@@ -69,7 +69,7 @@ export default function OwnerStory() {
             }}
           >
             <p className="font-[var(--font-playfair)] text-2xl font-bold text-white leading-none">
-              2024
+              2025
             </p>
             <p className="text-white/80 text-xs mt-1 tracking-wide">Since</p>
           </div>

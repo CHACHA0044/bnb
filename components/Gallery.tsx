@@ -2,13 +2,11 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { GALLERY_IMAGES } from "@/lib/constants";
+import { Instagram } from "lucide-react";
+import { GALLERY_IMAGES, RESTAURANT_INFO } from "@/lib/constants";
 
-/**
- * Gallery — responsive masonry-style image grid.
- * Hover: overlay fade-in + label + subtle zoom.
- * Scroll: staggered fade-in per card.
- */
+const INSTA = RESTAURANT_INFO.socials.instagram;
+
 export default function Gallery() {
   return (
     <section
@@ -43,8 +41,12 @@ export default function Gallery() {
         {/* Grid — first card spans 2 rows on md+ */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
           {GALLERY_IMAGES.map((src, i) => (
-            <motion.div
+            <motion.a
               key={src}
+              href={INSTA}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`View on Instagram — Benne n Beans photo ${i + 1}`}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-30px" }}
@@ -60,8 +62,7 @@ export default function Gallery() {
                   src={src}
                   alt={`Benne n Beans — gallery photo ${i + 1}`}
                   fill
-                  className="object-cover group-hover:scale-108 transition-transform duration-500 ease-out"
-                  style={{ transitionDuration: "500ms", transform: "scale(1)" }}
+                  className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
                   sizes="(max-width: 768px) 50vw, 33vw"
                 />
               </div>
@@ -69,26 +70,53 @@ export default function Gallery() {
               {/* Hover overlay */}
               <div
                 className="absolute inset-0 flex flex-col items-center justify-center gap-2
-                  bg-[var(--coffee)]/0 group-hover:bg-[var(--coffee)]/55
-                  transition-colors duration-350"
+                  bg-[var(--coffee)]/0 group-hover:bg-[var(--coffee)]/60
+                  transition-colors duration-300"
               >
+                <Instagram
+                  size={22}
+                  className="text-white opacity-0 group-hover:opacity-100 transition-all duration-300 -translate-y-2 group-hover:translate-y-0"
+                />
                 <span
                   className="text-white font-semibold text-sm tracking-widest uppercase
                     opacity-0 group-hover:opacity-100
                     translate-y-3 group-hover:translate-y-0
-                    transition-all duration-300"
+                    transition-all duration-300 delay-75"
                 >
                   @bennenbeans
                 </span>
                 <div
                   className="w-8 h-0.5 bg-[var(--benne-primary)] rounded-full
                     opacity-0 group-hover:opacity-100 scale-x-0 group-hover:scale-x-100
-                    transition-all duration-350 delay-75"
+                    transition-all duration-300 delay-100"
                 />
               </div>
-            </motion.div>
+            </motion.a>
           ))}
         </div>
+
+        {/* Instagram CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.3 }}
+          className="mt-10 text-center"
+        >
+          <a
+            href={INSTA}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2.5 px-7 py-3.5 rounded-full font-semibold text-sm text-white transition-all duration-300 hover:scale-105 active:scale-95"
+            style={{
+              background: "linear-gradient(45deg, #833ab4, #fd1d1d, #fcb045)",
+              boxShadow: "0 8px 28px rgba(253,29,29,0.30)",
+            }}
+          >
+            <Instagram size={17} />
+            Follow us on Instagram
+          </a>
+        </motion.div>
       </div>
     </section>
   );

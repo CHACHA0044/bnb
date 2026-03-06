@@ -163,9 +163,8 @@ export const GALLERY_IMAGES: string[] = [
   "/images/gallery1.jpg",
   "/images/gallery2.jpg",
   "/images/gallery3.jpg",
+  "/images/gallery4.jpg",
   "/images/benne-dosa.jpg",
-  "/images/filter-coffee.jpg",
-  "/images/restaurant-interior.jpg",
 ];
 
 /* ---------- Restaurant Info ---------- */
@@ -185,7 +184,7 @@ export const RESTAURANT_INFO = {
     weekend: "7:30 AM – 10:30 PM",
   },
   socials: {
-    instagram: "https://instagram.com/bennenbeans",
+    instagram: "https://www.instagram.com/bennenbeans?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
     facebook: "https://facebook.com/bennenbeans",
     twitter: "https://twitter.com/bennenbeans",
   },

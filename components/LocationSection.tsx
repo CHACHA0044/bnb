@@ -133,36 +133,43 @@ export default function LocationSection() {
             </a>
           </motion.div>
 
-          {/* Map placeholder */}
+          {/* Google Map embed */}
           <motion.div
             initial={{ opacity: 0, x: 32 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.18, ease: "easeOut" }}
-            className="relative rounded-3xl overflow-hidden h-[350px] md:h-[420px] flex items-center justify-center"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--cream) 0%, #fde9d2 100%)",
-              boxShadow: "0 20px 50px rgba(0,0,0,0.10)",
-            }}
+            className="flex flex-col gap-3"
           >
-            <div className="text-center px-6">
-              <MapPin
-                className="mx-auto mb-4"
-                style={{ color: "var(--benne-primary)" }}
-                size={48}
+            <div
+              className="relative rounded-3xl overflow-hidden"
+              style={{ boxShadow: "0 20px 50px rgba(0,0,0,0.12)" }}
+            >
+              <iframe
+                title="Benne n Beans location"
+                src="https://maps.google.com/maps?q=Sany+Palace+Opposite+Emerald+Mall+Ashiyana+Lucknow&output=embed&z=16"
+                width="100%"
+                height="380"
+                style={{ border: 0, display: "block" }}
+                allowFullScreen
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
               />
-              <p
-                className="font-[var(--font-playfair)] text-lg font-semibold mb-2"
-                style={{ color: "var(--coffee)" }}
-              >
-                Map Coming Soon
-              </p>
-              <p className="text-sm" style={{ color: "var(--text)", opacity: 0.55 }}>
-                {address.line1}, {address.line2}, {address.line3},{" "}
-                {address.city}
-              </p>
             </div>
+            <a
+              href="https://maps.app.goo.gl/xUT2H131zFcMdxZH8"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-[1.02] active:scale-95"
+              style={{
+                background: "linear-gradient(45deg, var(--benne-primary), var(--rustic-orange))",
+                color: "white",
+                boxShadow: "0 6px 20px rgba(231,111,81,0.35)",
+              }}
+            >
+              <MapPin size={16} />
+              Get Directions on Google Maps
+            </a>
           </motion.div>
         </div>
       </div>
