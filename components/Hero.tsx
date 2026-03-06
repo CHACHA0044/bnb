@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { motion, useInView, animate } from "framer-motion";
+import { useRef, useEffect, useState } from "react";
 
 /**
  * Hero — full-viewport landing section.
@@ -25,6 +26,25 @@ const itemVariants = {
   },
 };
 
+/** Animates a number from 0 to `target` when it enters the viewport */
+function CountUp({ target, display }: { target: number; display: (n: number) => string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-40px" });
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!inView) return;
+    const controls = animate(0, target, {
+      duration: 1.6,
+      ease: "easeOut",
+      onUpdate: (v) => setValue(Math.round(v)),
+    });
+    return controls.stop;
+  }, [inView, target]);
+
+  return <span ref={ref}>{display(value)}</span>;
+}
+
 export default function Hero() {
   return (
     <section
@@ -41,16 +61,22 @@ export default function Hero() {
           className="object-cover"
           sizes="100vw"
         />
-        {/* Lighter warm overlay for better visibility */}
+        {/* Directional overlay — darkens only the text side, photo breathes on the right */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(135deg, rgba(58,36,28,0.50) 0%, rgba(231,111,81,0.10) 40%, rgba(45,45,45,0.35) 100%)",
+              "linear-gradient(100deg, rgba(28,12,4,0.78) 0%, rgba(28,12,4,0.55) 38%, rgba(28,12,4,0.15) 62%, transparent 80%)",
           }}
         />
-        {/* Subtle vignette */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/5 via-transparent to-black/10" />
+        {/* Warm tint layer — ties text colours to background warmth */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(180,80,20,0.08) 0%, transparent 50%, rgba(180,80,20,0.12) 100%)",
+          }}
+        />
       </div>
 
       {/* Steam effect — purely decorative */}
@@ -85,21 +111,28 @@ export default function Hero() {
               boxShadow: "0 4px 16px rgba(231,111,81,0.35)",
             }}
           >
-            Since 2024 — Lucknow
+            Since 2025 — Lucknow
           </motion.span>
 
           <motion.h1
             variants={itemVariants}
             className="font-[var(--font-playfair)] text-4xl sm:text-6xl lg:text-[4rem] xl:text-7xl font-black leading-[1.1] mb-7"
             style={{
-              color: "white",
-              textShadow: "0 2px 8px rgba(0,0,0,0.35)",
+              color: "rgba(255,248,240,0.97)",
+              textShadow: "0 2px 12px rgba(20,8,2,0.45)",
             }}
           >
             Authentic{" "}
-            <span className="text-orange-500 drop-shadow-[0_3px_6px_rgba(0,0,0,0.25)] drop-shadow-[0_10px_18px_rgba(0,0,0,0.18)]">
-  Benne Dosa
-</span>
+            <span
+              style={{
+                background: "linear-gradient(120deg, #FFD580 0%, #F4A261 55%, #E8855A 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                backgroundClip: "text",
+              }}
+            >
+              Benne Dosa
+            </span>
             <br />
             <span>in Lucknow</span>
           </motion.h1>
@@ -108,8 +141,8 @@ export default function Hero() {
             variants={itemVariants}
             className="text-base sm:text-xl max-w-lg mb-10 leading-relaxed font-medium"
             style={{
-              color: "rgba(255,255,255,0.92)",
-              textShadow: "0 1px 4px rgba(0,0,0,0.3)",
+              color: "rgba(255,238,218,0.90)",
+              textShadow: "0 1px 6px rgba(20,8,2,0.4)",
             }}
           >
             Crispy, buttery, and soulful — experience the taste of Karnataka
@@ -164,10 +197,10 @@ export default function Hero() {
             className="mt-14 flex items-center gap-10"
           >
             {[
-              { value: "1K+", label: "Happy Guests" },
-              { value: "15+", label: "Dishes" },
-              { value: "5★", label: "Rating" },
-            ].map((stat, index) => (
+              { target: 1000, display: (n: number) => n >= 1000 ? "1K+" : `${n}`, label: "Happy Guests" },
+              { target: 15,   display: (n: number) => `${n}+`,                    label: "Dishes" },
+              { target: 5,    display: (n: number) => `${n}★`,                    label: "Rating" },
+            ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p
                   className="font-[var(--font-playfair)] text-2xl sm:text-3xl font-black mb-1"
@@ -178,7 +211,7 @@ export default function Hero() {
                     backgroundClip: "text",
                   }}
                 >
-                  {stat.value}
+                  <CountUp target={stat.target} display={stat.display} />
                 </p>
                 <p
                   className="text-xs sm:text-sm font-semibold tracking-wider uppercase"
@@ -202,14 +235,15 @@ export default function Hero() {
           className="hidden md:flex justify-center"
         >
           <div
-            className="relative w-72 h-72 lg:w-88 lg:h-88 xl:w-96 xl:h-96 rounded-full overflow-hidden animate-float"
+            className="relative w-72 h-72 lg:w-[22rem] lg:h-[22rem] xl:w-96 xl:h-96 rounded-full animate-float"
             style={{
-              background: "linear-gradient(45deg, var(--benne-primary), var(--rustic-orange))",
-              padding: "6px",
-              boxShadow: "0 25px 60px rgba(231,111,81,0.4), 0 0 0 1px rgba(231,111,81,0.2)",
+              padding: "3px",
+              background: "linear-gradient(135deg, #FFD580 0%, #F4A261 50%, #E76F51 100%)",
+              boxShadow:
+                "0 0 0 8px rgba(244,162,97,0.12), 0 20px 60px rgba(231,111,81,0.45), 0 0 100px rgba(231,111,81,0.18)",
             }}
           >
-            <div className="w-full h-full rounded-full overflow-hidden">
+            <div className="w-full h-full rounded-full overflow-hidden relative">
               <Image
                 src="/images/benne-dosa.jpg"
                 alt="Golden crispy Benne Dosa"
@@ -217,11 +251,11 @@ export default function Hero() {
                 className="object-cover"
                 sizes="(max-width: 1024px) 288px, 384px"
               />
-              {/* Subtle overlay for better integration */}
+              {/* Faint inner vignette so edges merge with the glow */}
               <div
-                className="absolute inset-0"
+                className="absolute inset-0 rounded-full"
                 style={{
-                  background: "linear-gradient(45deg, transparent 0%, rgba(231,111,81,0.1) 100%)",
+                  boxShadow: "inset 0 0 40px rgba(0,0,0,0.25)",
                 }}
               />
             </div>
