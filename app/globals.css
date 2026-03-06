@@ -1,0 +1,226 @@
+@import "tailwindcss";
+
+/* ============================================
+   Benne n Beans — Global CSS Variables & Base
+   Premium Café + Rustic Fire Palette
+   ============================================ */
+
+:root {
+  /* Brand Core */
+  --benne-primary: #E76F51;
+  --rustic-orange: #D35400;
+  --coffee: #3A241C;
+  --deep-brown: #2D2D2D;
+  --butter-gold: #F4A261;
+  --cream: #F3E8DA;
+  --leaf: #6A994E;
+
+  /* Aliases kept for backward-compat with components */
+  --primary: var(--benne-primary);
+  --gold: var(--butter-gold);
+  --text: var(--deep-brown);
+  --white: #ffffff;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-benne-primary: var(--benne-primary);
+  --color-rustic-orange: var(--rustic-orange);
+  --color-coffee: var(--coffee);
+  --color-deep-brown: var(--deep-brown);
+  --color-butter-gold: var(--butter-gold);
+  --color-gold: var(--gold);
+  --color-cream: var(--cream);
+  --color-leaf: var(--leaf);
+  --color-text: var(--text);
+}
+
+/* ---- Base ---- */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--cream);
+  color: var(--text);
+  font-family: "Poppins", sans-serif;
+  overflow-x: hidden;
+}
+
+/* ---- Hide native scrollbar (replaced by ScrollIndicator) ---- */
+html {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE / Edge legacy */
+}
+::-webkit-scrollbar {
+  display: none;                /* Chrome / Safari / Edge */
+}
+
+/* ---- Selection ---- */
+::selection {
+  background: var(--benne-primary);
+  color: var(--white);
+}
+
+/* ---- Utility animations ---- */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes steam {
+  0% { opacity: 0; transform: translateY(0) scaleX(1); }
+  50% { opacity: 0.6; transform: translateY(-18px) scaleX(1.2); }
+  100% { opacity: 0; transform: translateY(-36px) scaleX(0.8); }
+}
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes blurFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0px);
+  }
+}
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-50px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0px);
+  }
+}
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(50px);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0px);
+  }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+.animate-steam {
+  animation: steam 2.5s ease-in-out infinite;
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s ease-out forwards;
+}
+.animate-blur-fade-in {
+  animation: blurFadeIn 0.8s ease-out forwards;
+}
+.animate-slide-in-left {
+  animation: slideInLeft 0.7s ease-out forwards;
+}
+.animate-slide-in-right {
+  animation: slideInRight 0.7s ease-out forwards;
+}
+
+/* ---- Scroll animations ---- */
+.scroll-animate {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+}
+.scroll-animate.animated {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---- Mobile optimizations ---- */
+@media (max-width: 768px) {
+  .mobile-stack {
+    flex-direction: column;
+  }
+  .mobile-center {
+    text-align: center;
+  }
+  .mobile-spacing {
+    margin-bottom: 2rem;
+  }
+}
+
+/* ---- Warm gradient backgrounds ---- */
+.bg-warm-gradient {
+  background: linear-gradient(135deg, var(--coffee), var(--cream));
+}
+.bg-hero-gradient {
+  background: linear-gradient(
+    135deg,
+    var(--coffee) 0%,
+    color-mix(in srgb, var(--coffee) 80%, var(--benne-primary)) 50%,
+    color-mix(in srgb, var(--coffee) 60%, transparent) 100%
+  );
+}
+
+/* ---- Section padding helper ---- */
+.section-padding {
+  padding: 5rem 1.5rem;
+}
+@media (min-width: 640px) {
+  .section-padding {
+    padding: 5rem 1.5rem;
+  }
+}
+@media (min-width: 768px) {
+  .section-padding {
+    padding: 6rem 2rem;
+  }
+}
+@media (min-width: 1024px) {
+  .section-padding {
+    padding: 7rem 4rem;
+  }
+}
+
+/* ---- Card base ---- */
+.card-hover {
+  transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+}
+.card-hover:hover {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* ---- Soft shadow utility ---- */
+.shadow-soft {
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.10);
+}
+.shadow-soft-lg {
+  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.14);
+}
+
+/* ---- Navbar blur transition ---- */
+.navbar-scrolled {
+  background: rgba(243, 232, 218, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* ---- Focus ring ---- */
+:focus-visible {
+  outline: 2px solid var(--benne-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
