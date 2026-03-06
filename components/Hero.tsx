@@ -1,51 +1,55 @@
 "use client";
 
 import Image from "next/image";
-import { motion, useInView, animate } from "framer-motion";
-import { useRef, useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
 
 /**
  * Hero — full-viewport landing section.
  * Text stagger reveal + floating circular image.
  * Warm gradient overlay using the updated color palette.
+ * Mobile-optimized: shows content immediately, no counting animation.
  */
+
+/** Hook to detect mobile viewport */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  return isMobile;
+}
 
 const containerVariants = {
   hidden: {},
-  visible: {
-    transition: { staggerChildren: 0.18, delayChildren: 0.2 },
-  },
+  visible: (isMobile: boolean) => ({
+    transition: {
+      staggerChildren: isMobile ? 0 : 0.12,
+      delayChildren: isMobile ? 0 : 0.1
+    },
+  }),
 };
 
 const itemVariants = {
-  hidden: { opacity: 0, y: 32 },
+  hidden: (isMobile: boolean) => ({
+    opacity: isMobile ? 1 : 0,
+    y: isMobile ? 0 : 24
+  }),
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.7, ease: "easeOut" as const },
+    transition: { duration: 0.5, ease: "easeOut" as const },
   },
 };
 
-/** Animates a number from 0 to `target` when it enters the viewport */
-function CountUp({ target, display }: { target: number; display: (n: number) => string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    if (!inView) return;
-    const controls = animate(0, target, {
-      duration: 1.6,
-      ease: "easeOut",
-      onUpdate: (v) => setValue(Math.round(v)),
-    });
-    return controls.stop;
-  }, [inView, target]);
-
-  return <span ref={ref}>{display(value)}</span>;
-}
-
 export default function Hero() {
+  const isMobile = useIsMobile();
+
   return (
     <section
       id="home"
@@ -99,12 +103,14 @@ export default function Hero() {
         {/* Left — staggered text reveal */}
         <motion.div
           variants={containerVariants}
+          custom={isMobile}
           initial="hidden"
           animate="visible"
           className="flex flex-col items-start"
         >
           <motion.span
             variants={itemVariants}
+            custom={isMobile}
             className="inline-block font-bold tracking-[0.25em] uppercase text-xs sm:text-sm mb-6 px-4 py-2 rounded-full text-white"
             style={{
               background: "linear-gradient(45deg, var(--benne-primary), var(--rustic-orange))",
@@ -116,6 +122,7 @@ export default function Hero() {
 
           <motion.h1
             variants={itemVariants}
+            custom={isMobile}
             className="font-[var(--font-playfair)] text-4xl sm:text-6xl lg:text-[4rem] xl:text-7xl font-black leading-[1.1] mb-7"
             style={{
               color: "rgba(255,248,240,0.97)",
@@ -139,6 +146,7 @@ export default function Hero() {
 
           <motion.p
             variants={itemVariants}
+            custom={isMobile}
             className="text-base sm:text-xl max-w-lg mb-10 leading-relaxed font-medium"
             style={{
               color: "rgba(255,238,218,0.90)",
@@ -150,7 +158,7 @@ export default function Hero() {
             with love.
           </motion.p>
 
-          <motion.div variants={itemVariants} className="flex flex-wrap gap-5">
+          <motion.div variants={itemVariants} custom={isMobile} className="flex flex-wrap gap-5">
             <a
               href="#menu"
               className="inline-flex items-center px-8 py-4 rounded-full font-bold text-base text-white transition-all duration-300 active:scale-95"
@@ -191,15 +199,16 @@ export default function Hero() {
             </a>
           </motion.div>
 
-          {/* Quick stats bar */}
+          {/* Quick stats bar - static values on mobile for performance */}
           <motion.div
             variants={itemVariants}
+            custom={isMobile}
             className="mt-14 flex items-center gap-10"
           >
             {[
-              { target: 1000, display: (n: number) => n >= 1000 ? "1K+" : `${n}`, label: "Happy Guests" },
-              { target: 15,   display: (n: number) => `${n}+`,                    label: "Dishes" },
-              { target: 5,    display: (n: number) => `${n}★`,                    label: "Rating" },
+              { value: "1K+", label: "Happy Guests" },
+              { value: "15+", label: "Dishes" },
+              { value: "5★", label: "Rating" },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
                 <p
@@ -211,7 +220,7 @@ export default function Hero() {
                     backgroundClip: "text",
                   }}
                 >
-                  <CountUp target={stat.target} display={stat.display} />
+                  {stat.value}
                 </p>
                 <p
                   className="text-xs sm:text-sm font-semibold tracking-wider uppercase"

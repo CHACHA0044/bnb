@@ -3,15 +3,32 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { DOSA_PROCESS } from "@/lib/constants";
+import { useEffect, useState } from "react";
+
+/** Hook to detect mobile viewport */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  return isMobile;
+}
 
 /**
  * DosaProcess — step-by-step visual walkthrough of how
  * Benne Dosa is made, with staggered scroll animations.
  */
 export default function DosaProcess() {
+  const isMobile = useIsMobile();
+
   return (
     <section
-      className="section-padding content-auto text-white overflow-hidden"
+      className="section-padding text-white overflow-hidden"
       style={{
         background:
           "linear-gradient(135deg, var(--coffee) 0%, #2a160f 100%)",
@@ -21,10 +38,10 @@ export default function DosaProcess() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px 0px" }}
-          transition={{ duration: 0.45 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.4 }}
           className="text-center mb-14"
         >
           <span className="text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs">
@@ -44,16 +61,15 @@ export default function DosaProcess() {
             {DOSA_PROCESS.map((step, i) => (
               <motion.div
                 key={step.step}
-                initial={{ opacity: 0, x: -18 }}
+                initial={{ opacity: isMobile ? 1 : 0, x: isMobile ? 0 : -18 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-80px 0px" }}
-                transition={{ delay: i * 0.07, duration: 0.38, ease: "easeOut" }}
-                style={{ willChange: "transform, opacity" }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ delay: isMobile ? 0 : i * 0.05, duration: isMobile ? 0.15 : 0.3, ease: "easeOut" }}
                 className="flex gap-5 group"
               >
                 {/* Step number circle */}
                 <div
-                  className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-lg transition-transform duration-300 group-hover:scale-110"
+                  className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-lg md:transition-transform md:duration-300 md:group-hover:scale-110"
                   style={{
                     background: "var(--benne-primary)",
                     boxShadow: "0 6px 20px rgba(231,111,81,0.35)",
@@ -75,11 +91,11 @@ export default function DosaProcess() {
 
           {/* Image */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.97 }}
+            initial={{ opacity: isMobile ? 1 : 0, scale: isMobile ? 1 : 0.97 }}
             whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true, margin: "-80px 0px" }}
-            transition={{ duration: 0.42, ease: "easeOut" }}
-            style={{ willChange: "transform, opacity", boxShadow: "0 30px 60px rgba(0,0,0,0.35)" }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: isMobile ? 0.2 : 0.4, ease: "easeOut" }}
+            style={{ boxShadow: "0 30px 60px rgba(0,0,0,0.35)" }}
             className="relative h-[400px] md:h-[520px] rounded-2xl overflow-hidden"
           >
             <Image

@@ -4,23 +4,40 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { Instagram } from "lucide-react";
 import { GALLERY_IMAGES, RESTAURANT_INFO } from "@/lib/constants";
+import { useEffect, useState } from "react";
 
 const INSTA = RESTAURANT_INFO.socials.instagram;
 
+/** Hook to detect mobile viewport */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  return isMobile;
+}
+
 export default function Gallery() {
+  const isMobile = useIsMobile();
+
   return (
     <section
       id="gallery"
-      className="section-padding content-auto bg-[var(--cream)]"
+      className="section-padding bg-[var(--cream)]"
       aria-labelledby="gallery-heading"
     >
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px 0px" }}
-          transition={{ duration: 0.45 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.45 }}
           className="text-center mb-14"
         >
           <span className="inline-block text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs mb-3">
@@ -47,13 +64,13 @@ export default function Gallery() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`View on Instagram — Benne n Beans photo ${i + 1}`}
-              initial={{ opacity: 0, y: 14 }}
+              initial={{ opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 14 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-80px 0px" }}
-              transition={{ delay: i * 0.09, duration: 0.5, ease: "easeOut" }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ delay: isMobile ? 0 : i * 0.05, duration: isMobile ? 0.15 : 0.35, ease: "easeOut" }}
               className={`group relative overflow-hidden rounded-2xl cursor-pointer
                 shadow-[0_4px_16px_rgba(0,0,0,0.09)]
-                hover:shadow-[0_16px_40px_rgba(0,0,0,0.16)]
+                md:hover:shadow-[0_16px_40px_rgba(0,0,0,0.16)]
                 transition-shadow duration-300
                 ${i === 0 ? "md:row-span-2" : ""}`}
             >
@@ -63,14 +80,14 @@ export default function Gallery() {
                   alt={`Benne n Beans — gallery photo ${i + 1}`}
                   fill
                   loading="lazy"
-                  className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+                  className="object-cover md:transition-transform md:duration-500 md:ease-out md:group-hover:scale-105"
                   sizes="(max-width: 768px) 50vw, 33vw"
                 />
               </div>
 
-              {/* Hover overlay */}
+              {/* Hover overlay - desktop only */}
               <div
-                className="absolute inset-0 flex flex-col items-center justify-center gap-2
+                className="absolute inset-0 hidden md:flex flex-col items-center justify-center gap-2
                   bg-[var(--coffee)]/0 group-hover:bg-[var(--coffee)]/60
                   transition-colors duration-300"
               >
@@ -98,10 +115,10 @@ export default function Gallery() {
 
         {/* Instagram CTA */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 16 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px 0px" }}
-          transition={{ duration: 0.5, delay: 0.3 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.4 }}
           className="mt-10 text-center"
         >
           <a

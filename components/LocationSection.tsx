@@ -3,6 +3,21 @@
 import { motion } from "framer-motion";
 import { MapPin, Phone, Clock } from "lucide-react";
 import { RESTAURANT_INFO } from "@/lib/constants";
+import { useEffect, useState } from "react";
+
+/** Hook to detect mobile viewport */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  return isMobile;
+}
 
 /**
  * LocationSection — address, phone, hours, and map placeholder.
@@ -10,20 +25,21 @@ import { RESTAURANT_INFO } from "@/lib/constants";
  */
 export default function LocationSection() {
   const { address, phone, hours } = RESTAURANT_INFO;
+  const isMobile = useIsMobile();
 
   return (
     <section
       id="location"
-      className="section-padding content-auto bg-white"
+      className="section-padding bg-white"
       aria-labelledby="location-heading"
     >
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px 0px" }}
-          transition={{ duration: 0.45 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.4 }}
           className="text-center mb-14"
         >
           <span className="text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs">
@@ -40,11 +56,10 @@ export default function LocationSection() {
         <div className="grid md:grid-cols-2 gap-12 items-start">
           {/* Info cards */}
           <motion.div
-            initial={{ opacity: 0, x: -18 }}
+            initial={{ opacity: isMobile ? 1 : 0, x: isMobile ? 0 : -18 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: "-80px 0px" }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            style={{ willChange: "transform, opacity" }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: isMobile ? 0.2 : 0.4, ease: "easeOut" }}
             className="space-y-8"
           >
             {/* Address */}
@@ -136,11 +151,10 @@ export default function LocationSection() {
 
           {/* Google Map embed */}
           <motion.div
-            initial={{ opacity: 0, x: 18 }}
+            initial={{ opacity: isMobile ? 1 : 0, x: isMobile ? 0 : 18 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true, margin: "-80px 0px" }}
-            transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
-            style={{ willChange: "transform, opacity" }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: isMobile ? 0.2 : 0.4, ease: "easeOut" }}
             className="flex flex-col gap-3"
           >
             <div
@@ -162,7 +176,7 @@ export default function LocationSection() {
               href="https://maps.app.goo.gl/xUT2H131zFcMdxZH8"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-[1.02] active:scale-95"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-semibold text-sm transition-all duration-300 md:hover:scale-[1.02] active:scale-95"
               style={{
                 background: "linear-gradient(45deg, var(--benne-primary), var(--rustic-orange))",
                 color: "white",

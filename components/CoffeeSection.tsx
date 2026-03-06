@@ -3,15 +3,32 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Coffee } from "lucide-react";
+import { useEffect, useState } from "react";
+
+/** Hook to detect mobile viewport */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  return isMobile;
+}
 
 /**
  * CoffeeSection — highlights the traditional South Indian
  * filter coffee with imagery and descriptive text.
  */
 export default function CoffeeSection() {
+  const isMobile = useIsMobile();
+
   return (
     <section
-      className="section-padding content-auto text-white overflow-hidden"
+      className="section-padding text-white overflow-hidden"
       style={{
         background: "linear-gradient(145deg, var(--coffee) 0%, #1e0e08 100%)",
       }}
@@ -20,10 +37,10 @@ export default function CoffeeSection() {
       <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 lg:gap-20 items-center">
         {/* Image */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
+          initial={{ opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-80px 0px" }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.4, ease: "easeOut" }}
           className="relative flex justify-center order-2 md:order-1"
         >
           <div
@@ -48,10 +65,10 @@ export default function CoffeeSection() {
             />
           </div>
 
-          {/* Decorative steam lines */}
+          {/* Decorative steam lines - hidden on mobile */}
           <div
             aria-hidden="true"
-            className="absolute -top-4 left-1/2 -translate-x-1/2 flex gap-2"
+            className="absolute -top-4 left-1/2 -translate-x-1/2 hidden md:flex gap-2"
           >
             {[0, 0.4, 0.8].map((d, i) => (
               <span
@@ -65,11 +82,10 @@ export default function CoffeeSection() {
 
         {/* Text */}
         <motion.div
-          initial={{ opacity: 0, x: 20 }}
+          initial={{ opacity: isMobile ? 1 : 0, x: isMobile ? 0 : 20 }}
           whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true, margin: "-80px 0px" }}
-          transition={{ duration: 0.42, delay: 0.08, ease: "easeOut" }}
-          style={{ willChange: "transform, opacity" }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.4, ease: "easeOut" }}
           className="order-1 md:order-2"
         >
           <div className="flex items-center gap-3 mb-4">

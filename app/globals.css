@@ -150,13 +150,32 @@ html {
   /* Reduce expensive backdrop-filter on mobile */
   .navbar-scrolled,
   [style*="backdrop-filter"] {
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
   }
 
   /* Disable hover transforms on touch devices */
   .card-hover:hover {
     transform: none;
+  }
+
+  /* Disable content-visibility on mobile to prevent blank sections */
+  .content-auto {
+    content-visibility: visible !important;
+    contain-intrinsic-size: auto;
+  }
+
+  /* Simpler shadows on mobile */
+  .shadow-soft {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  }
+  .shadow-soft-lg {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.10);
+  }
+
+  /* Faster, subtler transitions on mobile */
+  * {
+    transition-duration: 150ms !important;
   }
 }
 
@@ -265,6 +284,24 @@ html {
   .transition-colors,
   .transition-opacity,
   .transition-shadow {
-    transition-duration: 150ms;
+    transition-duration: 100ms;
   }
+
+  /* Disable transform animations on hover for touch */
+  *:hover {
+    transform: none !important;
+  }
+}
+
+/* ---- Ensure sections never become invisible ---- */
+section {
+  /* Prevent content from disappearing on scroll */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* ---- Force GPU acceleration for smoother animations ---- */
+.gpu-accelerate {
+  transform: translateZ(0);
+  will-change: transform;
 }

@@ -2,12 +2,29 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+
+/** Hook to detect mobile viewport */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  return isMobile;
+}
 
 /**
  * StorySection — two-column layout telling the brand story.
  * Image on left, narrative on right. Stacks on mobile.
  */
 export default function StorySection() {
+  const isMobile = useIsMobile();
+
   return (
     <section
       id="story"
@@ -17,10 +34,10 @@ export default function StorySection() {
       <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 items-center">
         {/* Image */}
         <motion.div
-          initial={{ opacity: 0, x: -40 }}
+          initial={{ opacity: isMobile ? 1 : 0, x: isMobile ? 0 : -30 }}
           whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.7 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.5 }}
           className="relative h-[400px] md:h-[500px] rounded-2xl overflow-hidden shadow-lg"
         >
           <Image
@@ -34,10 +51,10 @@ export default function StorySection() {
 
         {/* Text */}
         <motion.div
-          initial={{ opacity: 0, x: 40 }}
+          initial={{ opacity: isMobile ? 1 : 0, x: isMobile ? 0 : 30 }}
           whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.7, delay: 0.2 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.5 }}
         >
           <span className="text-[var(--gold)] font-medium tracking-widest uppercase text-sm">
             Our Story

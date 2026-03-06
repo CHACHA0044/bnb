@@ -2,28 +2,44 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+
+/** Hook to detect mobile viewport */
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  return isMobile;
+}
 
 /**
  * OwnerStory — "Why We Started Benne n Beans"
  * Two-column on desktop (image left, text right), stacked on mobile.
  * Soft scroll-reveal animations; warm cream background.
  */
-
-const staggerContainer = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.07, delayChildren: 0 } },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 14 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: "easeOut" as const } },
-};
-
 export default function OwnerStory() {
+  const isMobile = useIsMobile();
+
+  const fadeUp = {
+    hidden: { opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 14 },
+    visible: { opacity: 1, y: 0, transition: { duration: isMobile ? 0.15 : 0.35, ease: "easeOut" as const } },
+  };
+
+  const staggerContainer = {
+    hidden: {},
+    visible: { transition: { staggerChildren: isMobile ? 0 : 0.05, delayChildren: 0 } },
+  };
+
   return (
     <section
       id="owner-story"
-      className="section-padding content-auto"
+      className="section-padding"
       style={{
         background: "linear-gradient(160deg, var(--cream) 0%, #fdf6ee 100%)",
       }}
@@ -33,11 +49,10 @@ export default function OwnerStory() {
 
         {/* Left — image */}
         <motion.div
-          initial={{ opacity: 0, x: -20 }}
+          initial={{ opacity: isMobile ? 1 : 0, x: isMobile ? 0 : -20 }}
           whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true, margin: "-80px 0px" }}
-          transition={{ duration: 0.42, ease: "easeOut" }}
-          style={{ willChange: "transform, opacity" }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: isMobile ? 0.2 : 0.4, ease: "easeOut" }}
           className="relative"
         >
           <div
@@ -82,7 +97,7 @@ export default function OwnerStory() {
           variants={staggerContainer}
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: "-80px 0px" }}
+          viewport={{ once: true, amount: 0.3 }}
           className="flex flex-col gap-5"
         >
           <motion.span
