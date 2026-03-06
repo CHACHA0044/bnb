@@ -20,10 +20,10 @@ export default function LocationSection() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 22 }}
+          initial={{ opacity: 0, y: 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55 }}
+          viewport={{ once: true, margin: "-80px 0px" }}
+          transition={{ duration: 0.45 }}
           className="text-center mb-14"
         >
           <span className="text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs">
@@ -40,10 +40,11 @@ export default function LocationSection() {
         <div className="grid md:grid-cols-2 gap-12 items-start">
           {/* Info cards */}
           <motion.div
-            initial={{ opacity: 0, x: -32 }}
+            initial={{ opacity: 0, x: -18 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
+            viewport={{ once: true, margin: "-80px 0px" }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            style={{ willChange: "transform, opacity" }}
             className="space-y-8"
           >
             {/* Address */}
@@ -135,10 +136,11 @@ export default function LocationSection() {
 
           {/* Google Map embed */}
           <motion.div
-            initial={{ opacity: 0, x: 32 }}
+            initial={{ opacity: 0, x: 18 }}
             whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.18, ease: "easeOut" }}
+            viewport={{ once: true, margin: "-80px 0px" }}
+            transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
+            style={{ willChange: "transform, opacity" }}
             className="flex flex-col gap-3"
           >
             <div

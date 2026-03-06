@@ -21,10 +21,10 @@ export default function DosaProcess() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 22 }}
+          initial={{ opacity: 0, y: 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55 }}
+          viewport={{ once: true, margin: "-80px 0px" }}
+          transition={{ duration: 0.45 }}
           className="text-center mb-14"
         >
           <span className="text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs">
@@ -44,10 +44,11 @@ export default function DosaProcess() {
             {DOSA_PROCESS.map((step, i) => (
               <motion.div
                 key={step.step}
-                initial={{ opacity: 0, x: -32 }}
+                initial={{ opacity: 0, x: -18 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-30px" }}
-                transition={{ delay: i * 0.13, duration: 0.5, ease: "easeOut" }}
+                viewport={{ once: true, margin: "-80px 0px" }}
+                transition={{ delay: i * 0.07, duration: 0.38, ease: "easeOut" }}
+                style={{ willChange: "transform, opacity" }}
                 className="flex gap-5 group"
               >
                 {/* Step number circle */}
@@ -74,12 +75,12 @@ export default function DosaProcess() {
 
           {/* Image */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.93 }}
+            initial={{ opacity: 0, scale: 0.97 }}
             whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.7, ease: "easeOut" }}
+            viewport={{ once: true, margin: "-80px 0px" }}
+            transition={{ duration: 0.42, ease: "easeOut" }}
+            style={{ willChange: "transform, opacity", boxShadow: "0 30px 60px rgba(0,0,0,0.35)" }}
             className="relative h-[400px] md:h-[520px] rounded-2xl overflow-hidden"
-            style={{ boxShadow: "0 30px 60px rgba(0,0,0,0.35)" }}
           >
             <Image
               src="/images/dosa-making.jpg"

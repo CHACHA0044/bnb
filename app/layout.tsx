@@ -26,6 +26,11 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   metadataBase: new URL("https://bennenbeans.in"),
 
+  icons: {
+    icon: "/images/logo.jpg",
+    apple: "/images/logo.jpg",
+  },
+
   title: {
     default: "Benne n Beans | Authentic Benne Dosa in Lucknow",
     template: "%s | Benne n Beans",

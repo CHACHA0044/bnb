@@ -17,10 +17,10 @@ export default function Gallery() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 22 }}
+          initial={{ opacity: 0, y: 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55 }}
+          viewport={{ once: true, margin: "-80px 0px" }}
+          transition={{ duration: 0.45 }}
           className="text-center mb-14"
         >
           <span className="inline-block text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs mb-3">
@@ -47,9 +47,9 @@ export default function Gallery() {
               target="_blank"
               rel="noopener noreferrer"
               aria-label={`View on Instagram — Benne n Beans photo ${i + 1}`}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-30px" }}
+              viewport={{ once: true, margin: "-80px 0px" }}
               transition={{ delay: i * 0.09, duration: 0.5, ease: "easeOut" }}
               className={`group relative overflow-hidden rounded-2xl cursor-pointer
                 shadow-[0_4px_16px_rgba(0,0,0,0.09)]
@@ -99,7 +99,7 @@ export default function Gallery() {
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          viewport={{ once: true, margin: "-80px 0px" }}
           transition={{ duration: 0.5, delay: 0.3 }}
           className="mt-10 text-center"
         >

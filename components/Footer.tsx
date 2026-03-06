@@ -1,6 +1,7 @@
 "use client";
 
 import { Instagram, Facebook, Twitter, MapPin, Phone } from "lucide-react";
+import Image from "next/image";
 import { RESTAURANT_INFO, NAV_LINKS } from "@/lib/constants";
 
 /**
@@ -25,11 +26,15 @@ export default function Footer() {
 
         {/* Brand */}
         <div>
-          <h2 className="font-[var(--font-playfair)] text-2xl font-bold mb-3">
-            Benne{" "}
-            <span style={{ color: "var(--benne-primary)" }}>n</span>
-            {" "}Beans
-          </h2>
+          <a href="#home" aria-label="Benne n Beans — home">
+            <Image
+              src="/images/logo.jpg"
+              alt="Benne n Beans logo"
+              width={150}
+              height={48}
+              className="h-12 w-auto object-contain mb-4"
+            />
+          </a>
           <p className="text-white/55 text-sm leading-relaxed max-w-xs">
             Authentic South Indian flavours in Lucknow — crispy Benne Dosa,
             frothy filter coffee &amp; more.

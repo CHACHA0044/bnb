@@ -20,10 +20,10 @@ export default function CoffeeSection() {
       <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 lg:gap-20 items-center">
         {/* Image */}
         <motion.div
-          initial={{ opacity: 0, y: 44 }}
+          initial={{ opacity: 0, y: 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.72, ease: "easeOut" }}
+          viewport={{ once: true, margin: "-80px 0px" }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
           className="relative flex justify-center order-2 md:order-1"
         >
           <div
@@ -64,10 +64,11 @@ export default function CoffeeSection() {
 
         {/* Text */}
         <motion.div
-          initial={{ opacity: 0, x: 44 }}
+          initial={{ opacity: 0, x: 20 }}
           whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.72, delay: 0.18, ease: "easeOut" }}
+          viewport={{ once: true, margin: "-80px 0px" }}
+          transition={{ duration: 0.42, delay: 0.08, ease: "easeOut" }}
+          style={{ willChange: "transform, opacity" }}
           className="order-1 md:order-2"
         >
           <div className="flex items-center gap-3 mb-4">

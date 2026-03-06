@@ -9,11 +9,11 @@ import { SIGNATURE_ITEMS } from "@/lib/constants";
  * Staggered scroll reveal + lift/shadow/scale hover effect.
  */
 const cardVariants = {
-  hidden: { opacity: 0, y: 36 },
+  hidden: { opacity: 0, y: 16 },
   visible: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.14, duration: 0.55 },
+    transition: { delay: i * 0.07, duration: 0.38, ease: "easeOut" as const },
   }),
 };
 
@@ -23,10 +23,10 @@ export default function SignatureItems() {
       <div className="max-w-7xl mx-auto text-center">
         {/* Heading */}
         <motion.div
-          initial={{ opacity: 0, y: 22 }}
+          initial={{ opacity: 0, y: 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55 }}
+          viewport={{ once: true, margin: "-80px 0px" }}
+          transition={{ duration: 0.45 }}
           className="mb-14"
         >
           <span className="inline-block text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs mb-3">
@@ -52,11 +52,15 @@ export default function SignatureItems() {
               custom={i}
               initial="hidden"
               whileInView="visible"
-              viewport={{ once: true, margin: "-40px" }}
+              viewport={{ once: true, margin: "-80px 0px" }}
               variants={cardVariants}
-              whileHover={{ y: -8, scale: 1.02 }}
-              transition={{ type: "spring", stiffness: 280, damping: 22 }}
-              className="group rounded-2xl overflow-hidden bg-[var(--cream)] shadow-[0_4px_20px_rgba(0,0,0,0.07)] hover:shadow-[0_20px_48px_rgba(0,0,0,0.13)] transition-all duration-300 ease-out cursor-pointer"
+              whileHover={{ y: -6, scale: 1.02 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              style={{ willChange: "transform, opacity" }}
+              className="group rounded-2xl overflow-hidden bg-[var(--cream)]
+                shadow-[0_4px_20px_rgba(0,0,0,0.07)]
+                hover:shadow-[0_16px_40px_rgba(0,0,0,0.13)]
+                transition-shadow duration-300 cursor-pointer"
             >
               {/* Image */}
               <div className="relative h-52 overflow-hidden">
@@ -64,7 +68,7 @@ export default function SignatureItems() {
                   src={item.image}
                   alt={item.title}
                   fill
-                  className="object-cover group-hover:scale-110 transition-transform duration-500 ease-out"
+                  className="object-cover group-hover:scale-105 transition-transform duration-300 ease-out"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />

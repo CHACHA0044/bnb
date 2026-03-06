@@ -185,7 +185,7 @@ export const RESTAURANT_INFO = {
   },
   socials: {
     instagram: "https://www.instagram.com/bennenbeans?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
-    facebook: "https://facebook.com/bennenbeans",
+    facebook: "https://www.facebook.com/people/Benne-N-Beans/61584002647606/",
     twitter: "https://twitter.com/bennenbeans",
   },
 } as const;

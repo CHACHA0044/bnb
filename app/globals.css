@@ -81,47 +81,26 @@ html {
   100% { background-position: 200% center; }
 }
 @keyframes blurFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(40px);
-    filter: blur(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0px);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-50px);
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-    filter: blur(0px);
-  }
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 @keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(50px);
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-    filter: blur(0px);
-  }
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 .animate-float {
   animation: float 4s ease-in-out infinite;
+  /* Pre-promote to GPU layer — no layout cost during the infinite loop */
+  will-change: transform;
 }
 .animate-steam {
   animation: steam 2.5s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 .animate-fade-in-up {
   animation: fadeInUp 0.6s ease-out forwards;
@@ -176,6 +155,9 @@ html {
 /* ---- Section padding helper ---- */
 .section-padding {
   padding: 5rem 1.5rem;
+  /* Contain paint/layout to each section individually — a repaint in one
+     section does not cascade to adjacent sections */
+  contain: layout style paint;
 }
 @media (min-width: 640px) {
   .section-padding {
@@ -196,6 +178,8 @@ html {
 /* ---- Card base ---- */
 .card-hover {
   transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+  /* GPU layer — hover transform runs on compositor, no layout thrash */
+  will-change: transform;
 }
 .card-hover:hover {
   transform: translateY(-6px) scale(1.015);
@@ -223,4 +207,14 @@ html {
   outline: 2px solid var(--benne-primary);
   outline-offset: 3px;
   border-radius: 4px;
+}
+
+/* ---- Reduced-motion — accessibility + perf on low-end devices ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

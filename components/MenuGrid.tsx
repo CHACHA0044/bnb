@@ -17,10 +17,10 @@ export default function MenuGrid() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <motion.div
-          initial={{ opacity: 0, y: 22 }}
+          initial={{ opacity: 0, y: 14 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55 }}
+          viewport={{ once: true, margin: "-80px 0px" }}
+          transition={{ duration: 0.45 }}
           className="text-center mb-14"
         >
           <span className="text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs">
@@ -43,15 +43,16 @@ export default function MenuGrid() {
           {MENU_ITEMS.map((item, i) => (
             <motion.div
               key={item.name}
-              initial={{ opacity: 0, y: 24 }}
+              initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-30px" }}
-              transition={{ delay: i * 0.07, duration: 0.45, ease: "easeOut" }}
-              whileHover={{ y: -6, scale: 1.01 }}
+              viewport={{ once: true, margin: "-80px 0px" }}
+              transition={{ delay: i * 0.04, duration: 0.35, ease: "easeOut" }}
+              whileHover={{ y: -5, scale: 1.01 }}
+              style={{ willChange: "transform, opacity" }}
               className="group relative rounded-xl bg-[var(--cream)] p-6
                 shadow-[0_2px_12px_rgba(0,0,0,0.06)]
-                hover:shadow-[0_16px_40px_rgba(0,0,0,0.11)]
-                transition-all duration-300 ease-out
+                hover:shadow-[0_12px_32px_rgba(0,0,0,0.11)]
+                transition-shadow duration-300
                 border border-[var(--butter-gold)]/12 overflow-hidden"
             >
               {/* Category badge */}

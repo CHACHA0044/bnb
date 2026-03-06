@@ -11,12 +11,12 @@ import { motion } from "framer-motion";
 
 const staggerContainer = {
   hidden: {},
-  visible: { transition: { staggerChildren: 0.13, delayChildren: 0.1 } },
+  visible: { transition: { staggerChildren: 0.07, delayChildren: 0 } },
 };
 
 const fadeUp = {
-  hidden: { opacity: 0, y: 26 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.38, ease: "easeOut" as const } },
 };
 
 export default function OwnerStory() {
@@ -33,10 +33,11 @@ export default function OwnerStory() {
 
         {/* Left — image */}
         <motion.div
-          initial={{ opacity: 0, x: -44 }}
+          initial={{ opacity: 0, x: -20 }}
           whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.75, ease: "easeOut" }}
+          viewport={{ once: true, margin: "-80px 0px" }}
+          transition={{ duration: 0.42, ease: "easeOut" }}
+          style={{ willChange: "transform, opacity" }}
           className="relative"
         >
           <div
@@ -80,7 +81,7 @@ export default function OwnerStory() {
           variants={staggerContainer}
           initial="hidden"
           whileInView="visible"
-          viewport={{ once: true, margin: "-60px" }}
+          viewport={{ once: true, margin: "-80px 0px" }}
           className="flex flex-col gap-5"
         >
           <motion.span
