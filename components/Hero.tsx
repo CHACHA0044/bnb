@@ -122,7 +122,7 @@ export default function Hero() {
               textShadow: "0 2px 12px rgba(20,8,2,0.45)",
             }}
           >
-            Authentic{" "}
+            Authentic<br />
             <span
               style={{
                 background: "linear-gradient(120deg, #FFD580 0%, #F4A261 55%, #E8855A 100%)",
