@@ -11,7 +11,7 @@ export default function Gallery() {
   return (
     <section
       id="gallery"
-      className="section-padding bg-[var(--cream)]"
+      className="section-padding content-auto bg-[var(--cream)]"
       aria-labelledby="gallery-heading"
     >
       <div className="max-w-7xl mx-auto">
@@ -62,6 +62,7 @@ export default function Gallery() {
                   src={src}
                   alt={`Benne n Beans — gallery photo ${i + 1}`}
                   fill
+                  loading="lazy"
                   className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
                   sizes="(max-width: 768px) 50vw, 33vw"
                 />

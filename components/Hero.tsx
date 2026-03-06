@@ -54,7 +54,7 @@ export default function Hero() {
       {/* Background image layer */}
       <div className="absolute inset-0 -z-10">
         <Image
-          src="/images/benne-dosa.jpg"
+          src="/images/benne-dosa.webp"
           alt="Benne Dosa being prepared on a cast iron tawa"
           fill
           priority
@@ -245,7 +245,7 @@ export default function Hero() {
           >
             <div className="w-full h-full rounded-full overflow-hidden relative">
               <Image
-                src="/images/benne-dosa.jpg"
+                src="/images/benne-dosa.webp"
                 alt="Golden crispy Benne Dosa"
                 fill
                 className="object-cover"

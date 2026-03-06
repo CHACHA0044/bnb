@@ -11,7 +11,7 @@ export default function MenuGrid() {
   return (
     <section
       id="menu"
-      className="section-padding bg-white"
+      className="section-padding content-auto bg-white"
       aria-labelledby="menu-heading"
     >
       <div className="max-w-7xl mx-auto">

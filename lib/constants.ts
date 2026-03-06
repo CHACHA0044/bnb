@@ -31,25 +31,25 @@ export const SIGNATURE_ITEMS: SignatureItem[] = [
     title: "Benne Dosa",
     description:
       "Crispy, buttery dosa loaded with freshly churned benne (butter), cooked on a seasoned cast-iron tawa until golden perfection.",
-    image: "/images/benne-dosa.jpg",
+    image: "/images/benne-dosa.webp",
   },
   {
     title: "Thatte Idli",
     description:
       "Soft, plate-sized steamed idlis from the Bidadi tradition, served with aromatic sambar and coconut chutney.",
-    image: "/images/thatte-idli.jpg",
+    image: "/images/thatte-idli.webp",
   },
   {
     title: "Filter Coffee",
     description:
       "Authentic South Indian filter coffee brewed from freshly ground beans with a rich, aromatic froth.",
-    image: "/images/filter-coffee.jpg",
+    image: "/images/filter-coffee.webp",
   },
   {
     title: "Uttapam",
     description:
       "Thick, fluffy pancake topped with onions, tomatoes, and green chilies — a wholesome South Indian classic.",
-    image: "/images/uttapam.jpg",
+    image: "/images/uttapam.webp",
   },
 ];
 
@@ -160,11 +160,11 @@ export const DOSA_PROCESS: ProcessStep[] = [
 
 /* ---------- Gallery ---------- */
 export const GALLERY_IMAGES: string[] = [
-  "/images/gallery1.jpg",
-  "/images/gallery2.jpg",
-  "/images/gallery3.jpg",
-  "/images/gallery4.jpg",
-  "/images/benne-dosa.jpg",
+  "/images/gallery1.webp",
+  "/images/gallery2.webp",
+  "/images/gallery3.webp",
+  "/images/gallery4.webp",
+  "/images/benne-dosa.webp",
 ];
 
 /* ---------- Restaurant Info ---------- */

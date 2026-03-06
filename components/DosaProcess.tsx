@@ -11,7 +11,7 @@ import { DOSA_PROCESS } from "@/lib/constants";
 export default function DosaProcess() {
   return (
     <section
-      className="section-padding text-white overflow-hidden"
+      className="section-padding content-auto text-white overflow-hidden"
       style={{
         background:
           "linear-gradient(135deg, var(--coffee) 0%, #2a160f 100%)",
@@ -83,9 +83,10 @@ export default function DosaProcess() {
             className="relative h-[400px] md:h-[520px] rounded-2xl overflow-hidden"
           >
             <Image
-              src="/images/dosa-making.jpg"
+              src="/images/dosa-making.webp"
               alt="Dosa being prepared on a cast iron tawa"
               fill
+              loading="lazy"
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
             />

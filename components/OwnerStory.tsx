@@ -23,7 +23,7 @@ export default function OwnerStory() {
   return (
     <section
       id="owner-story"
-      className="section-padding"
+      className="section-padding content-auto"
       style={{
         background: "linear-gradient(160deg, var(--cream) 0%, #fdf6ee 100%)",
       }}
@@ -45,9 +45,10 @@ export default function OwnerStory() {
             style={{ boxShadow: "0 30px 70px rgba(58,36,28,0.18)" }}
           >
             <Image
-              src="/images/ownersimage.jpg"
+              src="/images/ownersimage.webp"
               alt="The founders of Benne n Beans in their restaurant"
               fill
+              loading="lazy"
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
             />

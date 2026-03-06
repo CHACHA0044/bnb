@@ -137,6 +137,27 @@ html {
   .mobile-spacing {
     margin-bottom: 2rem;
   }
+
+  /* Disable infinite animations on mobile for smoother scrolling */
+  .animate-float {
+    animation: none;
+  }
+  .animate-steam {
+    animation: none;
+    opacity: 0.3;
+  }
+
+  /* Reduce expensive backdrop-filter on mobile */
+  .navbar-scrolled,
+  [style*="backdrop-filter"] {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  /* Disable hover transforms on touch devices */
+  .card-hover:hover {
+    transform: none;
+  }
 }
 
 /* ---- Warm gradient backgrounds ---- */
@@ -216,5 +237,34 @@ html {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Content visibility for below-fold sections ---- */
+/* Allows browser to skip rendering of off-screen content */
+.content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* ---- Touch optimizations ---- */
+@media (pointer: coarse) {
+  /* Improve touch response */
+  a, button {
+    touch-action: manipulation;
+  }
+
+  /* Disable hover states on touch devices to prevent sticky hover */
+  .group:hover .group-hover\:scale-105 {
+    transform: none;
+  }
+
+  /* Faster transitions on touch for snappier feel */
+  .transition-all,
+  .transition-transform,
+  .transition-colors,
+  .transition-opacity,
+  .transition-shadow {
+    transition-duration: 150ms;
   }
 }

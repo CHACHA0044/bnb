@@ -27,8 +27,8 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://bennenbeans.in"),
 
   icons: {
-    icon: "/images/logo.jpg",
-    apple: "/images/logo.jpg",
+    icon: "/images/logo.ico",
+    apple: "/images/logo.webp",
   },
 
   title: {
@@ -89,11 +89,11 @@ export const metadata: Metadata = {
       "Crispy Karnataka-style Benne Dosa, Thatte Idli, Filter Coffee & more. Handcrafted on cast-iron tawas. Visit us at Ashiyana, Lucknow.",
     images: [
       {
-        url: "/images/benne-dosa.jpg",
+        url: "/images/benne-dosa.webp",
         width: 1200,
         height: 630,
         alt: "Golden crispy Benne Dosa at Benne n Beans, Lucknow",
-        type: "image/jpeg",
+        type: "image/webp",
       },
     ],
   },
@@ -108,7 +108,7 @@ export const metadata: Metadata = {
       "Crispy Benne Dosa, Filter Coffee & South Indian street food now in Lucknow — Ashiyana.",
     images: [
       {
-        url: "/images/benne-dosa.jpg",
+        url: "/images/benne-dosa.webp",
         alt: "Benne Dosa at Benne n Beans, Lucknow",
       },
     ],
@@ -141,8 +141,8 @@ const jsonLd = {
   email: "hello@bennenbeans.in",
   foundingDate: "2025",
   image: [
-    "https://bennenbeans.in/images/benne-dosa.jpg",
-    "https://bennenbeans.in/images/filter-coffee.jpg",
+    "https://bennenbeans.in/images/benne-dosa.webp",
+    "https://bennenbeans.in/images/filter-coffee.webp",
   ],
 
   address: {
@@ -227,21 +227,22 @@ export default function RootLayout({
         <link
           rel="preload"
           as="image"
-          href="/images/benne-dosa.jpg"
+          href="/images/benne-dosa.webp"
+          type="image/webp"
           // @ts-expect-error fetchPriority is valid HTML but TS types lag
           fetchpriority="high"
         />
 
         {/* ② First-scroll images */}
-        <link rel="preload" as="image" href="/images/thatte-idli.jpg" />
-        <link rel="preload" as="image" href="/images/filter-coffee.jpg" />
-        <link rel="preload" as="image" href="/images/uttapam.jpg" />
+        <link rel="preload" as="image" href="/images/thatte-idli.webp" type="image/webp" />
+        <link rel="preload" as="image" href="/images/filter-coffee.webp" type="image/webp" />
+        <link rel="preload" as="image" href="/images/uttapam.webp" type="image/webp" />
 
         {/* ③ Gallery + mid-page — idle prefetch */}
-        <link rel="prefetch" as="image" href="/images/gallery1.jpg" />
-        <link rel="prefetch" as="image" href="/images/gallery2.jpg" />
-        <link rel="prefetch" as="image" href="/images/gallery3.jpg" />
-        <link rel="prefetch" as="image" href="/images/gallery4.jpg" />
+        <link rel="prefetch" as="image" href="/images/gallery1.webp" />
+        <link rel="prefetch" as="image" href="/images/gallery2.webp" />
+        <link rel="prefetch" as="image" href="/images/gallery3.webp" />
+        <link rel="prefetch" as="image" href="/images/gallery4.webp" />
 
         {/* ── DNS prefetch & preconnect ─────────────────────────────────
             Eliminates DNS lookup + TLS handshake latency for Google

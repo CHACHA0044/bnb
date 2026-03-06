@@ -14,7 +14,7 @@ export default function LocationSection() {
   return (
     <section
       id="location"
-      className="section-padding bg-white"
+      className="section-padding content-auto bg-white"
       aria-labelledby="location-heading"
     >
       <div className="max-w-7xl mx-auto">

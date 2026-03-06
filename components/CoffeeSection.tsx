@@ -11,7 +11,7 @@ import { Coffee } from "lucide-react";
 export default function CoffeeSection() {
   return (
     <section
-      className="section-padding text-white overflow-hidden"
+      className="section-padding content-auto text-white overflow-hidden"
       style={{
         background: "linear-gradient(145deg, var(--coffee) 0%, #1e0e08 100%)",
       }}
@@ -31,9 +31,10 @@ export default function CoffeeSection() {
             style={{ boxShadow: "0 30px 60px rgba(0,0,0,0.45)" }}
           >
             <Image
-              src="/images/coffee-pour.jpg"
+              src="/images/coffee-pour.webp"
               alt="Traditional South Indian filter coffee being poured"
               fill
+              loading="lazy"
               className="object-cover"
               sizes="(max-width: 768px) 288px, 320px"
             />
