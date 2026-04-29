@@ -11,7 +11,7 @@ const VALID_TABLES = ["T1", "T2", "T3"];
  */
 router.get("/:tableId", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { tableId } = req.params;
+    const { tableId } = req.params as { tableId: string };
 
     if (!VALID_TABLES.includes(tableId)) {
       res.status(400).json({ error: `Invalid table. Must be one of: ${VALID_TABLES.join(", ")}` });
@@ -21,7 +21,7 @@ router.get("/:tableId", async (req: Request, res: Response): Promise<void> => {
     // Use transaction to prevent race condition (two concurrent requests creating duplicates)
     const session = await prisma.$transaction(async (tx) => {
       const existing = await tx.session.findFirst({
-        where: { tableId, status: "OPEN" },
+        where: { tableId: tableId as string, status: "OPEN" },
         include: {
           orders: {
             include: { items: true },
@@ -34,7 +34,7 @@ router.get("/:tableId", async (req: Request, res: Response): Promise<void> => {
       if (existing) return existing;
 
       return tx.session.create({
-        data: { tableId },
+        data: { tableId: tableId as string },
         include: {
           orders: { include: { items: true } },
           payments: true,

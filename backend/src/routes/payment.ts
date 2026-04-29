@@ -14,7 +14,7 @@ const router = Router();
  */
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sessionId, method, amount, orderId } = req.body;
+    const { sessionId, method, amount, orderId } = req.body as { sessionId: string; method: string; amount: number; orderId?: string };
 
     if (!sessionId || !method || typeof amount !== "number" || amount <= 0) {
       res.status(400).json({ error: "sessionId, method (UPI|CASH), and amount (>0) required" });
@@ -35,7 +35,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     const status = method === "UPI" ? "PENDING" : "UNPAID";
 
     const payment = await prisma.payment.create({
-      data: { sessionId, method, amount, status, orderId: orderId || null },
+      data: { sessionId: sessionId as string, method, amount, status, orderId: orderId || null },
     });
 
     console.log(`[PAYMENT] ${payment.id} — ${method} ₹${amount} → ${status}`);
@@ -62,13 +62,13 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
  */
 router.patch("/:paymentId/confirm", requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { paymentId } = req.params;
+    const { paymentId } = req.params as { paymentId: string };
 
     const payment = await prisma.payment.update({
-      where: { id: paymentId },
+      where: { id: paymentId as string },
       data: { status: "CONFIRMED" },
       include: { session: true },
-    });
+    }) as any;
 
     console.log(`[PAYMENT] ${paymentId} → CONFIRMED`);
 

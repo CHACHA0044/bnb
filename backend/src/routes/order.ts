@@ -12,7 +12,7 @@ const router = Router();
  */
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sessionId, items } = req.body;
+    const { sessionId, items } = req.body as { sessionId: string; items: any[] };
 
     if (!sessionId || !items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: "sessionId and items[] required" });
@@ -36,7 +36,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
 
     const order = await prisma.order.create({
       data: {
-        sessionId,
+        sessionId: sessionId as string,
         items: {
           create: items.map((item: { name: string; price: number; quantity?: number }) => ({
             name: item.name,
@@ -74,7 +74,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
  */
 router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { orderId } = req.params;
+    const { orderId } = req.params as { orderId: string };
     const { status } = req.body;
     const validStatuses = ["PLACED", "PREPARING", "SERVED"];
 

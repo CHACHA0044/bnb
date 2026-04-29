@@ -38,10 +38,10 @@ router.get("/sessions", async (_req: Request, res: Response): Promise<void> => {
  */
 router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sessionId } = req.params;
+    const { sessionId } = req.params as { sessionId: string };
 
     const session = await prisma.session.update({
-      where: { id: sessionId },
+      where: { id: sessionId as string },
       data: { status: "CLOSED" },
       include: {
         orders: { include: { items: true } },
@@ -73,7 +73,7 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
  */
 router.post("/sessions/:sessionId/order", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sessionId } = req.params;
+    const { sessionId } = req.params as { sessionId: string };
     const { items } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -89,7 +89,7 @@ router.post("/sessions/:sessionId/order", async (req: Request, res: Response): P
 
     const order = await prisma.order.create({
       data: {
-        sessionId,
+        sessionId: sessionId as string,
         items: {
           create: items.map((item: { name: string; price: number; quantity?: number }) => ({
             name: item.name,
