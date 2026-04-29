@@ -1,85 +1,101 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { MENU_ITEMS } from "@/lib/constants";
+import { useState } from "react";
+import Image from "next/image";
+import { ORDER_MENU, ORDER_CATEGORIES } from "@/lib/menu";
+import { Coffee } from "lucide-react";
 
 /**
- * MenuGrid — displays all menu items in a responsive 3-col card grid.
- * Staggered reveal + lift-on-hover with soft shadow depth.
+ * MenuGrid optimized for a consistent, premium look.
+ * Removed plus button. Added placeholders for all items.
  */
 export default function MenuGrid() {
+  const [activeCategory, setActiveCategory] = useState(ORDER_CATEGORIES[0]);
+
+  const filteredItems = ORDER_MENU.filter(item => item.category === activeCategory);
+
   return (
-    <section
-      id="menu"
-      className="section-padding bg-white"
-      aria-labelledby="menu-heading"
-    >
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 22 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55 }}
-          className="text-center mb-14"
-        >
-          <span className="text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs">
-            Explore
-          </span>
-          <h2
-            id="menu-heading"
-            className="font-[var(--font-playfair)] text-3xl md:text-4xl font-bold text-[var(--coffee)] mt-2 mb-4"
-          >
-            Our Menu
-          </h2>
-          <p className="text-[var(--text)]/60 max-w-lg mx-auto text-sm sm:text-base leading-relaxed">
-            From crispy dosas to frothy filter coffee — every item is crafted
-            fresh with authentic South Indian recipes.
+    <section className="section-padding bg-[var(--cream)]/20 min-h-screen">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-16">
+          <h1 className="font-[var(--font-playfair)] text-5xl md:text-7xl font-bold text-[var(--coffee)] mb-6">
+            The <span className="text-[var(--benne-primary)]">Menu</span>
+          </h1>
+          <p className="text-[var(--coffee)]/60 max-w-xl mx-auto text-lg leading-relaxed font-light">
+            Each dish is prepared following authentic Karnataka recipes, using ingredients sourced directly from the region.
           </p>
-        </motion.div>
+        </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {MENU_ITEMS.map((item, i) => (
-            <motion.div
-              key={item.name}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-30px" }}
-              transition={{ delay: i * 0.07, duration: 0.45, ease: "easeOut" }}
-              whileHover={{ y: -6, scale: 1.01 }}
-              className="group relative rounded-xl bg-[var(--cream)] p-6
-                shadow-[0_2px_12px_rgba(0,0,0,0.06)]
-                hover:shadow-[0_16px_40px_rgba(0,0,0,0.11)]
-                transition-all duration-300 ease-out
-                border border-[var(--butter-gold)]/12 overflow-hidden"
+        {/* Category Selector */}
+        <div className="flex flex-wrap justify-center gap-3 mb-16 overflow-x-auto pb-4 scrollbar-hide">
+          {ORDER_CATEGORIES.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-8 py-3 rounded-full text-sm font-bold tracking-wide whitespace-nowrap transition-all duration-500 ${
+                activeCategory === cat
+                  ? "bg-[var(--benne-primary)] text-white shadow-lg shadow-[var(--benne-primary)]/30"
+                  : "bg-white text-[var(--coffee)] hover:bg-[var(--cream)] border border-[var(--coffee)]/10"
+              }`}
             >
-              {/* Category badge */}
-              <span className="inline-block text-xs font-semibold tracking-wider uppercase text-[var(--leaf)] bg-[var(--leaf)]/10 px-3 py-1 rounded-full mb-3">
-                {item.category}
-              </span>
+              {cat}
+            </button>
+          ))}
+        </div>
 
-              <h3 className="font-[var(--font-playfair)] text-lg font-semibold text-[var(--coffee)] mb-1.5">
-                {item.name}
-              </h3>
-              <p className="text-sm text-[var(--text)]/60 mb-5 leading-relaxed">
-                {item.description}
-              </p>
-
-              <div className="flex items-center justify-between">
-                <p className="text-xl font-bold text-[var(--benne-primary)]">
-                  {item.price}
-                </p>
-                {/* Animated underline */}
-                <div className="h-0.5 w-0 group-hover:w-8 rounded-full bg-[var(--benne-primary)] transition-all duration-400" />
+        {/* Menu Items Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {filteredItems.map((item) => (
+            <div 
+              key={item.id}
+              className="bg-white rounded-[2.5rem] p-4 flex flex-col group hover:shadow-2xl hover:shadow-[var(--coffee)]/5 transition-all duration-500 border border-[var(--coffee)]/5"
+            >
+              <div className="relative h-64 w-full rounded-[2rem] overflow-hidden mb-6 bg-[var(--cream)] flex items-center justify-center">
+                {item.image ? (
+                  <Image
+                    src={item.image}
+                    alt={item.name}
+                    fill
+                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center gap-3 opacity-20">
+                    <Coffee size={48} className="text-[var(--coffee)]" />
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[var(--coffee)]">Image Coming Soon</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
+              
+              <div className="px-4 pb-6 flex-1 flex flex-col">
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="font-[var(--font-playfair)] text-2xl font-bold text-[var(--coffee)]">
+                    {item.name}
+                  </h3>
+                  <span className="text-xl font-bold text-[var(--benne-primary)]">
+                    {item.priceLabel || `₹${item.price}`}
+                  </span>
+                </div>
+                
+                <p className="text-[var(--coffee)]/60 text-sm leading-relaxed mb-6 font-light">
+                  {item.description || "Authentic South Indian delicacy prepared with traditional methods and fresh ingredients."}
+                </p>
 
-              {/* Decorative corner accent */}
-              <div
-                aria-hidden="true"
-                className="absolute top-0 right-0 w-16 h-16 bg-[var(--benne-primary)]/5 rounded-bl-[3rem] transition-all duration-300 group-hover:bg-[var(--benne-primary)]/12"
-              />
-            </motion.div>
+                <div className="flex items-center gap-2 mt-auto">
+                  {item.tags?.map(tag => (
+                    <span key={tag} className="px-3 py-1 rounded-full bg-[var(--cream)] text-[var(--coffee)]/60 text-[10px] font-bold uppercase tracking-widest">
+                      {tag}
+                    </span>
+                  ))}
+                  {!item.tags && (
+                    <span className="px-3 py-1 rounded-full bg-[var(--cream)] text-[var(--coffee)]/40 text-[10px] font-bold uppercase tracking-widest">
+                      Authentic
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
           ))}
         </div>
       </div>

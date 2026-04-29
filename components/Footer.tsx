@@ -1,140 +1,96 @@
-"use client";
-
-import { Instagram, Facebook, Twitter, MapPin, Phone } from "lucide-react";
-import { RESTAURANT_INFO, NAV_LINKS } from "@/lib/constants";
+import Link from "next/link";
+import { Coffee, Instagram, Facebook, MapPin, Phone, Clock } from "lucide-react";
 
 /**
- * Footer — brand name, quick links, social icons, phone,
- * location, and copyright notice.
- * Uses the updated Premium Café colour palette.
+ * Footer refactored as a Server Component.
+ * Optimized layout for mobile and clean premium aesthetic.
  */
 export default function Footer() {
-  const { name, phone, address, socials } = RESTAURANT_INFO;
-  const year = new Date().getFullYear();
+  const currentYear = new Date().getFullYear();
 
   return (
-    <footer
-      className="text-white"
-      style={{
-        background:
-          "linear-gradient(160deg, var(--coffee) 0%, #1e0d08 100%)",
-      }}
-      role="contentinfo"
-    >
-      <div className="max-w-7xl mx-auto px-6 py-14 grid grid-cols-1 md:grid-cols-3 gap-10">
-
-        {/* Brand */}
-        <div>
-          <h2 className="font-[var(--font-playfair)] text-2xl font-bold mb-3">
-            Benne{" "}
-            <span style={{ color: "var(--benne-primary)" }}>n</span>
-            {" "}Beans
-          </h2>
-          <p className="text-white/55 text-sm leading-relaxed max-w-xs">
-            Authentic South Indian flavours in Lucknow — crispy Benne Dosa,
-            frothy filter coffee &amp; more.
-          </p>
-
-          {/* Subtle divider accent */}
-          <div
-            className="mt-6 h-0.5 w-12 rounded-full"
-            style={{ background: "var(--benne-primary)" }}
-          />
-        </div>
-
-        {/* Quick Links */}
-        <div>
-          <h3
-            className="font-semibold text-xs uppercase tracking-[0.18em] mb-5"
-            style={{ color: "var(--butter-gold)" }}
-          >
-            Quick Links
-          </h3>
-          <ul className="space-y-2.5" role="list">
-            {NAV_LINKS.map((link) => (
-              <li key={link.href}>
-                <a
-                  href={link.href}
-                  className="text-white/65 text-sm transition-colors duration-200 hover:text-white"
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* Contact & Social */}
-        <div>
-          <h3
-            className="font-semibold text-xs uppercase tracking-[0.18em] mb-5"
-            style={{ color: "var(--butter-gold)" }}
-          >
-            Contact
-          </h3>
-          <div className="space-y-3 text-sm text-white/65">
-            <div className="flex items-start gap-2.5">
-              <MapPin
-                size={15}
-                className="mt-0.5 flex-shrink-0"
-                style={{ color: "var(--benne-primary)" }}
-              />
-              <span>
-                {address.line1}, {address.line2}, {address.line3},{" "}
-                {address.city}
+    <footer className="bg-[var(--coffee)] text-white/90">
+      <div className="max-w-7xl mx-auto px-6 py-20">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+          {/* Brand Info */}
+          <div className="space-y-6">
+            <Link href="/" className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-[var(--benne-primary)] rounded-full flex items-center justify-center">
+                <Coffee className="text-white" size={24} />
+              </div>
+              <span className="font-[var(--font-playfair)] text-2xl font-bold tracking-tight">
+                Benne <span className="text-[var(--benne-primary)]">n</span> Beans
               </span>
-            </div>
-            <div className="flex items-center gap-2.5">
-              <Phone
-                size={15}
-                className="flex-shrink-0"
-                style={{ color: "var(--benne-primary)" }}
-              />
-              <a
-                href={`tel:${phone.replace(/\s/g, "")}`}
-                className="hover:text-white transition-colors duration-200"
-              >
-                {phone}
+            </Link>
+            <p className="text-white/60 text-sm leading-relaxed max-w-xs">
+              Bringing the authentic Davangere Benne Dosa and traditional Filter Coffee experience to the heart of Lucknow.
+            </p>
+            <div className="flex gap-4">
+              <a href="#" className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--benne-primary)] hover:border-transparent transition-all">
+                <Instagram size={18} />
+              </a>
+              <a href="#" className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--benne-primary)] hover:border-transparent transition-all">
+                <Facebook size={18} />
               </a>
             </div>
           </div>
 
-          {/* Social icons */}
-          <div className="flex items-center gap-3 mt-7">
-            {[
-              { href: socials.instagram, Icon: Instagram, label: "Follow us on Instagram" },
-              { href: socials.facebook, Icon: Facebook, label: "Follow us on Facebook" },
-              { href: socials.twitter, Icon: Twitter, label: "Follow us on Twitter" },
-            ].map(({ href, Icon, label }) => (
-              <a
-                key={label}
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={label}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-white/70 transition-all duration-300 hover:text-white hover:scale-110"
-                style={{ background: "rgba(255,255,255,0.08)" }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.background =
-                    "var(--benne-primary)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.background =
-                    "rgba(255,255,255,0.08)";
-                }}
-              >
-                <Icon size={17} />
-              </a>
-            ))}
+          {/* Quick Links */}
+          <div>
+            <h4 className="font-bold mb-8 tracking-wider uppercase text-xs text-[var(--benne-primary)]">Quick Links</h4>
+            <ul className="space-y-4">
+              {["Home", "Menu", "Our Story", "Gallery", "Location"].map((item) => (
+                <li key={item}>
+                  <Link 
+                    href={item === "Home" ? "/" : `/${item.toLowerCase().replace(" ", "-")}`}
+                    className="text-white/70 hover:text-[var(--benne-primary)] transition-colors text-sm"
+                  >
+                    {item}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Contact Info */}
+          <div>
+            <h4 className="font-bold mb-8 tracking-wider uppercase text-xs text-[var(--benne-primary)]">Contact Us</h4>
+            <ul className="space-y-4">
+              <li className="flex items-start gap-3 text-white/70 text-sm">
+                <MapPin className="text-[var(--benne-primary)] shrink-0" size={18} />
+                <span>Sector K, Ashiyana, Lucknow, Uttar Pradesh 226012</span>
+              </li>
+              <li className="flex items-center gap-3 text-white/70 text-sm">
+                <Phone className="text-[var(--benne-primary)] shrink-0" size={18} />
+                <span>+91 9123456789</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Hours */}
+          <div>
+            <h4 className="font-bold mb-8 tracking-wider uppercase text-xs text-[var(--benne-primary)]">Opening Hours</h4>
+            <ul className="space-y-4">
+              <li className="flex items-start gap-3 text-white/70 text-sm">
+                <Clock className="text-[var(--benne-primary)] shrink-0" size={18} />
+                <div>
+                  <p className="font-semibold text-white">Mon — Sun</p>
+                  <p className="text-white/50">8:00 AM — 10:30 PM</p>
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
-      </div>
 
-      {/* Bottom bar */}
-      <div className="border-t border-white/10 py-5 text-center text-xs text-white/40 px-6">
-        © {year}{" "}
-        <span className="text-white/55">{name}</span>
-        . All rights reserved.
+        <div className="pt-8 border-t border-white/10 flex flex-col md:flex-row justify-between items-center gap-6">
+          <p className="text-white/40 text-xs">
+            © {currentYear} Benne n Beans. All rights reserved.
+          </p>
+          <div className="flex gap-8 text-white/40 text-xs">
+            <Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <Link href="#" className="hover:text-white transition-colors">Terms of Service</Link>
+          </div>
+        </div>
       </div>
     </footer>
   );

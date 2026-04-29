@@ -1,176 +1,84 @@
-"use client";
-
-import { motion } from "framer-motion";
-import { MapPin, Phone, Clock } from "lucide-react";
-import { RESTAURANT_INFO } from "@/lib/constants";
+import { MapPin, Phone, Mail, Clock, ExternalLink } from "lucide-react";
 
 /**
- * LocationSection — address, phone, hours, and map placeholder.
- * Consistent with the updated Premium Café colour palette.
+ * LocationSection refactored as a Server Component.
+ * Cleaner UI: reduced excessive shadows and gradients.
  */
 export default function LocationSection() {
-  const { address, phone, hours } = RESTAURANT_INFO;
-
   return (
-    <section
-      id="location"
-      className="section-padding bg-white"
-      aria-labelledby="location-heading"
-    >
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 22 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55 }}
-          className="text-center mb-14"
-        >
-          <span className="text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs">
-            Find Us
-          </span>
-          <h2
-            id="location-heading"
-            className="font-[var(--font-playfair)] text-3xl md:text-4xl font-bold text-[var(--coffee)] mt-3"
-          >
-            Our Location
+    <section className="section-padding bg-white">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-16">
+          <h2 className="font-[var(--font-playfair)] text-4xl md:text-5xl font-bold text-[var(--coffee)] mb-4">
+            Visit <span className="text-[var(--benne-primary)]">Our Café</span>
           </h2>
-        </motion.div>
+          <p className="text-[var(--coffee)]/60 max-w-lg mx-auto">
+            Experience the taste of Karnataka in Ashiyana, Lucknow.
+          </p>
+        </div>
 
-        <div className="grid md:grid-cols-2 gap-12 items-start">
-          {/* Info cards */}
-          <motion.div
-            initial={{ opacity: 0, x: -32 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="space-y-8"
-          >
-            {/* Address */}
-            <div className="flex gap-5">
-              <div
-                className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(231,111,81,0.10)" }}
-              >
-                <MapPin className="text-[var(--benne-primary)]" size={22} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          {/* Info Side */}
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-8 rounded-3xl bg-[var(--cream)]/30 border border-[var(--cream)] hover:bg-[var(--cream)]/50 transition-colors">
+                <MapPin className="text-[var(--benne-primary)] mb-6" size={28} />
+                <h4 className="font-bold text-[var(--coffee)] mb-2">Our Address</h4>
+                <p className="text-[var(--coffee)]/60 text-sm leading-relaxed">
+                  Sector K, Ashiyana, <br />
+                  Lucknow, UP 226012
+                </p>
               </div>
-              <div>
-                <h3 className="font-semibold text-[var(--coffee)] mb-1.5">
-                  Address
-                </h3>
-                <p className="text-sm text-[var(--text)]/70 leading-relaxed">
-                  {address.line1}
-                  <br />
-                  {address.line2}
-                  <br />
-                  {address.line3}
-                  <br />
-                  {address.city}
+
+              <div className="p-8 rounded-3xl bg-[var(--cream)]/30 border border-[var(--cream)] hover:bg-[var(--cream)]/50 transition-colors">
+                <Clock className="text-[var(--benne-primary)] mb-6" size={28} />
+                <h4 className="font-bold text-[var(--coffee)] mb-2">Timing</h4>
+                <p className="text-[var(--coffee)]/60 text-sm leading-relaxed">
+                  Mon — Sun <br />
+                  8:00 AM — 10:30 PM
                 </p>
               </div>
             </div>
 
-            {/* Phone */}
-            <div className="flex gap-5">
-              <div
-                className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(106,153,78,0.10)" }}
-              >
-                <Phone className="text-[var(--leaf)]" size={22} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-[var(--coffee)] mb-1.5">
-                  Call Us
-                </h3>
-                <a
-                  href={`tel:${phone.replace(/\s/g, "")}`}
-                  className="text-sm text-[var(--benne-primary)] hover:underline"
+            <div className="p-8 rounded-3xl bg-[var(--coffee)] text-white relative overflow-hidden">
+              <div className="relative z-10">
+                <h4 className="font-[var(--font-playfair)] text-2xl font-bold mb-6">Contact Details</h4>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 text-white/80">
+                    <Phone size={18} className="text-[var(--benne-primary)]" />
+                    <span>+91 9123456789</span>
+                  </div>
+                  <div className="flex items-center gap-4 text-white/80">
+                    <Mail size={18} className="text-[var(--benne-primary)]" />
+                    <span>hello@bennenbeans.com</span>
+                  </div>
+                </div>
+                <a 
+                  href="https://maps.google.com" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="mt-8 inline-flex items-center gap-2 bg-[var(--benne-primary)] text-white px-6 py-3 rounded-full font-bold hover:scale-105 transition-all text-sm"
                 >
-                  {phone}
+                  Get Directions <ExternalLink size={16} />
                 </a>
               </div>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-[var(--benne-primary)]/10 rounded-full blur-3xl" />
             </div>
+          </div>
 
-            {/* Hours */}
-            <div className="flex gap-5">
-              <div
-                className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center"
-                style={{ background: "rgba(244,162,97,0.10)" }}
-              >
-                <Clock className="text-[var(--butter-gold)]" size={22} />
-              </div>
-              <div>
-                <h3 className="font-semibold text-[var(--coffee)] mb-1.5">
-                  Opening Hours
-                </h3>
-                <p className="text-sm text-[var(--text)]/70">
-                  Mon – Fri: {hours.weekday}
-                  <br />
-                  Sat – Sun: {hours.weekend}
-                </p>
-              </div>
-            </div>
-
-            {/* CTA */}
-            <a
-              href={`tel:${phone.replace(/\s/g, "")}`}
-              className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full text-white font-semibold text-sm transition-all duration-300 active:scale-95"
-              style={{
-                background: "var(--benne-primary)",
-                boxShadow: "0 8px 24px rgba(231,111,81,0.35)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.background =
-                  "var(--rustic-orange)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.background =
-                  "var(--benne-primary)";
-              }}
-            >
-              <Phone size={16} aria-hidden="true" />
-              Call to Reserve
-            </a>
-          </motion.div>
-
-          {/* Google Map embed */}
-          <motion.div
-            initial={{ opacity: 0, x: 32 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.18, ease: "easeOut" }}
-            className="flex flex-col gap-3"
-          >
-            <div
-              className="relative rounded-3xl overflow-hidden"
-              style={{ boxShadow: "0 20px 50px rgba(0,0,0,0.12)" }}
-            >
-              <iframe
-                title="Benne n Beans location"
-                src="https://maps.google.com/maps?q=Sany+Palace+Opposite+Emerald+Mall+Ashiyana+Lucknow&output=embed&z=16"
-                width="100%"
-                height="380"
-                style={{ border: 0, display: "block" }}
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
-            </div>
-            <a
-              href="https://maps.app.goo.gl/xUT2H131zFcMdxZH8"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-2xl font-semibold text-sm transition-all duration-300 hover:scale-[1.02] active:scale-95"
-              style={{
-                background: "linear-gradient(45deg, var(--benne-primary), var(--rustic-orange))",
-                color: "white",
-                boxShadow: "0 6px 20px rgba(231,111,81,0.35)",
-              }}
-            >
-              <MapPin size={16} />
-              Get Directions on Google Maps
-            </a>
-          </motion.div>
+          {/* Map Side - Use a cleaner static placeholder or lightweight embed */}
+          <div className="h-[400px] lg:h-auto rounded-3xl overflow-hidden shadow-lg border-4 border-white">
+            <iframe
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3561.821734947936!2d80.9163013!3d26.7820641!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x399bfb0000000000%3A0x0!2zMjbCsDQ2JzU1LjQiTiA4MMKwNTQnNTguNyJF!5e0!3m2!1sen!2sin!4v1714392000000!5m2!1sen!2sin"
+              width="100%"
+              height="100%"
+              style={{ border: 0 }}
+              allowFullScreen
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              title="Benne n Beans Location"
+            />
+          </div>
         </div>
       </div>
     </section>

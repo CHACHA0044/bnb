@@ -1,86 +1,88 @@
-"use client";
-
 import Image from "next/image";
-import { motion } from "framer-motion";
-import { SIGNATURE_ITEMS } from "@/lib/constants";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
+const SIGNATURE_ITEMS = [
+  {
+    name: "Plain Benne Dosa",
+    price: "₹140",
+    image: "/images/benne-dosa.webp",
+    description: "The golden crunch of Davangere style butter dosa.",
+  },
+  {
+    name: "Filter Coffee",
+    price: "₹40",
+    image: "/images/filter-coffee.webp",
+    description: "Classic brass tumbler coffee, frothed to perfection.",
+  },
+  {
+    name: "Thatte Idli",
+    price: "₹70",
+    image: "/images/thatte-idli.webp",
+    description: "Soft, plate-sized idli served with butter and spicy podi.",
+  },
+];
 
 /**
- * SignatureItems — 4-card grid showcasing hero dishes.
- * Staggered scroll reveal + lift/shadow/scale hover effect.
+ * SignatureItems refactored as a Server Component.
+ * Using real images from the public folder.
  */
-const cardVariants = {
-  hidden: { opacity: 0, y: 36 },
-  visible: (i: number) => ({
-    opacity: 1,
-    y: 0,
-    transition: { delay: i * 0.14, duration: 0.55 },
-  }),
-};
-
 export default function SignatureItems() {
   return (
-    <section className="section-padding bg-white" aria-labelledby="sig-heading">
-      <div className="max-w-7xl mx-auto text-center">
-        {/* Heading */}
-        <motion.div
-          initial={{ opacity: 0, y: 22 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.55 }}
-          className="mb-14"
-        >
-          <span className="inline-block text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs mb-3">
-            Chef&apos;s Picks
-          </span>
-          <h2
-            id="sig-heading"
-            className="font-[var(--font-playfair)] text-3xl md:text-4xl font-bold text-[var(--coffee)] mb-4"
+    <section className="section-padding bg-[var(--cream)]">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="flex justify-between items-end mb-12">
+          <div className="max-w-xl">
+            <h2 className="font-[var(--font-playfair)] text-4xl md:text-5xl font-bold text-[var(--coffee)] mb-4">
+              Our <span className="text-[var(--benne-primary)] italic">Signatures</span>
+            </h2>
+            <p className="text-[var(--coffee)]/70 text-lg">
+              The dishes that define us. Crafted with authentic ingredients sourced directly from Karnataka.
+            </p>
+          </div>
+          <Link 
+            href="/menu" 
+            className="hidden md:flex items-center gap-2 text-[var(--benne-primary)] font-bold border-b-2 border-transparent hover:border-[var(--benne-primary)] transition-all pb-1"
           >
-            Our Signature Dishes
-          </h2>
-          <p className="text-[var(--text)]/60 max-w-xl mx-auto text-sm sm:text-base leading-relaxed">
-            Handpicked classics that define the soul of South Indian cuisine —
-            each prepared fresh, every single time.
-          </p>
-        </motion.div>
+            View Full Menu <ArrowRight size={18} />
+          </Link>
+        </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7">
-          {SIGNATURE_ITEMS.map((item, i) => (
-            <motion.article
-              key={item.title}
-              custom={i}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true, margin: "-40px" }}
-              variants={cardVariants}
-              whileHover={{ y: -8, scale: 1.02 }}
-              transition={{ type: "spring", stiffness: 280, damping: 22 }}
-              className="group rounded-2xl overflow-hidden bg-[var(--cream)] shadow-[0_4px_20px_rgba(0,0,0,0.07)] hover:shadow-[0_20px_48px_rgba(0,0,0,0.13)] transition-all duration-300 ease-out cursor-pointer"
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {SIGNATURE_ITEMS.map((item, idx) => (
+            <div 
+              key={idx} 
+              className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-500 border border-[var(--coffee)]/5"
             >
-              {/* Image */}
-              <div className="relative h-52 overflow-hidden">
+              <div className="relative h-72 overflow-hidden">
                 <Image
                   src={item.image}
-                  alt={item.title}
+                  alt={item.name}
                   fill
-                  className="object-cover group-hover:scale-110 transition-transform duration-500 ease-out"
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                  className="object-cover transition-transform duration-700 group-hover:scale-110"
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-md px-4 py-1 rounded-full font-bold text-[var(--coffee)] shadow-sm">
+                  {item.price}
+                </div>
               </div>
-
-              {/* Body */}
-              <div className="p-5 text-left">
-                <h3 className="font-[var(--font-playfair)] text-lg font-semibold text-[var(--coffee)] mb-2">
-                  {item.title}
+              <div className="p-8">
+                <h3 className="font-[var(--font-playfair)] text-2xl font-bold text-[var(--coffee)] mb-3">
+                  {item.name}
                 </h3>
-                <p className="text-sm text-[var(--text)]/65 leading-relaxed">
+                <p className="text-[var(--coffee)]/60 text-sm leading-relaxed mb-6">
                   {item.description}
                 </p>
-                <div className="mt-4 h-0.5 w-0 group-hover:w-10 rounded-full bg-[var(--benne-primary)] transition-all duration-500" />
+                <Link 
+                  href="/menu"
+                  className="inline-flex items-center gap-2 text-sm font-bold text-[var(--benne-primary)] group/link"
+                >
+                  Order Now 
+                  <span className="transition-transform group-hover/link:translate-x-1">→</span>
+                </Link>
               </div>
-            </motion.article>
+            </div>
           ))}
         </div>
       </div>

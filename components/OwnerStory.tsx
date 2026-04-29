@@ -1,142 +1,77 @@
-"use client";
-
 import Image from "next/image";
-import { motion } from "framer-motion";
 
 /**
- * OwnerStory — "Why We Started Benne n Beans"
- * Two-column on desktop (image left, text right), stacked on mobile.
- * Soft scroll-reveal animations; warm cream background.
+ * OwnerStory — Masterpiece heritage layout.
+ * Balanced grid, refined photo positioning, and high-end typography.
  */
-
-const staggerContainer = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.13, delayChildren: 0.1 } },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 26 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.6 } },
-};
-
 export default function OwnerStory() {
   return (
-    <section
-      id="owner-story"
-      className="section-padding"
-      style={{
-        background: "linear-gradient(160deg, var(--cream) 0%, #fdf6ee 100%)",
-      }}
-      aria-labelledby="owner-story-heading"
-    >
-      <div className="max-w-7xl mx-auto grid md:grid-cols-2 gap-12 lg:gap-20 items-center">
-
-        {/* Left — image */}
-        <motion.div
-          initial={{ opacity: 0, x: -44 }}
-          whileInView={{ opacity: 1, x: 0 }}
-          viewport={{ once: true, margin: "-60px" }}
-          transition={{ duration: 0.75, ease: "easeOut" }}
-          className="relative"
-        >
-          <div
-            className="relative h-[420px] md:h-[540px] rounded-3xl overflow-hidden"
-            style={{ boxShadow: "0 30px 70px rgba(58,36,28,0.18)" }}
-          >
-            <Image
-              src="/images/ownersimage.jpg"
-              alt="The founders of Benne n Beans in their restaurant"
-              fill
-              className="object-cover"
-              sizes="(max-width: 768px) 100vw, 50vw"
-            />
-            {/* Warm tint overlay */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(to top, rgba(58,36,28,0.28) 0%, transparent 60%)",
-              }}
-            />
+    <section className="relative overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
+          
+          {/* Photo Column - Refined Position */}
+          <div className="relative group order-2 lg:order-1">
+            <div className="relative z-20 rounded-[2.5rem] overflow-hidden shadow-2xl shadow-[var(--coffee)]/30 border-[12px] border-white transform transition-transform duration-700 hover:rotate-1">
+              <Image
+                src="/images/ownersimage.webp"
+                alt="The founders of Benne n Beans"
+                width={800}
+                height={1000}
+                className="w-full h-auto object-cover"
+                priority
+              />
+            </div>
+            
+            {/* Classy Decorative Elements */}
+            <div className="absolute -top-10 -left-10 w-40 h-40 bg-[var(--benne-primary)]/10 rounded-full blur-2xl -z-10 animate-pulse" />
+            <div className="absolute -bottom-16 -right-16 w-64 h-64 bg-[var(--butter-gold)]/20 rounded-full blur-3xl -z-10" />
+            
+            {/* The Heritage Badge */}
+            <div className="absolute -bottom-8 -left-6 md:-left-12 z-30 bg-[var(--coffee)] p-8 md:p-10 rounded-[2rem] shadow-2xl border-4 border-white text-center">
+              <p className="font-[var(--font-playfair)] text-4xl md:text-5xl font-bold text-[var(--benne-primary)]">10+</p>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-white/40 leading-none mt-2">
+                Years of <br /> Heritage
+              </p>
+            </div>
           </div>
 
-          {/* Floating accent badge */}
-          <div
-            className="absolute -bottom-5 -right-4 md:-right-6 rounded-2xl px-5 py-4 text-center"
-            style={{
-              background: "var(--benne-primary)",
-              boxShadow: "0 12px 32px rgba(231,111,81,0.38)",
-            }}
-          >
-            <p className="font-[var(--font-playfair)] text-2xl font-bold text-white leading-none">
-              2025
-            </p>
-            <p className="text-white/80 text-xs mt-1 tracking-wide">Since</p>
-          </div>
-        </motion.div>
+          {/* Text Column - High Contrast */}
+          <div className="space-y-8 order-1 lg:order-2">
+            <div>
+              <span className="text-[var(--benne-primary)] font-black tracking-[0.4em] uppercase text-[10px] mb-4 block">
+                The Heart of the Bean
+              </span>
+              <h1 className="font-[var(--font-playfair)] text-5xl md:text-7xl font-bold text-[var(--coffee)] leading-[1.1]">
+                From Karnataka <br /> 
+                <span className="text-[var(--benne-primary)] italic">to Your Table.</span>
+              </h1>
+            </div>
 
-        {/* Right — staggered text */}
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true, margin: "-60px" }}
-          className="flex flex-col gap-5"
-        >
-          <motion.span
-            variants={fadeUp}
-            className="inline-block font-semibold tracking-[0.18em] uppercase text-xs"
-            style={{ color: "var(--butter-gold)" }}
-          >
-            Our Founders
-          </motion.span>
+            <div className="space-y-6 text-[var(--coffee)]/80 leading-relaxed text-lg md:text-xl font-light">
+              <p>
+                Our journey began with a simple craving—the craving for a <span className="font-bold text-[var(--coffee)] border-b-2 border-[var(--benne-primary)]/30">real Benne Dosa</span> in the heart of North India. Having grown up with the aroma of freshly ground coffee and the golden crunch of butter-ladled dosas, we realized something was missing in Lucknow.
+              </p>
+              <p>
+                Benne n Beans was born out of a passion to bridge that gap. We didn't just want to serve food; we wanted to transport you to the bustling streets of Davangere and the misty plantations of Chikkamagaluru.
+              </p>
+            </div>
 
-          <motion.h2
-            id="owner-story-heading"
-            variants={fadeUp}
-            className="font-[var(--font-playfair)] text-3xl md:text-4xl lg:text-[2.6rem] font-bold leading-tight"
-            style={{ color: "var(--coffee)" }}
-          >
-            Why We Started{" "}
-            <span style={{ color: "var(--benne-primary)" }}>Benne n Beans</span>
-          </motion.h2>
+            <div className="pt-6">
+              <p className="italic font-[var(--font-playfair)] text-2xl md:text-3xl text-[var(--coffee)] border-l-8 border-[var(--benne-primary)] pl-8 py-4 leading-snug">
+                "We don't just use butter; we use memory. Every dosa is a piece of our home."
+              </p>
+            </div>
 
-          <div
-            className="space-y-4 text-sm sm:text-base leading-relaxed"
-            style={{ color: "var(--deep-brown)", opacity: 0.78 }}
-          >
-            {[
-              "Growing up with the flavours of Karnataka, our founders carried a deep love for Davangere-style benne dosa — the kind cooked on well-seasoned cast-iron tawas, slathered in pure white butter, and served piping hot with coconut chutney.",
-              "When they moved to Lucknow, they couldn't find a single place that captured that authentic taste. So they decided to build one. Benne n Beans was born from a simple mission: bring the real Karnataka street-food experience to the City of Nawabs.",
-              "Every item on our menu — from the butter-drenched dosas to the slow-dripped filter coffee — reflects our obsession with staying true to tradition. No shortcuts. No compromises. Just honest, soulful food cooked with passion.",
-            ].map((para, i) => (
-              <motion.p key={i} variants={fadeUp}>{para}</motion.p>
-            ))}
+            <div className="pt-10 flex items-center gap-6">
+              <div className="w-16 h-1 bg-[var(--benne-primary)] rounded-full" />
+              <p className="font-[var(--font-playfair)] text-2xl font-bold text-[var(--coffee)]">
+                Prana & The Team
+              </p>
+            </div>
           </div>
 
-          {/* Values row */}
-          <motion.div variants={fadeUp} className="mt-4 grid grid-cols-3 gap-4">
-            {[
-              { icon: "🌿", label: "Authentic" },
-              { icon: "🔥", label: "Passionate" },
-              { icon: "🫶", label: "Soulful" },
-            ].map((val) => (
-              <div
-                key={val.label}
-                className="flex flex-col items-center gap-2 py-4 px-3 rounded-2xl text-center"
-                style={{ background: "rgba(231,111,81,0.07)" }}
-              >
-                <span className="text-xl" aria-hidden="true">{val.icon}</span>
-                <span
-                  className="text-xs font-semibold tracking-wide uppercase"
-                  style={{ color: "var(--coffee)" }}
-                >
-                  {val.label}
-                </span>
-              </div>
-            ))}
-          </motion.div>
-        </motion.div>
+        </div>
       </div>
     </section>
   );

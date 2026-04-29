@@ -81,47 +81,35 @@ html {
   100% { background-position: 200% center; }
 }
 @keyframes blurFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(40px);
-    filter: blur(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0px);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-50px);
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-    filter: blur(0px);
-  }
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 @keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(50px);
-    filter: blur(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-    filter: blur(0px);
-  }
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes fade-in-up-hero {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slow-zoom {
+  from { transform: scale(1.05); }
+  to { transform: scale(1.15); }
 }
 
 .animate-float {
   animation: float 4s ease-in-out infinite;
+  /* Pre-promote to GPU layer — no layout cost during the infinite loop */
+  will-change: transform;
 }
 .animate-steam {
   animation: steam 2.5s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 .animate-fade-in-up {
   animation: fadeInUp 0.6s ease-out forwards;
@@ -134,6 +122,13 @@ html {
 }
 .animate-slide-in-right {
   animation: slideInRight 0.7s ease-out forwards;
+}
+
+.animate-fade-in-up-hero {
+  animation: fade-in-up-hero 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.animate-slow-zoom {
+  animation: slow-zoom 20s linear infinite alternate;
 }
 
 /* ---- Scroll animations ---- */
@@ -158,6 +153,46 @@ html {
   .mobile-spacing {
     margin-bottom: 2rem;
   }
+
+  /* Disable infinite animations on mobile for smoother scrolling */
+  .animate-float {
+    animation: none;
+  }
+  .animate-steam {
+    animation: none;
+    opacity: 0.3;
+  }
+
+  /* Reduce expensive backdrop-filter on mobile */
+  .navbar-scrolled,
+  [style*="backdrop-filter"] {
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  /* Disable hover transforms on touch devices */
+  .card-hover:hover {
+    transform: none;
+  }
+
+  /* Disable content-visibility on mobile to prevent blank sections */
+  .content-auto {
+    content-visibility: visible !important;
+    contain-intrinsic-size: auto;
+  }
+
+  /* Simpler shadows on mobile */
+  .shadow-soft {
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+  }
+  .shadow-soft-lg {
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.10);
+  }
+
+  /* Faster, subtler transitions on mobile */
+  * {
+    transition-duration: 150ms !important;
+  }
 }
 
 /* ---- Warm gradient backgrounds ---- */
@@ -176,6 +211,9 @@ html {
 /* ---- Section padding helper ---- */
 .section-padding {
   padding: 5rem 1.5rem;
+  /* Contain paint/layout to each section individually — a repaint in one
+     section does not cascade to adjacent sections */
+  contain: layout style paint;
 }
 @media (min-width: 640px) {
   .section-padding {
@@ -196,6 +234,8 @@ html {
 /* ---- Card base ---- */
 .card-hover {
   transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
+  /* GPU layer — hover transform runs on compositor, no layout thrash */
+  will-change: transform;
 }
 .card-hover:hover {
   transform: translateY(-6px) scale(1.015);
@@ -223,4 +263,61 @@ html {
   outline: 2px solid var(--benne-primary);
   outline-offset: 3px;
   border-radius: 4px;
+}
+
+/* ---- Reduced-motion — accessibility + perf on low-end devices ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---- Content visibility for below-fold sections ---- */
+/* Allows browser to skip rendering of off-screen content */
+.content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* ---- Touch optimizations ---- */
+@media (pointer: coarse) {
+  /* Improve touch response */
+  a, button {
+    touch-action: manipulation;
+  }
+
+  /* Disable hover states on touch devices to prevent sticky hover */
+  .group:hover .group-hover\:scale-105 {
+    transform: none;
+  }
+
+  /* Faster transitions on touch for snappier feel */
+  .transition-all,
+  .transition-transform,
+  .transition-colors,
+  .transition-opacity,
+  .transition-shadow {
+    transition-duration: 100ms;
+  }
+
+  /* Disable transform animations on hover for touch */
+  *:hover {
+    transform: none !important;
+  }
+}
+
+/* ---- Ensure sections never become invisible ---- */
+section {
+  /* Prevent content from disappearing on scroll */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* ---- Force GPU acceleration for smoother animations ---- */
+.gpu-accelerate {
+  transform: translateZ(0);
+  will-change: transform;
 }
