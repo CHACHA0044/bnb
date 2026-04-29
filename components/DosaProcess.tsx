@@ -1,119 +1,69 @@
-"use client";
-
 import Image from "next/image";
-import { motion } from "framer-motion";
-import { DOSA_PROCESS } from "@/lib/constants";
-import { useEffect, useState } from "react";
 
-/** Hook to detect mobile viewport */
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check, { passive: true });
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  return isMobile;
-}
+const STEPS = [
+  {
+    number: "01",
+    title: "The Fermentation",
+    desc: "12 hours of natural fermentation ensures the perfect tang and fluffiness.",
+  },
+  {
+    number: "02",
+    title: "The Benne",
+    desc: "Pure, artisanal butter sourced to give that signature Davangere crunch.",
+  },
+  {
+    number: "03",
+    title: "The Heat",
+    desc: "Cast-iron griddles maintained at exact temperatures for consistent gold.",
+  },
+];
 
 /**
- * DosaProcess — step-by-step visual walkthrough of how
- * Benne Dosa is made, with staggered scroll animations.
+ * DosaProcess refactored as a Server Component.
+ * Optimized performance: replaced viewport-triggered Framer Motion with static layout.
  */
 export default function DosaProcess() {
-  const isMobile = useIsMobile();
-
   return (
-    <section
-      className="section-padding text-white overflow-hidden"
-      style={{
-        background:
-          "linear-gradient(135deg, var(--coffee) 0%, #2a160f 100%)",
-      }}
-      aria-labelledby="process-heading"
-    >
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: isMobile ? 1 : 0, y: isMobile ? 0 : 14 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, amount: 0.3 }}
-          transition={{ duration: isMobile ? 0.2 : 0.4 }}
-          className="text-center mb-14"
-        >
-          <span className="text-[var(--butter-gold)] font-semibold tracking-[0.18em] uppercase text-xs">
-            The Craft
-          </span>
-          <h2
-            id="process-heading"
-            className="font-[var(--font-playfair)] text-3xl md:text-4xl font-bold mt-3"
-          >
-            How We Make Benne Dosa
+    <section className="section-padding bg-[var(--cream)]/30">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="text-center mb-20">
+          <h2 className="font-[var(--font-playfair)] text-4xl md:text-5xl font-bold text-[var(--coffee)] mb-6">
+            The Craft of the <span className="text-[var(--benne-primary)] italic">Perfect Crunch</span>
           </h2>
-        </motion.div>
+          <div className="w-24 h-1 bg-[var(--benne-primary)] mx-auto rounded-full" />
+        </div>
 
-        <div className="grid md:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* Steps */}
-          <div className="space-y-7">
-            {DOSA_PROCESS.map((step, i) => (
-              <motion.div
-                key={step.step}
-                initial={{ opacity: isMobile ? 1 : 0, x: isMobile ? 0 : -18 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, amount: 0.3 }}
-                transition={{ delay: isMobile ? 0 : i * 0.05, duration: isMobile ? 0.15 : 0.3, ease: "easeOut" }}
-                className="flex gap-5 group"
-              >
-                {/* Step number circle */}
-                <div
-                  className="flex-shrink-0 w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-lg md:transition-transform md:duration-300 md:group-hover:scale-110"
-                  style={{
-                    background: "var(--benne-primary)",
-                    boxShadow: "0 6px 20px rgba(231,111,81,0.35)",
-                  }}
-                >
-                  {step.step}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+          <div className="grid grid-cols-1 gap-12">
+            {STEPS.map((step) => (
+              <div key={step.number} className="group flex gap-8">
+                <div className="shrink-0 font-[var(--font-playfair)] text-5xl font-black text-[var(--benne-primary)]/10 group-hover:text-[var(--benne-primary)]/30 transition-colors duration-500">
+                  {step.number}
                 </div>
                 <div>
-                  <h3 className="font-[var(--font-playfair)] text-lg font-semibold mb-1.5">
-                    {step.title}
-                  </h3>
-                  <p className="text-white/68 text-sm leading-relaxed">
-                    {step.description}
+                  <h3 className="text-xl font-bold text-[var(--coffee)] mb-2">{step.title}</h3>
+                  <p className="text-[var(--coffee)]/60 leading-relaxed text-sm max-w-sm">
+                    {step.desc}
                   </p>
                 </div>
-              </motion.div>
+              </div>
             ))}
           </div>
 
-          {/* Image */}
-          <motion.div
-            initial={{ opacity: isMobile ? 1 : 0, scale: isMobile ? 1 : 0.97 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true, amount: 0.3 }}
-            transition={{ duration: isMobile ? 0.2 : 0.4, ease: "easeOut" }}
-            style={{ boxShadow: "0 30px 60px rgba(0,0,0,0.35)" }}
-            className="relative h-[400px] md:h-[520px] rounded-2xl overflow-hidden"
-          >
+          <div className="relative aspect-video lg:aspect-square rounded-3xl overflow-hidden shadow-2xl shadow-[var(--coffee)]/10">
             <Image
               src="/images/dosa-making.webp"
-              alt="Dosa being prepared on a cast iron tawa"
+              alt="Dosa preparation process"
               fill
-              loading="lazy"
               className="object-cover"
               sizes="(max-width: 768px) 100vw, 50vw"
             />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(to top, rgba(58,36,28,0.55) 0%, transparent 55%)",
-              }}
-            />
-          </motion.div>
+            <div className="absolute inset-0 bg-gradient-to-t from-[var(--coffee)]/40 to-transparent" />
+            <div className="absolute bottom-8 left-8 right-8 text-white">
+              <p className="font-[var(--font-playfair)] text-2xl font-bold mb-1">Authentic Process</p>
+              <p className="text-sm opacity-80 uppercase tracking-widest">No shortcuts, just soul.</p>
+            </div>
+          </div>
         </div>
       </div>
     </section>

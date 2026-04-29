@@ -1,203 +1,177 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X } from "lucide-react";
-import { NAV_LINKS } from "@/lib/constants";
+import { Menu, X, Coffee, ChevronRight } from "lucide-react";
 
 /**
- * Navbar — sticky top navigation with glass-blur effect on scroll.
- * Transparent at the top; frosted-cream on scroll.
- * Mobile: animated hamburger → staggered slide-down link list.
- * Fixed: Smooth scroll navigation that works reliably on mobile.
+ * Intelligent Navbar with Spring Physics.
+ * Automatically adapts colors based on page header themes (Light vs Dark).
  */
 export default function Navbar() {
+  const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 40);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Handle link click with smooth scroll for mobile
-  const handleLinkClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    e.preventDefault();
+  const navLinks = [
+    { name: "Home", href: "/" },
+    { name: "Menu", href: "/menu" },
+    { name: "Our Story", href: "/story" },
+    { name: "Gallery", href: "/gallery" },
+    { name: "Location", href: "/location" },
+  ];
 
-    // Close mobile menu first
-    setMobileOpen(false);
+  // Logic: Menu page has a dark header initially. Story & Home (top) vary.
+  const isDarkHeaderPage = pathname === "/menu";
+  const shouldBeWhite = !scrolled && (pathname === "/" || isDarkHeaderPage);
+  const textColor = shouldBeWhite ? "#FFFFFF" : "#3A241C";
 
-    // Get the target element
-    const targetId = href.replace('#', '');
-    const targetElement = document.getElementById(targetId);
-
-    if (targetElement) {
-      // Small delay to allow menu to close, then scroll
-      setTimeout(() => {
-        const navbarHeight = 80; // Account for fixed navbar
-        const elementPosition = targetElement.getBoundingClientRect().top;
-        const offsetPosition = elementPosition + window.pageYOffset - navbarHeight;
-
-        window.scrollTo({
-          top: offsetPosition,
-          behavior: 'smooth'
-        });
-      }, 100);
-    }
-  }, []);
-
-  // Handle desktop link click
-  const handleDesktopLinkClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
-    e.preventDefault();
-
-    const targetId = href.replace('#', '');
-    const targetElement = document.getElementById(targetId);
-
-    if (targetElement) {
-      const navbarHeight = 80;
-      const elementPosition = targetElement.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - navbarHeight;
-
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth'
-      });
-    }
-  }, []);
+  const isActive = (href: string) => pathname === href;
 
   return (
-    <nav
-      role="navigation"
-      aria-label="Main navigation"
-      style={
-        scrolled
-          ? {
-              background: "rgba(243,232,218,0.72)",
-              backdropFilter: "blur(14px)",
-              WebkitBackdropFilter: "blur(14px)",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
-            }
-          : undefined
-      }
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-500 ease-out ${
-        !scrolled ? "bg-transparent" : ""
-      }`}
-    >
-      <div className="max-w-7xl mx-auto flex items-center justify-between px-5 md:px-8 py-4">
-        {/* Logo */}
-        <a
-          href="#home"
-          onClick={(e) => handleDesktopLinkClick(e, '#home')}
-          className="font-[var(--font-playfair)] text-2xl md:text-3xl font-bold tracking-tight select-none"
-          style={{ color: scrolled ? "var(--coffee)" : "white" }}
-        >
-          Benne{" "}
-          <span style={{ color: "var(--benne-primary)" }}>n</span>
-          {" "}Beans
-        </a>
-
-        {/* Desktop links */}
-        <ul className="hidden md:flex items-center gap-8" role="list">
-          {NAV_LINKS.map((link) => (
-            <li key={link.href}>
-              <a
-                href={link.href}
-                onClick={(e) => handleDesktopLinkClick(e, link.href)}
-                className="relative text-sm font-medium transition-colors duration-300
-                  after:absolute after:bottom-[-4px] after:left-0 after:h-[2px]
-                  after:w-0 after:rounded-full after:bg-[var(--benne-primary)]
-                  after:transition-all after:duration-300 hover:after:w-full"
-                style={{ color: scrolled ? "var(--coffee)" : "rgba(255,255,255,0.9)" }}
-              >
-                {link.label}
-              </a>
-            </li>
-          ))}
-        </ul>
-
-        {/* Mobile toggle */}
-        <motion.button
-          aria-label={mobileOpen ? "Close menu" : "Open menu"}
-          aria-expanded={mobileOpen}
-          aria-controls="mobile-menu"
-          className="md:hidden flex items-center justify-center w-11 h-11 rounded-xl
-            transition-colors duration-200 active:scale-95"
-          style={{ color: scrolled ? "var(--coffee)" : "white" }}
-          onClick={() => setMobileOpen((prev) => !prev)}
-          whileTap={{ scale: 0.9 }}
-        >
-          <AnimatePresence mode="wait" initial={false}>
-            {mobileOpen ? (
-              <motion.span
-                key="close"
-                initial={{ rotate: -90, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                exit={{ rotate: 90, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <X size={24} strokeWidth={2} />
-              </motion.span>
-            ) : (
-              <motion.span
-                key="open"
-                initial={{ rotate: 90, opacity: 0 }}
-                animate={{ rotate: 0, opacity: 1 }}
-                exit={{ rotate: -90, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Menu size={24} strokeWidth={2} />
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </motion.button>
-      </div>
-
-      {/* Mobile menu */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <motion.div
-            id="mobile-menu"
-            key="mobile-menu"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
-            className="md:hidden overflow-hidden border-t border-white/10"
-            style={{
-              background: "rgba(243,232,218,0.95)",
-              backdropFilter: "blur(16px)",
-              WebkitBackdropFilter: "blur(16px)",
-            }}
-          >
-            <ul
-              className="flex flex-col items-center gap-1 py-5 px-4"
-              role="list"
+    <>
+      <motion.nav 
+        initial={false}
+        animate={{
+          backgroundColor: scrolled ? "rgba(255, 255, 255, 0.8)" : "rgba(255, 255, 255, 0)",
+          paddingTop: scrolled ? "0.75rem" : "1.5rem",
+          paddingBottom: scrolled ? "0.75rem" : "1.5rem",
+          borderBottomLeftRadius: scrolled ? "2.5rem" : "0rem",
+          borderBottomRightRadius: scrolled ? "2.5rem" : "0rem",
+          boxShadow: scrolled ? "0 20px 50px rgba(58, 36, 28, 0.15)" : "0 0px 0px rgba(0,0,0,0)",
+        }}
+        transition={{ type: "spring", stiffness: 100, damping: 20, mass: 1 }}
+        className="fixed top-0 left-0 right-0 z-[100] border-b border-transparent"
+        style={{ 
+          backdropFilter: scrolled ? "blur(32px) saturate(180%)" : "blur(0px)",
+          WebkitBackdropFilter: scrolled ? "blur(32px) saturate(180%)" : "blur(0px)",
+          borderBottomColor: scrolled ? "rgba(231, 111, 81, 0.15)" : "transparent"
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
+          <Link href="/" className="flex items-center gap-3 group">
+            <motion.div 
+              animate={{ scale: scrolled ? 0.9 : 1 }}
+              className="w-10 h-10 bg-[var(--benne-primary)] rounded-xl flex items-center justify-center transition-transform group-hover:rotate-12 shadow-lg shadow-[var(--benne-primary)]/20"
             >
-              {NAV_LINKS.map((link, i) => (
-                <motion.li
-                  key={link.href}
-                  initial={{ opacity: 0, x: -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: i * 0.04, duration: 0.2 }}
-                  className="w-full"
+              <Coffee className="text-white" size={20} />
+            </motion.div>
+            <motion.span 
+              animate={{ color: textColor }}
+              className="font-[var(--font-playfair)] text-xl font-bold tracking-tight transition-colors"
+            >
+              Benne <span className="text-[var(--benne-primary)]">n</span> Beans
+            </motion.span>
+          </Link>
+
+          {/* Desktop Nav */}
+          <div className="hidden md:flex items-center gap-10">
+            {navLinks.map((link) => (
+              <Link
+                key={link.name}
+                href={link.href}
+                className="relative text-[11px] font-black tracking-[0.25em] uppercase group/link"
+              >
+                <motion.span
+                  animate={{ color: isActive(link.href) ? "#E76F51" : textColor }}
+                  className="transition-colors"
                 >
-                  <a
+                  {link.name}
+                </motion.span>
+                <motion.span 
+                  className="absolute -bottom-2 left-0 h-[3px] bg-[var(--benne-primary)] rounded-full"
+                  initial={false}
+                  animate={{ width: isActive(link.href) ? "100%" : "0%" }}
+                  whileHover={{ width: "100%" }}
+                />
+              </Link>
+            ))}
+            <Link 
+              href="/menu" 
+              className="bg-[var(--benne-primary)] text-white px-8 py-3 rounded-full text-[11px] font-black shadow-2xl shadow-[var(--benne-primary)]/40 hover:scale-105 active:scale-95 transition-all uppercase tracking-[0.2em]"
+            >
+              Order Now
+            </Link>
+          </div>
+
+          {/* Mobile Toggle */}
+          <motion.button 
+            animate={{ 
+              backgroundColor: shouldBeWhite ? "rgba(255, 255, 255, 0.15)" : "rgba(58, 36, 28, 0.08)",
+              color: textColor
+            }}
+            className="md:hidden w-12 h-12 rounded-xl flex items-center justify-center backdrop-blur-md"
+            onClick={() => setIsOpen(true)}
+            aria-label="Open Menu"
+          >
+            <Menu size={24} />
+          </motion.button>
+        </div>
+      </motion.nav>
+
+      {/* Premium Mobile Drawer */}
+      <AnimatePresence>
+        {isOpen && (
+          <div className="fixed inset-0 z-[110]">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-[var(--coffee)]/80 backdrop-blur-2xl"
+              onClick={() => setIsOpen(false)}
+            />
+            <motion.div 
+              initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 120, damping: 25 }}
+              className="absolute top-0 right-0 w-full max-w-xs h-full bg-[var(--cream)] shadow-2xl flex flex-col p-10"
+            >
+              <div className="flex justify-between items-center mb-16">
+                <div className="w-10 h-10 bg-[var(--benne-primary)] rounded-xl flex items-center justify-center">
+                  <Coffee className="text-white" size={20} />
+                </div>
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[var(--coffee)] shadow-sm"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <nav className="space-y-2">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.name}
                     href={link.href}
-                    onClick={(e) => handleLinkClick(e, link.href)}
-                    className="flex items-center justify-center w-full py-3 text-base font-medium
-                      rounded-xl transition-colors duration-200
-                      text-[var(--coffee)] hover:text-[var(--benne-primary)]
-                      hover:bg-[var(--benne-primary)]/8 active:bg-[var(--benne-primary)]/12"
+                    onClick={() => setIsOpen(false)}
+                    className={`flex items-center justify-between group p-5 rounded-2xl transition-all ${
+                      isActive(link.href) ? "bg-white text-[var(--benne-primary)] shadow-sm" : "text-[var(--coffee)] hover:bg-white/50"
+                    }`}
                   >
-                    {link.label}
-                  </a>
-                </motion.li>
-              ))}
-            </ul>
-          </motion.div>
+                    <span className="text-xl font-bold tracking-tight">{link.name}</span>
+                    <ChevronRight size={18} className="opacity-40" />
+                  </Link>
+                ))}
+              </nav>
+
+              <div className="mt-auto">
+                <Link 
+                  href="/menu" 
+                  onClick={() => setIsOpen(false)}
+                  className="w-full flex items-center justify-center bg-[var(--benne-primary)] text-white py-5 rounded-2xl text-lg font-black shadow-2xl shadow-[var(--benne-primary)]/30 uppercase tracking-widest"
+                >
+                  Order Now
+                </Link>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
-    </nav>
+    </>
   );
 }

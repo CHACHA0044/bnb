@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Poppins } from "next/font/google";
 import "./globals.css";
+import ScrollIndicator from "@/components/ScrollIndicator";
 
 /* ─────────────────────────────────────────────
    Fonts — swap display prevents invisible text
@@ -230,7 +231,7 @@ export default function RootLayout({
           href="/images/benne-dosa.webp"
           type="image/webp"
           // @ts-expect-error fetchPriority is valid HTML but TS types lag
-          fetchpriority="high"
+          fetchPriority="high"
         />
 
         {/* ② First-scroll images */}
@@ -267,7 +268,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className="font-[var(--font-poppins)] antialiased">{children}</body>
+      <body className="font-[var(--font-poppins)] antialiased">
+        <ScrollIndicator />
+        {children}
+      </body>
     </html>
   );
 }

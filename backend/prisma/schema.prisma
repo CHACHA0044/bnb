@@ -1,0 +1,50 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  tableId   String
+  status    String    @default("OPEN") // OPEN | CLOSED
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  orders    Order[]
+  payments  Payment[]
+}
+
+model Order {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   Session     @relation(fields: [sessionId], references: [id])
+  status    String      @default("PLACED") // PLACED | PREPARING | SERVED
+  createdAt DateTime    @default(now())
+  items     OrderItem[]
+  payments  Payment[]
+}
+
+model OrderItem {
+  id       String @id @default(uuid())
+  orderId  String
+  order    Order  @relation(fields: [orderId], references: [id])
+  name     String
+  price    Int    // Price in rupees
+  quantity Int    @default(1)
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id])
+  orderId   String?
+  order     Order?   @relation(fields: [orderId], references: [id])
+  method    String   // UPI | CASH
+  amount    Int      // Amount in rupees
+  status    String   @default("PENDING") // PENDING | CONFIRMED | UNPAID
+  createdAt DateTime @default(now())
+}
