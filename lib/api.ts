@@ -60,6 +60,7 @@ export interface OrderItemData {
 export interface PaymentData {
   id: string;
   sessionId: string;
+  orderId?: string | null;
   method: string;
   amount: number;
   status: string;
@@ -80,10 +81,10 @@ export function placeOrder(sessionId: string, items: { name: string; price: numb
 }
 
 /** Create a payment */
-export function createPayment(sessionId: string, method: "UPI" | "CASH", amount: number) {
+export function createPayment(sessionId: string, method: "UPI" | "CASH", amount: number, orderId?: string) {
   return apiFetch<PaymentData>("/api/payment", {
     method: "POST",
-    body: JSON.stringify({ sessionId, method, amount }),
+    body: JSON.stringify({ sessionId, method, amount, orderId }),
   });
 }
 

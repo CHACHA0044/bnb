@@ -230,7 +230,6 @@ export default function RootLayout({
           as="image"
           href="/images/benne-dosa.webp"
           type="image/webp"
-          // @ts-expect-error fetchPriority is valid HTML but TS types lag
           fetchPriority="high"
         />
 
