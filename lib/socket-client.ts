@@ -10,52 +10,53 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
  * and polling fallback.
  */
 export function useSocket() {
-  const socketRef = useRef<Socket | null>(null);
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const socket = io(API_URL, {
+    const s = io(API_URL, {
       transports: ["websocket", "polling"],
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
     });
 
-    socket.on("connect", () => {
-      console.log("[WS] Connected:", socket.id);
+    s.on("connect", () => {
+      console.log("[WS] Connected:", s.id);
       setConnected(true);
     });
 
-    socket.on("disconnect", () => {
+    s.on("disconnect", () => {
       console.log("[WS] Disconnected");
       setConnected(false);
     });
 
-    socket.on("connect_error", (err) => {
+    s.on("connect_error", (err) => {
       console.warn("[WS] Connection error:", err.message);
     });
 
-    socketRef.current = socket;
+    setSocket(s);
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
+      s.disconnect();
+      setSocket(null);
     };
   }, []);
 
   const joinSession = useCallback((sessionId: string) => {
-    socketRef.current?.emit("join_session", sessionId);
-  }, []);
+    socket?.emit("join_session", sessionId);
+  }, [socket]);
 
   const joinAdmin = useCallback(() => {
-    socketRef.current?.emit("join_admin");
-  }, []);
+    socket?.emit("join_admin");
+  }, [socket]);
 
   const on = useCallback((event: string, handler: (...args: unknown[]) => void) => {
-    socketRef.current?.on(event, handler);
-    return () => { socketRef.current?.off(event, handler); };
-  }, []);
+    if (!socket) return () => {};
+    socket.on(event, handler);
+    return () => { socket.off(event, handler); };
+  }, [socket]);
 
-  return { socket: socketRef.current, connected, joinSession, joinAdmin, on };
+  return { socket, connected, joinSession, joinAdmin, on };
 }

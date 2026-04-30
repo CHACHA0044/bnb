@@ -79,7 +79,7 @@ export default function MenuGrid() {
                 </div>
                 
                 <p className="text-[var(--coffee)]/60 text-sm leading-relaxed mb-6 font-light">
-                  {item.description || "Authentic South Indian delicacy prepared with traditional methods and fresh ingredients."}
+                  {item.descriptionEn || "Authentic South Indian delicacy prepared with traditional methods and fresh ingredients."}
                 </p>
 
                 <div className="flex items-center gap-2 mt-auto">

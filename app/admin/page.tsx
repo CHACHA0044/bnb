@@ -4,16 +4,18 @@ import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Shield, LogOut, Coffee, Loader2, Lock,
-  LayoutDashboard, ShoppingBag, Bell, X
+  LayoutDashboard, ShoppingBag, Bell, X, ChevronRight
 } from "lucide-react";
 import {
   adminFetchSessions, adminCloseSession, adminConfirmPayment,
-  adminUpdateOrder, adminAddOrder,
+  adminUpdateOrder, adminAddOrder, adminToggleItemServed,
+  adminDeletePayment, adminToggleReminder,
   type SessionData,
 } from "@/lib/api";
 import { useSocket } from "@/lib/socket-client";
 import AdminTableColumn from "@/components/AdminTableColumn";
 import AddOrderModal from "@/components/AddOrderModal";
+import AdminMenuManager from "@/components/AdminMenuManager";
 
 const TABLES = ["T1", "T2", "T3"];
 
@@ -35,12 +37,20 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState("");
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"LIVE" | "HISTORY">("LIVE");
+  const [activeTab, setActiveTab] = useState<"LIVE" | "HISTORY" | "MENU">("LIVE");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
   // Modals
   const [addOrderSession, setAddOrderSession] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    show: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    danger?: boolean;
+  }>({ show: false, title: "", message: "", onConfirm: () => {} });
 
   // Check for mobile on mount and resize
   useEffect(() => {
@@ -119,7 +129,18 @@ export default function AdminPage() {
 
   /* ─── Actions ──────────────────────────── */
   const confirmPayment = async (paymentId: string) => {
-    try { await adminConfirmPayment(paymentId, secret); loadSessions(); } catch (err) { console.error(err); }
+    // Optimistic Update
+    setSessions(prev => prev.map(s => ({
+      ...s,
+      payments: s.payments.map(p => p.id === paymentId ? { ...p, status: "CONFIRMED" } : p)
+    })));
+    try { 
+      await adminConfirmPayment(paymentId, secret); 
+      loadSessions(); 
+    } catch (err) { 
+      console.error(err); 
+      loadSessions(); // Rollback
+    }
   };
 
   const updateOrderStatus = async (orderId: string, status: string) => {
@@ -127,8 +148,59 @@ export default function AdminPage() {
   };
 
   const closeSession = async (sessionId: string) => {
-    if (!confirm("Close this session? This cannot be undone.")) return;
-    try { await adminCloseSession(sessionId, secret); loadSessions(); } catch (err) { console.error(err); }
+    setConfirmModal({
+      show: true,
+      title: "Close Session?",
+      message: "This will finalize all orders and payments for this table. This action cannot be undone.",
+      danger: true,
+      onConfirm: async () => {
+        try { await adminCloseSession(sessionId, secret); loadSessions(); } catch (err) { console.error(err); }
+        setConfirmModal(prev => ({ ...prev, show: false }));
+      }
+    });
+  };
+
+  const deletePayment = async (paymentId: string) => {
+    setConfirmModal({
+      show: true,
+      title: "Reject Payment?",
+      message: "Are you sure you want to deny this payment request? The user will be notified to try again.",
+      danger: true,
+      onConfirm: async () => {
+        try { await adminDeletePayment(paymentId, secret); loadSessions(); } catch (err) { console.error(err); }
+        setConfirmModal(prev => ({ ...prev, show: false }));
+      }
+    });
+  };
+
+  const toggleReminder = async (sessionId: string, reminder: boolean) => {
+    // Optimistic Update
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, paymentReminder: reminder } : s));
+    try { 
+      await adminToggleReminder(sessionId, reminder, secret); 
+      loadSessions(); 
+    } catch (err) { 
+      console.error(err); 
+      loadSessions(); // Rollback
+    }
+  };
+
+  const toggleItemServed = async (itemId: string, isServed: boolean) => {
+    // Optimistic Update
+    setSessions(prev => prev.map(s => ({
+      ...s,
+      orders: s.orders.map(o => ({
+        ...o,
+        items: o.items.map(i => i.id === itemId ? { ...i, isServed } : i)
+      }))
+    })));
+
+    try { 
+      await adminToggleItemServed(itemId, isServed, secret); 
+    } catch (err) { 
+      console.error(err); 
+      loadSessions(); // Rollback on error
+    }
   };
 
   const handleAddManualOrder = async (sessionId: string, items: any[], isTakeaway: boolean) => {
@@ -189,70 +261,70 @@ export default function AdminPage() {
 
   /* ─── Dashboard ────────────────────────── */
   return (
-    <div className="min-h-screen bg-[#F9F7F4] flex overflow-x-hidden">
-      {/* Sidebar - Collapsible Detailed Desktop */}
+    <div className="flex min-h-screen bg-[#F9F7F4]">
+      {/* Sidebar Overlay (Mobile) */}
+      <AnimatePresence>
+        {isSidebarOpen && isMobile && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-[#3A241C]/60 backdrop-blur-sm z-[55]"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar */}
       <motion.aside 
         initial={false}
         animate={{ 
-          width: isSidebarOpen ? (isMobile ? "100%" : "280px") : "0px",
-          x: isSidebarOpen ? 0 : (isMobile ? "-100%" : "-280px"),
+          x: isSidebarOpen ? 0 : isMobile ? -300 : -280,
+          width: isMobile ? "280px" : "280px"
         }}
-        transition={{ type: "spring", damping: 20, stiffness: 100 }}
-        className={`fixed h-full z-[60] bg-[#3A241C] flex flex-col shadow-2xl overflow-hidden`}
+        className="fixed left-0 top-0 bottom-0 bg-[#3A241C] text-white z-[60] shadow-2xl flex flex-col overflow-hidden"
       >
-        <div className="p-8 flex flex-col h-full">
-          <div className="flex items-center justify-between mb-12">
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => setIsSidebarOpen(false)}
-                className="w-10 h-10 bg-[#E76F51] rounded-xl flex items-center justify-center shadow-lg shadow-[#E76F51]/20 hover:scale-105 active:scale-95 transition-all"
-              >
-                <Coffee size={20} className="text-white" />
-              </button>
-              <span className="font-[var(--font-playfair)] text-xl font-bold text-white tracking-tight">Admin Deck</span>
-            </div>
-            {isMobile && (
-              <button 
-                onClick={() => setIsSidebarOpen(false)}
-                className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/40 hover:text-white"
-              >
-                <X size={20} />
-              </button>
-            )}
-          </div>
-
-          <nav className="space-y-2 flex-1">
-            {[
-              { id: "LIVE", label: "Live Dashboard", icon: LayoutDashboard },
-              { id: "HISTORY", label: "Session History", icon: ShoppingBag },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id as any);
-                  if (isMobile) setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold text-sm ${
-                  activeTab === item.id 
-                    ? "bg-[#E76F51] text-white shadow-lg shadow-[#E76F51]/20" 
-                    : "text-white/40 hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                <item.icon size={20} />
-                <span className="whitespace-nowrap">{item.label}</span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="pt-8 border-t border-white/5">
+        <div className="p-8 lg:p-10 border-b border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-4">
             <button 
-              onClick={handleLogout}
-              className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[#B71C1C] font-bold text-sm hover:bg-[#B71C1C]/10 transition-all"
+              onClick={() => setIsSidebarOpen(false)}
+              className="w-10 h-10 lg:w-12 lg:h-12 bg-[#E76F51] rounded-2xl flex items-center justify-center shadow-lg shadow-[#E76F51]/20 hover:scale-105 active:scale-95 transition-all"
             >
-              <LogOut size={20} />
-              <span>Logout</span>
+              <Coffee size={24} className="text-white" />
             </button>
+            <div>
+              <h1 className="text-lg lg:text-xl font-black tracking-tight leading-none">BnB</h1>
+              <p className="text-[8px] lg:text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mt-1">Admin Portal</p>
+            </div>
           </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden w-8 h-8 rounded-full bg-white/5 flex items-center justify-center"><X size={18} /></button>
+        </div>
+
+        <nav className="flex-1 p-6 lg:p-8 space-y-2">
+          {[
+            { id: "LIVE", label: "Live Dashboard", icon: LayoutDashboard },
+            { id: "HISTORY", label: "Order History", icon: ShoppingBag },
+            { id: "MENU", label: "Menu Manager", icon: Lock },
+          ].map((item) => (
+            <button
+              key={item.id}
+              onClick={() => { setActiveTab(item.id as any); if (isMobile) setIsSidebarOpen(false); }}
+              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold text-sm ${activeTab === item.id ? "bg-[#E76F51] text-white shadow-lg shadow-[#E76F51]/20" : "text-white/40 hover:bg-white/5 hover:text-white"}`}
+            >
+              <item.icon size={20} />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-8 border-t border-white/5">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-white/5 text-white/60 font-bold text-xs uppercase tracking-widest hover:bg-[#B71C1C] hover:text-white transition-all group"
+          >
+            <LogOut size={16} className="group-hover:-translate-x-1 transition-transform" />
+            Sign Out
+          </button>
         </div>
       </motion.aside>
 
@@ -276,14 +348,14 @@ export default function AdminPage() {
           width: isSidebarOpen && !isMobile ? "calc(100% - 280px)" : "100%"
         }}
         transition={{ type: "spring", damping: 20, stiffness: 100 }}
-        className="flex-1 p-6 lg:p-10 pb-32 min-h-screen"
+        className="flex-1 p-6 lg:p-10 lg:pr-16 pb-32 min-h-screen"
       >
         {/* Header Stats */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 sticky top-0 bg-[#F9F7F4]/80 backdrop-blur-md z-40 py-4 -mx-4 px-4">
           <div className="flex items-center gap-4">
             <div>
               <h2 className="text-2xl lg:text-3xl font-[var(--font-playfair)] font-black text-[#3A241C]">
-                {activeTab === "LIVE" ? "Live Dashboard" : "Session History"}
+                {activeTab === "LIVE" ? "Live Dashboard" : activeTab === "MENU" ? "Menu Manager" : "Session History"}
               </h2>
               <div className="flex items-center gap-3 mt-1">
                 <span className={`w-2 h-2 rounded-full animate-pulse ${connected ? "bg-[#6A994E]" : "bg-[#B71C1C]"}`} />
@@ -320,37 +392,133 @@ export default function AdminPage() {
                   onConfirmPayment={confirmPayment}
                   onAddOrder={(sid) => setAddOrderSession(sid)}
                   onCloseSession={closeSession}
+                  onToggleItemServed={toggleItemServed}
+                  onDeletePayment={deletePayment}
+                  onToggleReminder={toggleReminder}
                 />
               );
             })}
           </div>
+        ) : activeTab === "MENU" ? (
+          <AdminMenuManager secret={secret} />
         ) : (
-          /* History View (Minimal List) */
-          <div className="space-y-4">
+          /* History View (Expandable List) */
+          <div className="space-y-4 max-w-5xl mx-auto">
             {sessions
               .filter(s => s.status === "CLOSED")
-              .map(session => (
-                <div key={session.id} className="bg-white p-6 rounded-[2rem] border border-[#3A241C]/5 flex justify-between items-center">
-                  <div className="flex items-center gap-6">
-                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center font-black text-[#3A241C]">
-                      {session.tableId}
+              .map(session => {
+                const isExpanded = expandedSession === session.id;
+                const total = session.orders.reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0), 0);
+                
+                return (
+                  <div key={session.id} className="bg-white rounded-[2.5rem] border border-[#3A241C]/5 shadow-sm overflow-hidden transition-all duration-300">
+                    <div 
+                      onClick={() => setExpandedSession(isExpanded ? null : session.id)}
+                      className="p-6 flex justify-between items-center cursor-pointer hover:bg-[#F9F7F4]/50"
+                    >
+                      <div className="flex items-center gap-6">
+                        <div className="w-14 h-14 bg-[#3A241C] rounded-2xl flex items-center justify-center font-black text-white shadow-lg">
+                          {session.tableId}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-black text-[#3A241C] text-lg">Session #{session.id.slice(-4).toUpperCase()}</p>
+                            <span className="text-[10px] font-black bg-[#6A994E]/10 text-[#6A994E] px-2 py-0.5 rounded-full uppercase">Settled</span>
+                          </div>
+                          <p className="text-xs text-[#3A241C]/40 font-bold uppercase tracking-widest mt-0.5">
+                            {new Date(session.createdAt).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })} • {new Date(session.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-8">
+                        <div className="text-right">
+                          <p className="text-xl font-black text-[#3A241C]">₹{total}</p>
+                          <p className="text-[10px] font-black text-[#3A241C]/20 uppercase tracking-widest">Total Bill</p>
+                        </div>
+                        <ChevronRight size={20} className={`text-[#3A241C]/20 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-[#3A241C]">Session #{session.id.slice(-4).toUpperCase()}</p>
-                      <p className="text-xs text-gray-400 font-medium">
-                        {new Date(session.createdAt).toLocaleDateString()} • {new Date(session.createdAt).toLocaleTimeString()}
-                      </p>
-                    </div>
+
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div 
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="border-t border-[#3A241C]/5 bg-[#F9F7F4]/20"
+                        >
+                          <div className="p-8 space-y-6">
+                            {session.orders.map((order, oIdx) => (
+                              <div key={order.id} className="bg-white rounded-2xl p-6 border border-[#3A241C]/5 shadow-sm">
+                                <div className="flex justify-between items-center mb-4 pb-4 border-b border-[#3A241C]/5">
+                                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#E76F51]">Order #{oIdx + 1}</p>
+                                  <p className="text-[10px] font-bold text-[#3A241C]/30">{new Date(order.createdAt).toLocaleTimeString()}</p>
+                                </div>
+                                <div className="space-y-3">
+                                  {order.items.map((item, iIdx) => (
+                                    <div key={iIdx} className="flex justify-between items-center">
+                                      <div className="flex items-center gap-3">
+                                        <span className="w-5 h-5 bg-[#3A241C]/5 rounded flex items-center justify-center text-[10px] font-bold text-[#3A241C]/40">{item.quantity}x</span>
+                                        <p className="text-sm font-bold text-[#3A241C]">{item.name}</p>
+                                      </div>
+                                      <p className="text-sm font-black text-[#3A241C]">₹{item.price * item.quantity}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-black text-[#3A241C]">₹{session.orders.reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0), 0)}</p>
-                    <p className="text-[10px] font-black text-[#6A994E] uppercase">Paid Full</p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         )}
       </motion.main>
+
+      {/* CUSTOM CONFIRM MODAL */}
+      <AnimatePresence>
+        {confirmModal.show && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+              className="absolute inset-0 bg-[#3A241C]/60 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-sm bg-white rounded-[2.5rem] p-10 shadow-2xl overflow-hidden border border-white/20"
+            >
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${confirmModal.danger ? "bg-red-50 text-red-500" : "bg-orange-50 text-orange-500"}`}>
+                <Shield size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-[#3A241C] tracking-tight mb-2">{confirmModal.title}</h3>
+              <p className="text-[#3A241C]/60 text-sm leading-relaxed mb-10 font-medium">{confirmModal.message}</p>
+              
+              <div className="flex flex-col gap-3">
+                <button 
+                  onClick={confirmModal.onConfirm}
+                  className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg transition-all active:scale-95 ${
+                    confirmModal.danger ? "bg-[#B71C1C] text-white shadow-red-900/20" : "bg-[#3A241C] text-white shadow-black/20"
+                  }`}
+                >
+                  Confirm Action
+                </button>
+                <button 
+                  onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                  className="w-full py-4 text-[#3A241C]/30 font-black text-[10px] uppercase tracking-[0.2em] hover:text-[#3A241C] transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Manual Order Modal */}
       <AnimatePresence>

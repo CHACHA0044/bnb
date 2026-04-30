@@ -88,4 +88,35 @@ router.patch("/:paymentId/confirm", requireAdmin, async (req: Request, res: Resp
   }
 });
 
+/**
+ * DELETE /api/payment/:paymentId
+ * Admin rejects/deletes a payment record
+ */
+router.delete("/:paymentId", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { paymentId } = req.params as { paymentId: string };
+
+    const payment = await prisma.payment.delete({
+      where: { id: paymentId as string },
+      include: { session: true },
+    }) as any;
+
+    console.log(`[PAYMENT] ${paymentId} → REJECTED/DELETED`);
+
+    try {
+      const io = getIO();
+      io.to(`session:${payment.sessionId}`).to("admin").emit("payment_confirmed", {
+        payment: { ...payment, status: "REJECTED" },
+        sessionId: payment.sessionId,
+        tableId: payment.session.tableId,
+      });
+    } catch { /* skip */ }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[PAYMENT] Delete error:", err);
+    res.status(500).json({ error: "Failed to reject payment" });
+  }
+});
+
 export default router;

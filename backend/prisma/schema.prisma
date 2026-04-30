@@ -9,13 +9,14 @@ generator client {
 }
 
 model Session {
-  id        String    @id @default(uuid())
-  tableId   String
-  status    String    @default("OPEN") // OPEN | CLOSED
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  orders    Order[]
-  payments  Payment[]
+  id              String    @id @default(uuid())
+  tableId         String
+  status          String    @default("OPEN") // OPEN | CLOSED
+  paymentReminder Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  orders          Order[]
+  payments        Payment[]
 }
 
 model Order {
@@ -37,6 +38,7 @@ model OrderItem {
   price    Int    // Price in rupees
   quantity Int    @default(1)
   type     String @default("DINE_IN") // DINE_IN | TAKEAWAY
+  isServed Boolean @default(false)
 }
 
 model Payment {
@@ -48,5 +50,48 @@ model Payment {
   method    String   // UPI | CASH
   amount    Int      // Amount in rupees
   status    String   @default("PENDING") // PENDING | CONFIRMED | UNPAID
+  createdAt DateTime @default(now())
+}
+
+// ─── Menu Management ──────────────────────────
+
+model Category {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  sortOrder Int        @default(0)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  items     MenuItem[]
+}
+
+model MenuItem {
+  id            String   @id @default(uuid())
+  name          String
+  price         Int
+  categoryId    String
+  category      Category @relation(fields: [categoryId], references: [id])
+  descriptionEn String?
+  descriptionHi String?
+  image         String?
+  priceLabel    String?
+  rating        Float?
+  ratingCount   Int?
+  variants      String[]   // PostgreSQL text array
+  variantPrices Json?      // { "Thums Up": 20, "Diet Coke": 30 }
+  tags          String[]
+  outOfStock    Boolean  @default(false)
+  outOfStockUntil DateTime? // Optional: auto-restock after this time
+  discountPct   Int?     // e.g. 10 for 10% off (item-level overrides category)
+  discountFlat  Int?     // e.g. 20 for ₹20 off
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model MenuVersion {
+  id        String   @id @default(uuid())
+  snapshot  Json     // Full menu snapshot for rollback
+  changedBy String   @default("admin")
+  note      String?
   createdAt DateTime @default(now())
 }

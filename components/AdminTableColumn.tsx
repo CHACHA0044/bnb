@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { 
   Clock, CheckCircle2, Coffee, 
   CreditCard, Banknote, RotateCcw,
-  QrCode, Download, Plus
+  QrCode, Download, Plus, Bell, X
 } from "lucide-react";
 import { SessionData } from "@/lib/api";
 import { QRCodeSVG } from "qrcode.react";
@@ -16,6 +16,9 @@ interface AdminTableColumnProps {
   onConfirmPayment: (paymentId: string) => Promise<void>;
   onAddOrder: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => Promise<void>;
+  onToggleItemServed: (itemId: string, isServed: boolean) => Promise<void>;
+  onDeletePayment: (paymentId: string) => Promise<void>;
+  onToggleReminder: (sessionId: string, reminder: boolean) => Promise<void>;
 }
 
 const COLORS = {
@@ -35,7 +38,10 @@ export default function AdminTableColumn({
   onUpdateStatus,
   onConfirmPayment,
   onAddOrder,
-  onCloseSession
+  onCloseSession,
+  onToggleItemServed,
+  onDeletePayment,
+  onToggleReminder,
 }: AdminTableColumnProps) {
   
   const getSessionStats = () => {
@@ -223,13 +229,28 @@ export default function AdminTableColumn({
                         </div>
                       </div>
 
-                      <div className="space-y-1.5">
-                        {order.items.map((item, idx) => (
-                          <div key={idx} className="flex justify-between items-start text-xs">
-                            <span className="font-bold text-[#3A241C] flex-1">
-                              {item.name} <span className="text-gray-400 font-medium ml-1">× {item.quantity}</span>
-                            </span>
-                            <span className="font-bold text-gray-400">₹{item.price * item.quantity}</span>
+                      <div className="space-y-2">
+                        {order.items
+                          .filter(i => i.name !== "Packing Charges")
+                          .map((item) => (
+                          <div key={item.id} className="flex justify-between items-center text-xs group/item">
+                            <div className="flex items-center gap-2 flex-1">
+                              <motion.button
+                                whileTap={{ scale: 0.8 }}
+                                onClick={() => onToggleItemServed(item.id, !item.isServed)}
+                                className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
+                                  item.isServed 
+                                    ? "bg-[#6A994E] border-[#6A994E] text-white shadow-sm" 
+                                    : "bg-white border-gray-200 text-transparent hover:border-[#6A994E]/30"
+                                }`}
+                              >
+                                <CheckCircle2 size={12} className={item.isServed ? "opacity-100" : "opacity-0"} />
+                              </motion.button>
+                              <span className={`font-bold transition-all ${item.isServed ? "text-[#3A241C]/30 line-through" : "text-[#3A241C]"}`}>
+                                {item.name} <span className={`font-medium ml-1 ${item.isServed ? "text-gray-200" : "text-gray-400"}`}>× {item.quantity}</span>
+                              </span>
+                            </div>
+                            <span className={`font-bold transition-all ${item.isServed ? "text-gray-200" : "text-gray-400"}`}>₹{item.price * item.quantity}</span>
                           </div>
                         ))}
                       </div>
@@ -242,7 +263,20 @@ export default function AdminTableColumn({
             {/* Payments Summary */}
             {session.payments.length > 0 && (
               <div className="pt-4 mt-4 border-t border-dashed border-gray-200 space-y-3">
-                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Payments</h4>
+                <div className="flex justify-between items-center px-2">
+                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payments</h4>
+                  <button 
+                    onClick={() => onToggleReminder(session.id, !session.paymentReminder)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
+                      session.paymentReminder 
+                        ? "bg-[#E76F51] text-white shadow-lg shadow-[#E76F51]/20" 
+                        : "bg-[#F9F7F4] text-[#3A241C]/40 hover:bg-[#3A241C]/5"
+                    }`}
+                  >
+                    <Bell size={10} className={session.paymentReminder ? "animate-bounce" : ""} />
+                    {session.paymentReminder ? "Reminder On" : "Send Reminder"}
+                  </button>
+                </div>
                 {session.payments.map(p => (
                   <div key={p.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100">
                     <div className="flex items-center gap-3">
@@ -254,15 +288,24 @@ export default function AdminTableColumn({
                         }`}>{p.status}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
                       <span className="text-xs font-black text-[#3A241C]">₹{p.amount}</span>
                       {p.status !== "CONFIRMED" && (
-                        <button 
-                          onClick={() => onConfirmPayment(p.id)}
-                          className="px-2 py-1 bg-[#6A994E] text-white rounded-lg text-[8px] font-bold uppercase hover:opacity-80"
-                        >
-                          Confirm
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button 
+                            onClick={() => onConfirmPayment(p.id)}
+                            className="px-2.5 py-1 bg-[#6A994E] text-white rounded-lg text-[8px] font-bold uppercase hover:opacity-80 shadow-sm"
+                          >
+                            Confirm
+                          </button>
+                          <button 
+                            onClick={() => onDeletePayment(p.id)}
+                            className="p-1 text-[#B71C1C] hover:bg-red-50 rounded-lg transition-colors"
+                            title="Deny Payment"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -286,13 +329,16 @@ export default function AdminTableColumn({
           </div>
           
           <div className="grid grid-cols-2 gap-3">
-            <button 
+            <motion.button 
+              whileTap={{ scale: 0.95 }}
               onClick={() => onAddOrder(session.id)}
               className="py-3 px-4 bg-gray-50 text-[#3A241C] rounded-2xl font-black text-xs hover:bg-gray-100 transition-all border border-gray-100 flex items-center justify-center gap-2"
             >
               <Plus size={14} /> Add Items
-            </button>
-            <button 
+            </motion.button>
+            <motion.button 
+              whileHover={balance <= 0 ? { scale: 1.02 } : {}}
+              whileTap={balance <= 0 ? { scale: 0.98 } : {}}
               onClick={() => onCloseSession(session.id)}
               disabled={balance > 0}
               className={`py-3 px-4 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 ${
@@ -301,8 +347,8 @@ export default function AdminTableColumn({
                   : "bg-[#3A241C] text-white hover:bg-[#E76F51] shadow-lg shadow-[#3A241C]/10"
               }`}
             >
-              Close Table
-            </button>
+              Close Session
+            </motion.button>
           </div>
         </div>
       )}

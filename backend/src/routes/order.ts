@@ -12,11 +12,26 @@ const router = Router();
  */
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sessionId, items } = req.body as { sessionId: string; items: any[] };
+    const { sessionId: reqSessionId, tableId, items, isTakeaway } = req.body as { sessionId?: string; tableId?: string; items: any[]; isTakeaway?: boolean };
 
-    if (!sessionId || !items || !Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ error: "sessionId and items[] required" });
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      res.status(400).json({ error: "items[] required" });
       return;
+    }
+
+    if (!reqSessionId && !tableId) {
+      res.status(400).json({ error: "sessionId or tableId required" });
+      return;
+    }
+
+    let sessionId = reqSessionId;
+
+    if (!sessionId && tableId) {
+      // Create session
+      const newSession = await prisma.session.create({
+        data: { tableId }
+      });
+      sessionId = newSession.id;
     }
 
     // Verify session is OPEN
@@ -37,7 +52,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     const order = await prisma.order.create({
       data: {
         sessionId: sessionId as string,
-        isTakeaway: Boolean(req.body.isTakeaway),
+        isTakeaway: Boolean(isTakeaway),
         items: {
           create: items.map((item: { name: string; price: number; quantity?: number; type?: string }) => ({
             name: item.name,
@@ -60,7 +75,11 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         sessionId,
         tableId: session.tableId,
       });
-    } catch { /* Socket not initialized — skip */ }
+      // Import clearActiveCart and call it dynamically or add it to socket.ts exports
+      const { clearActiveCart, getActiveCart } = require("../lib/socket");
+      clearActiveCart(session.tableId);
+      io.to(`table:${session.tableId}`).emit("cart_sync", getActiveCart(session.tableId));
+    } catch (e) { console.error("Socket error", e); }
 
     res.status(201).json(order);
   } catch (err) {
@@ -101,11 +120,49 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
         tableId: order.session.tableId,
       });
     } catch { /* skip */ }
-
     res.json(order);
   } catch (err) {
     console.error("[ORDER] Update error:", err);
     res.status(500).json({ error: "Failed to update order" });
+  }
+});
+
+/**
+ * PATCH /api/order/item/:itemId/served
+ * Toggle isServed status for an order item. Admin only.
+ */
+router.patch("/item/:itemId/served", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { itemId } = req.params;
+    const { isServed } = req.body as { isServed: boolean };
+
+    const item = await prisma.orderItem.update({
+      where: { id: itemId },
+      data: { isServed },
+      include: { order: { include: { session: true } } },
+    });
+
+    try {
+      const io = getIO();
+      io.to(`session:${item.order.sessionId}`).to("admin").emit("order_updated", {
+        order: item.order,
+        sessionId: item.order.sessionId,
+        tableId: item.order.session.tableId,
+      });
+
+      // Takeaway Ready Notification
+      if (isServed && item.order.isTakeaway) {
+        io.to(`session:${item.order.sessionId}`).emit("takeaway_ready", {
+          message: "Your order is ready for pick up!",
+          itemName: item.name
+        });
+      }
+    } catch { /* skip */ }
+
+    res.json(item);
+  } catch (err) {
+    console.error("[ORDER] Item update error:", err);
+    res.status(500).json({ error: "Failed to update item status" });
   }
 });
 

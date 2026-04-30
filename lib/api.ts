@@ -36,6 +36,7 @@ export interface SessionData {
   id: string;
   tableId: string;
   status: string;
+  paymentReminder: boolean;
   createdAt: string;
   updatedAt: string;
   orders: OrderData[];
@@ -57,6 +58,7 @@ export interface OrderItemData {
   price: number;
   quantity: number;
   type: "DINE_IN" | "TAKEAWAY";
+  isServed: boolean;
 }
 
 export interface PaymentData {
@@ -75,10 +77,10 @@ export function fetchSession(tableId: string) {
 }
 
 /** Place an order */
-export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false) {
+export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false, tableId?: string) {
   return apiFetch<OrderData>("/api/order", {
     method: "POST",
-    body: JSON.stringify({ sessionId, items, isTakeaway }),
+    body: JSON.stringify({ sessionId, items, isTakeaway, tableId }),
   });
 }
 
@@ -111,6 +113,21 @@ export function adminConfirmPayment(paymentId: string, secret: string) {
   });
 }
 
+export function adminDeletePayment(paymentId: string, secret: string) {
+  return apiFetch(`/api/payment/${paymentId}`, {
+    method: "DELETE",
+    adminSecret: secret,
+  });
+}
+
+export function adminToggleReminder(sessionId: string, reminder: boolean, secret: string) {
+  return apiFetch(`/api/table/session/${sessionId}/reminder`, {
+    method: "PATCH",
+    body: JSON.stringify({ reminder }),
+    adminSecret: secret,
+  });
+}
+
 /** Admin: Update order status */
 export function adminUpdateOrder(orderId: string, status: string, secret: string) {
   return apiFetch<OrderData>(`/api/order/${orderId}`, {
@@ -126,5 +143,126 @@ export function adminAddOrder(sessionId: string, items: { name: string; price: n
     method: "POST",
     body: JSON.stringify({ items, isTakeaway }),
     adminSecret: secret,
+  });
+}
+
+/* ─── Menu Management ────────────────────────── */
+
+/** Fetch public menu */
+export function fetchMenu() {
+  return apiFetch<{ categories: string[]; items: any[] }>("/api/menu");
+}
+
+/** Admin: Fetch full menu for editing */
+export function adminFetchFullMenu(secret: string) {
+  return apiFetch<{ categories: any[] }>("/api/menu/admin/full", { adminSecret: secret });
+}
+
+/** Admin: Create menu item */
+export function adminCreateMenuItem(data: any, secret: string) {
+  return apiFetch("/api/menu/admin/items", {
+    method: "POST",
+    body: JSON.stringify(data),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Update menu item */
+export function adminUpdateMenuItem(id: string, data: any, secret: string) {
+  return apiFetch(`/api/menu/admin/items/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Delete menu item */
+export function adminDeleteMenuItem(id: string, secret: string) {
+  return apiFetch(`/api/menu/admin/items/${id}`, {
+    method: "DELETE",
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Toggle stock */
+export function adminToggleStock(id: string, outOfStock: boolean, until: string | null, secret: string) {
+  return apiFetch(`/api/menu/admin/items/${id}/stock`, {
+    method: "PATCH",
+    body: JSON.stringify({ outOfStock, until }),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Bulk stock update */
+export function adminBulkUpdateStock(updates: { id: string; outOfStock: boolean }[], secret: string) {
+  return apiFetch("/api/menu/admin/items/bulk-stock", {
+    method: "PATCH",
+    body: JSON.stringify({ updates }),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Create category */
+export function adminCreateCategory(name: string, sortOrder: number, secret: string) {
+  return apiFetch("/api/menu/admin/categories", {
+    method: "POST",
+    body: JSON.stringify({ name, sortOrder }),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Update category */
+export function adminUpdateCategory(id: string, data: any, secret: string) {
+  return apiFetch(`/api/menu/admin/categories/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Delete category */
+export function adminDeleteCategory(id: string, secret: string) {
+  return apiFetch(`/api/menu/admin/categories/${id}`, {
+    method: "DELETE",
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Bulk discount */
+export function adminBulkDiscount(categoryId: string, discount: { discountPct?: number, discountFlat?: number, clear?: boolean }, secret: string) {
+  return apiFetch("/api/menu/admin/discount/bulk", {
+    method: "POST",
+    body: JSON.stringify({ categoryId, ...discount }),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Fetch versions */
+export function adminFetchMenuVersions(secret: string) {
+  return apiFetch<any[]>("/api/menu/admin/versions", { adminSecret: secret });
+}
+
+/** Admin: Rollback menu */
+export function adminRollbackMenu(versionId: string, secret: string) {
+  return apiFetch(`/api/menu/admin/versions/${versionId}/rollback`, {
+    method: "POST",
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Toggle item served status */
+export function adminToggleItemServed(itemId: string, isServed: boolean, secret: string) {
+  return apiFetch(`/api/order/item/${itemId}/served`, {
+    method: "PATCH",
+    body: JSON.stringify({ isServed }),
+    adminSecret: secret,
+  });
+}
+
+/** Submit rating for a menu item */
+export function submitRating(itemId: string, rating: number) {
+  return apiFetch("/api/menu/rate", {
+    method: "POST",
+    body: JSON.stringify({ itemId, rating }),
   });
 }
