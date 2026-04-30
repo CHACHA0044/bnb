@@ -19,13 +19,14 @@ model Session {
 }
 
 model Order {
-  id        String      @id @default(uuid())
-  sessionId String
-  session   Session     @relation(fields: [sessionId], references: [id])
-  status    String      @default("PLACED") // PLACED | PREPARING | SERVED
-  createdAt DateTime    @default(now())
-  items     OrderItem[]
-  payments  Payment[]
+  id          String      @id @default(uuid())
+  sessionId   String
+  session     Session     @relation(fields: [sessionId], references: [id])
+  status      String      @default("PLACED") // PLACED | PREPARING | SERVED
+  isTakeaway  Boolean     @default(false)
+  createdAt   DateTime    @default(now())
+  items       OrderItem[]
+  payments    Payment[]
 }
 
 model OrderItem {
@@ -35,6 +36,7 @@ model OrderItem {
   name     String
   price    Int    // Price in rupees
   quantity Int    @default(1)
+  type     String @default("DINE_IN") // DINE_IN | TAKEAWAY
 }
 
 model Payment {

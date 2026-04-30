@@ -3,17 +3,19 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Shield, LogOut, RefreshCw, X as XIcon, ChevronDown, ChevronUp,
-  CheckCircle2, Clock, Coffee, CreditCard, Banknote, Loader2, Plus, Lock,
-  LayoutDashboard, ShoppingBag, DollarSign, Settings, Bell, Search, Filter
+  Shield, LogOut, Coffee, Loader2, Lock,
+  LayoutDashboard, ShoppingBag, Bell, X
 } from "lucide-react";
 import {
   adminFetchSessions, adminCloseSession, adminConfirmPayment,
   adminUpdateOrder, adminAddOrder,
-  type SessionData, type OrderData, type PaymentData,
+  type SessionData,
 } from "@/lib/api";
-import { ORDER_MENU, ORDER_CATEGORIES } from "@/lib/menu";
 import { useSocket } from "@/lib/socket-client";
+import AdminTableColumn from "@/components/AdminTableColumn";
+import AddOrderModal from "@/components/AddOrderModal";
+
+const TABLES = ["T1", "T2", "T3"];
 
 /* ─── Color Palette ────────────────────────── */
 const COLORS = {
@@ -27,32 +29,30 @@ const COLORS = {
   background: "#F9F7F4",
 };
 
-const getStatusColor = (s: string) => {
-  switch (s) {
-    case "PLACED": return COLORS.danger;
-    case "PREPARING": return COLORS.warning;
-    case "SERVED": return COLORS.success;
-    case "CONFIRMED": return COLORS.success;
-    case "PENDING": return COLORS.warning;
-    case "UNPAID": return COLORS.danger;
-    case "OPEN": return COLORS.success;
-    case "CLOSED": return "#999";
-    default: return "#999";
-  }
-};
-
 export default function AdminPage() {
   const [secret, setSecret] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [sessions, setSessions] = useState<SessionData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"LIVE" | "HISTORY">("LIVE");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
 
-  // Manual order form
+  // Modals
   const [addOrderSession, setAddOrderSession] = useState<string | null>(null);
-  const [manualCart, setManualCart] = useState<Record<string, number>>({});
+
+  // Check for mobile on mount and resize
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+      if (window.innerWidth < 1024) setIsSidebarOpen(false);
+      else setIsSidebarOpen(true);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const { joinAdmin, on, connected } = useSocket();
 
@@ -131,20 +131,14 @@ export default function AdminPage() {
     try { await adminCloseSession(sessionId, secret); loadSessions(); } catch (err) { console.error(err); }
   };
 
-  const submitManualOrder = async (sessionId: string) => {
-    const items = Object.entries(manualCart)
-      .filter(([, qty]) => qty > 0)
-      .map(([id, qty]) => {
-        const mi = ORDER_MENU.find((m) => m.id === id)!;
-        return { name: mi.name, price: mi.price, quantity: qty };
-      });
-    if (items.length === 0) return;
+  const handleAddManualOrder = async (sessionId: string, items: any[], isTakeaway: boolean) => {
     try {
-      await adminAddOrder(sessionId, items, secret);
-      setManualCart({});
-      setAddOrderSession(null);
+      await adminAddOrder(sessionId, items, secret, isTakeaway);
       loadSessions();
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      throw err;
+    }
   };
 
   /* ─── Stats ────────────────────────────── */
@@ -158,32 +152,32 @@ export default function AdminPage() {
   /* ─── Login Screen ─────────────────────── */
   if (!authenticated) {
     return (
-      <div className="min-h-screen bg-[var(--cream)]/30 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl shadow-[var(--coffee)]/5 border border-[var(--coffee)]/5">
+      <div className="min-h-screen bg-[#F3E8DA]/30 flex items-center justify-center p-6">
+        <div className="w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl shadow-[#3A241C]/5 border border-[#3A241C]/5">
           <div className="text-center mb-10">
-            <div className="w-16 h-16 bg-[var(--benne-primary)] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-[var(--benne-primary)]/20">
+            <div className="w-16 h-16 bg-[#E76F51] rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl shadow-[#E76F51]/20">
               <Shield size={32} className="text-white" />
             </div>
-            <h1 className="font-[var(--font-playfair)] text-3xl font-bold text-[var(--coffee)]">Admin Portal</h1>
-            <p className="text-[var(--coffee)]/40 text-sm mt-2 font-medium tracking-wide">Enter credentials to manage Benne n Beans</p>
+            <h1 className="font-[var(--font-playfair)] text-3xl font-bold text-[#3A241C]">Admin Portal</h1>
+            <p className="text-[#3A241C]/40 text-sm mt-2 font-medium tracking-wide">Enter credentials to manage Benne n Beans</p>
           </div>
 
           <div className="space-y-4">
             <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--coffee)]/30" size={20} />
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3A241C]/30" size={20} />
               <input
                 type="password"
                 placeholder="Admin Secret Key"
                 value={secret}
                 onChange={(e) => setSecret(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                className="w-full bg-[var(--background)] border-none rounded-2xl py-4 pl-12 pr-6 text-[var(--coffee)] font-bold outline-none ring-2 ring-transparent focus:ring-[var(--benne-primary)] transition-all"
+                className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 pl-12 pr-6 text-[#3A241C] font-bold outline-none ring-2 ring-transparent focus:ring-[#E76F51] transition-all"
               />
             </div>
-            {loginError && <p className="text-[var(--danger)] text-xs font-bold pl-2">{loginError}</p>}
+            {loginError && <p className="text-[#B71C1C] text-xs font-bold pl-2">{loginError}</p>}
             <button
               onClick={handleLogin}
-              className="w-full bg-[var(--coffee)] text-white py-4 rounded-2xl font-bold text-lg hover:bg-[var(--benne-primary)] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-[var(--coffee)]/10"
+              className="w-full bg-[#3A241C] text-white py-4 rounded-2xl font-bold text-lg hover:bg-[#E76F51] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-[#3A241C]/10"
             >
               Sign In
             </button>
@@ -195,316 +189,177 @@ export default function AdminPage() {
 
   /* ─── Dashboard ────────────────────────── */
   return (
-    <div className="min-h-screen bg-[#F9F7F4] flex">
-      {/* Sidebar - Optimized for Desktop */}
-      <aside className="hidden lg:flex w-72 bg-[var(--coffee)] flex-col p-8 fixed h-full z-50">
-        <div className="flex items-center gap-3 mb-12">
-          <div className="w-10 h-10 bg-[var(--benne-primary)] rounded-xl flex items-center justify-center">
-            <Coffee size={20} className="text-white" />
+    <div className="min-h-screen bg-[#F9F7F4] flex overflow-x-hidden">
+      {/* Sidebar - Collapsible Detailed Desktop */}
+      <motion.aside 
+        initial={false}
+        animate={{ 
+          width: isSidebarOpen ? (isMobile ? "100%" : "280px") : "0px",
+          x: isSidebarOpen ? 0 : (isMobile ? "-100%" : "-280px"),
+        }}
+        transition={{ type: "spring", damping: 20, stiffness: 100 }}
+        className={`fixed h-full z-[60] bg-[#3A241C] flex flex-col shadow-2xl overflow-hidden`}
+      >
+        <div className="p-8 flex flex-col h-full">
+          <div className="flex items-center justify-between mb-12">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsSidebarOpen(false)}
+                className="w-10 h-10 bg-[#E76F51] rounded-xl flex items-center justify-center shadow-lg shadow-[#E76F51]/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                <Coffee size={20} className="text-white" />
+              </button>
+              <span className="font-[var(--font-playfair)] text-xl font-bold text-white tracking-tight">Admin Deck</span>
+            </div>
+            {isMobile && (
+              <button 
+                onClick={() => setIsSidebarOpen(false)}
+                className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-white/40 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            )}
           </div>
-          <span className="font-[var(--font-playfair)] text-xl font-bold text-white tracking-tight">Admin Deck</span>
-        </div>
 
-        <nav className="space-y-2 flex-1">
-          {[
-            { id: "LIVE", label: "Live Dashboard", icon: LayoutDashboard },
-            { id: "HISTORY", label: "Session History", icon: ShoppingBag },
-          ].map((item) => (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id as any)}
-              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold text-sm ${
-                activeTab === item.id 
-                  ? "bg-[var(--benne-primary)] text-white shadow-lg shadow-[var(--benne-primary)]/20" 
-                  : "text-white/40 hover:bg-white/5 hover:text-white"
-              }`}
+          <nav className="space-y-2 flex-1">
+            {[
+              { id: "LIVE", label: "Live Dashboard", icon: LayoutDashboard },
+              { id: "HISTORY", label: "Session History", icon: ShoppingBag },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id as any);
+                  if (isMobile) setIsSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold text-sm ${
+                  activeTab === item.id 
+                    ? "bg-[#E76F51] text-white shadow-lg shadow-[#E76F51]/20" 
+                    : "text-white/40 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <item.icon size={20} />
+                <span className="whitespace-nowrap">{item.label}</span>
+              </button>
+            ))}
+          </nav>
+
+          <div className="pt-8 border-t border-white/5">
+            <button 
+              onClick={handleLogout}
+              className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[#B71C1C] font-bold text-sm hover:bg-[#B71C1C]/10 transition-all"
             >
-              <item.icon size={20} />
-              {item.label}
+              <LogOut size={20} />
+              <span>Logout</span>
             </button>
-          ))}
-        </nav>
-
-        <div className="pt-8 border-t border-white/5">
-          <button 
-            onClick={handleLogout}
-            className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[var(--danger)] font-bold text-sm hover:bg-[var(--danger)]/10 transition-all"
-          >
-            <LogOut size={20} />
-            Logout
-          </button>
+          </div>
         </div>
-      </aside>
+      </motion.aside>
+
+      {/* Main Content Toggle Button */}
+      {!isSidebarOpen && (
+        <motion.button
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          onClick={() => setIsSidebarOpen(true)}
+          className="fixed left-6 top-8 z-[70] w-12 h-12 bg-[#3A241C] text-white rounded-2xl flex items-center justify-center shadow-2xl hover:bg-[#E76F51] transition-all"
+        >
+          <Coffee size={24} />
+        </motion.button>
+      )}
 
       {/* Main Content */}
-      <main className="flex-1 lg:ml-72 p-6 lg:p-10 pb-32">
+      <motion.main 
+        layout
+        animate={{ 
+          marginLeft: isSidebarOpen && !isMobile ? "280px" : "0px",
+          width: isSidebarOpen && !isMobile ? "calc(100% - 280px)" : "100%"
+        }}
+        transition={{ type: "spring", damping: 20, stiffness: 100 }}
+        className="flex-1 p-6 lg:p-10 pb-32 min-h-screen"
+      >
         {/* Header Stats */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-          <div>
-            <h2 className="text-3xl font-[var(--font-playfair)] font-bold text-[var(--coffee)]">
-              {activeTab === "LIVE" ? "Current Live Status" : "Past Sessions"}
-            </h2>
-            <div className="flex items-center gap-3 mt-1">
-              <span className={`w-2 h-2 rounded-full ${connected ? "bg-[var(--success)]" : "bg-[var(--danger)]"}`} />
-              <span className="text-xs font-bold uppercase tracking-widest text-[var(--coffee)]/30">
-                {connected ? "Connected to Engine" : "Polling for Updates"}
-              </span>
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 sticky top-0 bg-[#F9F7F4]/80 backdrop-blur-md z-40 py-4 -mx-4 px-4">
+          <div className="flex items-center gap-4">
+            <div>
+              <h2 className="text-2xl lg:text-3xl font-[var(--font-playfair)] font-black text-[#3A241C]">
+                {activeTab === "LIVE" ? "Live Dashboard" : "Session History"}
+              </h2>
+              <div className="flex items-center gap-3 mt-1">
+                <span className={`w-2 h-2 rounded-full animate-pulse ${connected ? "bg-[#6A994E]" : "bg-[#B71C1C]"}`} />
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/30">
+                  {connected ? "Engine Connected" : "Polling Updates"}
+                </span>
+              </div>
             </div>
           </div>
 
           <div className="flex gap-4 w-full md:w-auto">
-            <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-[var(--coffee)]/5 min-w-[160px]">
-              <p className="text-[10px] font-bold text-[var(--coffee)]/30 uppercase tracking-widest mb-1">Total Outstanding</p>
-              <p className="text-2xl font-bold text-[var(--danger)]">₹{totalDue}</p>
+            <div className="flex-1 bg-white p-4 lg:p-5 rounded-[1.5rem] lg:rounded-[2rem] shadow-sm border border-[#3A241C]/5 min-w-[140px]">
+              <p className="text-[8px] lg:text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-1">Outstanding</p>
+              <p className="text-xl lg:text-2xl font-black text-[#B71C1C]">₹{totalDue}</p>
             </div>
-            <div className="flex-1 bg-white p-4 rounded-2xl shadow-sm border border-[var(--coffee)]/5 min-w-[160px]">
-              <p className="text-[10px] font-bold text-[var(--coffee)]/30 uppercase tracking-widest mb-1">Active Tables</p>
-              <p className="text-2xl font-bold text-[var(--coffee)]">{liveSessions.length}</p>
+            <div className="flex-1 bg-white p-4 lg:p-5 rounded-[1.5rem] lg:rounded-[2rem] shadow-sm border border-[#3A241C]/5 min-w-[140px]">
+              <p className="text-[8px] lg:text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-1">Active Tables</p>
+              <p className="text-xl lg:text-2xl font-black text-[#3A241C]">{liveSessions.length}</p>
             </div>
           </div>
         </header>
 
-        {/* Live View */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-          {sessions
-            .filter(s => activeTab === "LIVE" ? s.status === "OPEN" : s.status === "CLOSED")
-            .map((session) => {
-              const sessionTotal = session.orders.reduce((sum, o) => sum + o.items.reduce((a, i) => a + i.price * i.quantity, 0), 0);
-              const sessionPaid = session.payments.filter(p => p.status === "CONFIRMED").reduce((a, p) => a + p.amount, 0);
-              const isExpanded = expandedSession === session.id;
-
+        {activeTab === "LIVE" ? (
+          /* Live 3-Column Layout */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6 lg:gap-8">
+            {TABLES.map((tableId) => {
+              const session = liveSessions.find(s => s.tableId === tableId) || null;
               return (
-                <div key={session.id} className="bg-white rounded-[2.5rem] shadow-sm border border-[var(--coffee)]/5 overflow-hidden transition-all hover:shadow-xl hover:shadow-[var(--coffee)]/5">
-                  {/* Table Card Header */}
-                  <div className="p-8 flex justify-between items-center bg-[var(--background)]/50">
-                    <div className="flex items-center gap-5">
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black ${
-                        sessionTotal > sessionPaid ? "bg-[var(--danger)]/10 text-[var(--danger)]" : "bg-[var(--success)]/10 text-[var(--success)]"
-                      }`}>
-                        {session.tableId}
-                      </div>
-                      <div>
-                        <h3 className="font-bold text-xl text-[var(--coffee)]">Session #{session.id.slice(-4).toUpperCase()}</h3>
-                        <p className="text-xs font-bold text-[var(--coffee)]/30">Started {new Date(session.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold text-[var(--coffee)]/30 uppercase tracking-widest">Balance Due</p>
-                        <p className={`text-xl font-black ${sessionTotal > sessionPaid ? "text-[var(--danger)]" : "text-[var(--success)]"}`}>
-                          ₹{sessionTotal - sessionPaid}
-                        </p>
-                      </div>
-                      <button 
-                        onClick={() => setExpandedSession(isExpanded ? null : session.id)}
-                        className="w-10 h-10 rounded-xl bg-white border border-[var(--coffee)]/10 flex items-center justify-center hover:bg-[var(--coffee)] hover:text-white transition-all"
-                      >
-                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Expanded Content */}
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div initial={{ height: 0 }} animate={{ height: "auto" }} exit={{ height: 0 }} className="overflow-hidden">
-                        <div className="p-8 pt-2 space-y-8">
-                          {/* Orders List */}
-                          <div>
-                            <div className="flex justify-between items-center mb-6">
-                              <h4 className="font-bold text-[var(--coffee)] flex items-center gap-2">
-                                <ShoppingBag size={18} className="text-[var(--benne-primary)]" />
-                                Orders ({session.orders.length})
-                              </h4>
-                              <button 
-                                onClick={() => { setAddOrderSession(session.id); setManualCart({}); }}
-                                className="text-[var(--benne-primary)] font-bold text-xs uppercase tracking-widest flex items-center gap-1 hover:opacity-70 transition-all"
-                              >
-                                <Plus size={14} /> Add Items
-                              </button>
-                            </div>
-
-                            <div className="space-y-4">
-                              {session.orders.map((order) => {
-                                // Tie payments to this order if applicable (backend improvement)
-                                const orderPayments = session.payments.filter(p => p.orderId === order.id);
-                                const orderTotal = order.items.reduce((s, i) => s + i.price * i.quantity, 0);
-                                const orderPaid = orderPayments.filter(p => p.status === "CONFIRMED").reduce((s, p) => s + p.amount, 0);
-
-                                return (
-                                  <div key={order.id} className="bg-[var(--background)] rounded-3xl p-6 border border-[var(--coffee)]/5">
-                                    <div className="flex justify-between items-start mb-4">
-                                      <div className="flex gap-3">
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase ${
-                                          order.status === "SERVED" ? "bg-[var(--success)]/10 text-[var(--success)]" : "bg-[var(--warning)]/10 text-[var(--warning)]"
-                                        }`}>
-                                          {order.status}
-                                        </span>
-                                        <span className="text-xs font-bold text-[var(--coffee)]/30">
-                                          {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                      </div>
-                                      
-                                      <div className="flex gap-2">
-                                        {order.status === "PLACED" && (
-                                          <button 
-                                            onClick={() => updateOrderStatus(order.id, "PREPARING")}
-                                            className="bg-[var(--warning)] text-white px-4 py-1.5 rounded-xl text-[10px] font-bold hover:opacity-90 transition-all"
-                                          >
-                                            Mark Preparing
-                                          </button>
-                                        )}
-                                        {order.status === "PREPARING" && (
-                                          <button 
-                                            onClick={() => updateOrderStatus(order.id, "SERVED")}
-                                            className="bg-[var(--success)] text-white px-4 py-1.5 rounded-xl text-[10px] font-bold hover:opacity-90 transition-all"
-                                          >
-                                            Mark Served
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-2 mb-4">
-                                      {order.items.map((it) => (
-                                        <div key={it.id} className="flex justify-between text-sm">
-                                          <span className="text-[var(--coffee)]/70 font-medium">{it.name} <span className="text-[var(--coffee)]/30">× {it.quantity}</span></span>
-                                          <span className="font-bold text-[var(--coffee)]">₹{it.price * it.quantity}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-
-                                    {/* Per-Order Payment Tracking */}
-                                    {orderPayments.length > 0 && (
-                                      <div className="mt-4 pt-4 border-t border-[var(--coffee)]/5 space-y-2">
-                                        {orderPayments.map(p => (
-                                          <div key={p.id} className="flex justify-between items-center text-xs">
-                                            <span className="flex items-center gap-2 text-[var(--coffee)]/50">
-                                              {p.method === "UPI" ? <CreditCard size={12} /> : <Banknote size={12} />}
-                                              {p.method} Payment
-                                              <span className={`font-bold ${getStatusColor(p.status)}`}>({p.status})</span>
-                                            </span>
-                                            {p.status !== "CONFIRMED" && (
-                                              <button 
-                                                onClick={() => confirmPayment(p.id)}
-                                                className="text-[var(--success)] font-bold hover:underline"
-                                              >
-                                                Confirm
-                                              </button>
-                                            )}
-                                            <span className="font-bold text-[var(--coffee)]">₹{p.amount}</span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-
-                          {/* Session Total & Closing */}
-                          <div className="pt-6 border-t border-[var(--coffee)]/5 flex flex-col md:flex-row justify-between items-end gap-6">
-                            <div className="w-full md:w-auto">
-                              <div className="flex justify-between md:gap-12 mb-2">
-                                <span className="text-sm font-bold text-[var(--coffee)]/40">Grand Total</span>
-                                <span className="text-lg font-black text-[var(--coffee)]">₹{sessionTotal}</span>
-                              </div>
-                              <div className="flex justify-between md:gap-12">
-                                <span className="text-sm font-bold text-[var(--success)]/60">Total Paid</span>
-                                <span className="text-lg font-black text-[var(--success)]">₹{sessionPaid}</span>
-                              </div>
-                            </div>
-
-                            <button 
-                              onClick={() => closeSession(session.id)}
-                              disabled={sessionTotal > sessionPaid}
-                              className={`px-10 py-4 rounded-2xl font-bold text-sm transition-all ${
-                                sessionTotal > sessionPaid 
-                                  ? "bg-[var(--background)] text-[var(--coffee)]/20 cursor-not-allowed" 
-                                  : "bg-[var(--coffee)] text-white hover:bg-[var(--benne-primary)] shadow-xl shadow-[var(--coffee)]/10"
-                              }`}
-                            >
-                              Finalize & Close Session
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+                <AdminTableColumn
+                  key={tableId}
+                  tableId={tableId}
+                  session={session}
+                  onUpdateStatus={updateOrderStatus}
+                  onConfirmPayment={confirmPayment}
+                  onAddOrder={(sid) => setAddOrderSession(sid)}
+                  onCloseSession={closeSession}
+                />
               );
             })}
-        </div>
-      </main>
-
-      {/* Manual Order Modal - Styled same as main theme */}
-      <AnimatePresence>
-        {addOrderSession && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-6">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setAddOrderSession(null)}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
-              className="relative w-full max-w-2xl bg-white rounded-t-[3rem] sm:rounded-[3rem] overflow-hidden flex flex-col max-h-[90vh]"
-            >
-              <div className="p-8 border-b border-[var(--coffee)]/5 flex justify-between items-center">
-                <h3 className="font-[var(--font-playfair)] text-3xl font-bold text-[var(--coffee)]">Add Order</h3>
-                <button onClick={() => setAddOrderSession(null)} className="w-12 h-12 rounded-2xl bg-[var(--background)] flex items-center justify-center text-[var(--coffee)]/30 hover:text-[var(--coffee)] transition-all">
-                  <XIcon size={24} />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 space-y-8">
-                {ORDER_CATEGORIES.map(cat => (
-                  <div key={cat}>
-                    <h5 className="text-[10px] font-bold text-[var(--benne-primary)] uppercase tracking-[0.2em] mb-4">{cat}</h5>
-                    <div className="space-y-2">
-                      {ORDER_MENU.filter(m => m.category === cat).map(item => {
-                        const qty = manualCart[item.id] || 0;
-                        return (
-                          <div key={item.id} className="flex justify-between items-center p-4 bg-[var(--background)] rounded-2xl">
-                            <div>
-                              <p className="font-bold text-[var(--coffee)]">{item.name}</p>
-                              <p className="text-xs text-[var(--benne-primary)] font-bold">₹{item.price}</p>
-                            </div>
-                            <div className="flex items-center gap-4 bg-white p-2 rounded-xl border border-[var(--coffee)]/5">
-                              <button 
-                                onClick={() => setManualCart(p => ({ ...p, [item.id]: Math.max(0, (p[item.id] || 0) - 1) }))}
-                                className="w-8 h-8 flex items-center justify-center text-[var(--coffee)] hover:text-[var(--benne-primary)]"
-                              >
-                                <XIcon size={16} />
-                              </button>
-                              <span className="font-black text-[var(--coffee)] min-w-[20px] text-center">{qty}</span>
-                              <button 
-                                onClick={() => setManualCart(p => ({ ...p, [item.id]: (p[item.id] || 0) + 1 }))}
-                                className="w-8 h-8 flex items-center justify-center text-[var(--benne-primary)]"
-                              >
-                                <Plus size={16} />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
+          </div>
+        ) : (
+          /* History View (Minimal List) */
+          <div className="space-y-4">
+            {sessions
+              .filter(s => s.status === "CLOSED")
+              .map(session => (
+                <div key={session.id} className="bg-white p-6 rounded-[2rem] border border-[#3A241C]/5 flex justify-between items-center">
+                  <div className="flex items-center gap-6">
+                    <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center font-black text-[#3A241C]">
+                      {session.tableId}
+                    </div>
+                    <div>
+                      <p className="font-bold text-[#3A241C]">Session #{session.id.slice(-4).toUpperCase()}</p>
+                      <p className="text-xs text-gray-400 font-medium">
+                        {new Date(session.createdAt).toLocaleDateString()} • {new Date(session.createdAt).toLocaleTimeString()}
+                      </p>
                     </div>
                   </div>
-                ))}
-              </div>
-
-              <div className="p-8 bg-[var(--background)]">
-                <button 
-                  onClick={() => submitManualOrder(addOrderSession)}
-                  className="w-full bg-[var(--coffee)] text-white py-5 rounded-2xl font-bold text-lg hover:bg-[var(--benne-primary)] shadow-2xl transition-all"
-                >
-                  Confirm & Place Order
-                </button>
-              </div>
-            </motion.div>
+                  <div className="text-right">
+                    <p className="text-lg font-black text-[#3A241C]">₹{session.orders.reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0), 0)}</p>
+                    <p className="text-[10px] font-black text-[#6A994E] uppercase">Paid Full</p>
+                  </div>
+                </div>
+              ))}
           </div>
+        )}
+      </motion.main>
+
+      {/* Manual Order Modal */}
+      <AnimatePresence>
+        {addOrderSession && (
+          <AddOrderModal
+            sessionId={addOrderSession}
+            onClose={() => setAddOrderSession(null)}
+            onSubmit={(items, isTakeaway) => handleAddManualOrder(addOrderSession, items, isTakeaway)}
+          />
         )}
       </AnimatePresence>
     </div>

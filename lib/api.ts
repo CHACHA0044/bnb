@@ -46,6 +46,7 @@ export interface OrderData {
   id: string;
   sessionId: string;
   status: string;
+  isTakeaway: boolean;
   createdAt: string;
   items: OrderItemData[];
 }
@@ -55,6 +56,7 @@ export interface OrderItemData {
   name: string;
   price: number;
   quantity: number;
+  type: "DINE_IN" | "TAKEAWAY";
 }
 
 export interface PaymentData {
@@ -73,10 +75,10 @@ export function fetchSession(tableId: string) {
 }
 
 /** Place an order */
-export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number }[]) {
+export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false) {
   return apiFetch<OrderData>("/api/order", {
     method: "POST",
-    body: JSON.stringify({ sessionId, items }),
+    body: JSON.stringify({ sessionId, items, isTakeaway }),
   });
 }
 
@@ -119,10 +121,10 @@ export function adminUpdateOrder(orderId: string, status: string, secret: string
 }
 
 /** Admin: Add manual order */
-export function adminAddOrder(sessionId: string, items: { name: string; price: number; quantity: number }[], secret: string) {
+export function adminAddOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], secret: string, isTakeaway: boolean = false) {
   return apiFetch<OrderData>(`/api/admin/sessions/${sessionId}/order`, {
     method: "POST",
-    body: JSON.stringify({ items }),
+    body: JSON.stringify({ items, isTakeaway }),
     adminSecret: secret,
   });
 }

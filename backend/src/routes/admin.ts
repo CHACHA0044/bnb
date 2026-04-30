@@ -90,14 +90,16 @@ router.post("/sessions/:sessionId/order", async (req: Request, res: Response): P
     const order = await prisma.order.create({
       data: {
         sessionId: sessionId as string,
+        isTakeaway: Boolean(req.body.isTakeaway),
         items: {
-          create: items.map((item: { name: string; price: number; quantity?: number }) => ({
+          create: items.map((item: { name: string; price: number; quantity?: number; type?: string }) => ({
             name: item.name,
             price: item.price,
             quantity: item.quantity || 1,
+            type: item.type || "DINE_IN",
           })),
         },
-      },
+      } as any, // Cast to any to bypass stale IDE types
       include: { items: true },
     });
 
