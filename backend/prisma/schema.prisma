@@ -80,6 +80,7 @@ model MenuItem {
   variantPrices Json?      // { "Thums Up": 20, "Diet Coke": 30 }
   tags          String[]
   outOfStock    Boolean  @default(false)
+  outOfStockVariants String[] @default([])
   outOfStockUntil DateTime? // Optional: auto-restock after this time
   discountPct   Int?     // e.g. 10 for 10% off (item-level overrides category)
   discountFlat  Int?     // e.g. 20 for ₹20 off

@@ -83,7 +83,13 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
     setLoading(true);
     try {
       const data = await adminFetchFullMenu(secret);
-      setCategories(data.categories);
+      const filtered = data.categories
+        .filter(c => c.name !== "Others" && c.name !== "Hidden")
+        .map(c => ({
+           ...c,
+           items: c.items.filter(i => i.name !== "Packing Charges")
+        }));
+      setCategories(filtered);
       setPendingStock({}); // Reset pending on reload
     } catch (err) {
       showToast("Failed to load menu", "error");
@@ -249,7 +255,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setEditingItem({ id: "NEW", name: "", price: 0, categoryId: categories[0]?.id, descriptionEn: "", descriptionHi: "", outOfStock: false, variants: [], variantPrices: {} })}
+              onClick={() => setEditingItem({ id: "NEW", name: "", price: 0, categoryId: categories[0]?.id, descriptionEn: "", descriptionHi: "", outOfStock: false, variants: [], variantPrices: {}, outOfStockVariants: [] })}
               className="bg-[#E76F51] text-white p-3 rounded-2xl shadow-lg shadow-[#E76F51]/20 transition-all"
             >
               <Plus size={24} />
@@ -341,7 +347,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                                 <div className="flex justify-between items-start mb-1">
                                   <h4 className={`font-bold text-[#3A241C] text-sm leading-tight ${currentStatus ? "opacity-40" : ""}`}>{item.name}</h4>
                                   <div className="flex items-center gap-1">
-                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setEditingItem({ ...item, variants: item.variants || [], variantPrices: item.variantPrices || {} })} className="p-2 text-[#3A241C]/20 hover:text-[#E76F51] transition-colors"><Edit2 size={14} /></motion.button>
+                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setEditingItem({ ...item, variants: item.variants || [], variantPrices: item.variantPrices || {}, outOfStockVariants: item.outOfStockVariants || [] })} className="p-2 text-[#3A241C]/20 hover:text-[#E76F51] transition-colors"><Edit2 size={14} /></motion.button>
                                     <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleDeleteItem(item.id)} className="p-2 text-[#3A241C]/20 hover:text-[#B71C1C] transition-colors"><Trash2 size={14} /></motion.button>
                                   </div>
                                 </div>
@@ -609,7 +615,8 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                           setEditingItem({
                             ...editingItem,
                             variants: [...(editingItem.variants || []), vName],
-                            variantPrices: { ...(editingItem.variantPrices || {}), [vName]: price }
+                            variantPrices: { ...(editingItem.variantPrices || {}), [vName]: price },
+                            outOfStockVariants: editingItem.outOfStockVariants || []
                           });
                         }
                       }}
@@ -619,26 +626,43 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                     </button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {editingItem.variants?.map((v: string) => (
-                      <div key={v} className="flex items-center justify-between bg-[#F9F7F4] p-3 rounded-xl border border-[#3A241C]/5">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-[#3A241C] truncate">{v}</p>
-                          <p className="text-[10px] font-black text-[#E76F51]">₹{editingItem.variantPrices?.[v] || editingItem.price}</p>
+                    {editingItem.variants?.map((v: string) => {
+                      const isOOS = editingItem.outOfStockVariants?.includes(v);
+                      return (
+                        <div key={v} className={`flex items-center justify-between p-3 rounded-xl border transition-all ${isOOS ? "bg-red-50 border-red-100 opacity-60" : "bg-[#F9F7F4] border-[#3A241C]/5"}`}>
+                          <div className="min-w-0 flex-1 flex items-center gap-3">
+                            <input 
+                              type="checkbox"
+                              checked={!isOOS}
+                              onChange={(e) => {
+                                const newOOS = e.target.checked 
+                                  ? (editingItem.outOfStockVariants || []).filter((name: string) => name !== v)
+                                  : [...(editingItem.outOfStockVariants || []), v];
+                                setEditingItem({ ...editingItem, outOfStockVariants: newOOS });
+                              }}
+                              className="w-4 h-4 accent-[#6A994E]"
+                            />
+                            <div className="min-w-0">
+                              <p className={`text-xs font-bold ${isOOS ? "text-red-900 line-through" : "text-[#3A241C]"} truncate`}>{v}</p>
+                              <p className="text-[10px] font-black text-[#E76F51]">₹{editingItem.variantPrices?.[v] || editingItem.price}</p>
+                            </div>
+                          </div>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const newVariants = editingItem.variants.filter((name: string) => name !== v);
+                              const newPrices = { ...editingItem.variantPrices };
+                              delete newPrices[v];
+                              const newOOS = (editingItem.outOfStockVariants || []).filter((name: string) => name !== v);
+                              setEditingItem({ ...editingItem, variants: newVariants, variantPrices: newPrices, outOfStockVariants: newOOS });
+                            }}
+                            className="p-2 text-[#3A241C]/20 hover:text-[#B71C1C]"
+                          >
+                            <X size={14} />
+                          </button>
                         </div>
-                        <button 
-                          type="button" 
-                          onClick={() => {
-                            const newVariants = editingItem.variants.filter((name: string) => name !== v);
-                            const newPrices = { ...editingItem.variantPrices };
-                            delete newPrices[v];
-                            setEditingItem({ ...editingItem, variants: newVariants, variantPrices: newPrices });
-                          }}
-                          className="p-2 text-[#3A241C]/20 hover:text-[#B71C1C]"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 

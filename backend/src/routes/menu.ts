@@ -177,6 +177,7 @@ router.post("/admin/items", requireAdmin, async (req: Request, res: Response): P
         variants: variants || [],
         variantPrices: variantPrices || undefined,
         tags: tags || [],
+        outOfStockVariants: req.body.outOfStockVariants || [],
       },
     });
 
@@ -217,6 +218,7 @@ router.put("/admin/items/:id", requireAdmin, async (req: Request, res: Response)
     if (data.outOfStockUntil !== undefined) updateData.outOfStockUntil = data.outOfStockUntil ? new Date(data.outOfStockUntil) : null;
     if (data.discountPct !== undefined) updateData.discountPct = data.discountPct ? parseInt(data.discountPct) : null;
     if (data.discountFlat !== undefined) updateData.discountFlat = data.discountFlat ? parseInt(data.discountFlat) : null;
+    if (data.outOfStockVariants !== undefined) updateData.outOfStockVariants = data.outOfStockVariants;
     if (data.sortOrder !== undefined) updateData.sortOrder = parseInt(data.sortOrder);
 
     const item = await prisma.menuItem.update({

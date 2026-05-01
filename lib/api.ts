@@ -167,6 +167,7 @@ export interface OrderMenuItem {
   image?: string;
   descriptionEn?: string;
   outOfStock?: boolean;
+  outOfStockVariants?: string[];
   variants?: string[];
   variantPrices?: Record<string, number>;
 }
