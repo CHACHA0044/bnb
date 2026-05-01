@@ -76,7 +76,9 @@ export default function AdminPaymentSummary({
           </div>
           <p className="text-[8px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Payment Queue</p>
         </div>
-        <button 
+        <motion.button 
+          whileTap={{ scale: 0.9 }}
+          whileHover={{ scale: 1.1 }}
           onClick={() => onToggleReminder(session.id, !session.paymentReminder)}
           className={`p-2 rounded-xl transition-all ${
             session.paymentReminder 
@@ -86,7 +88,7 @@ export default function AdminPaymentSummary({
           title={session.paymentReminder ? "Reminder Sent" : "Send Payment Reminder"}
         >
           <Bell size={16} className={session.paymentReminder ? "animate-bounce" : ""} />
-        </button>
+        </motion.button>
       </div>
 
       {/* Bill Summary in Payment Box */}
@@ -106,18 +108,20 @@ export default function AdminPaymentSummary({
         <div className="flex flex-col gap-2 mb-6">
           <div className="flex gap-2 p-1.5 bg-[#F9F7F4] rounded-2xl border border-[#3A241C]/5">
             <div className="flex bg-white rounded-xl p-1 gap-1 border border-gray-100 shadow-sm">
-              <button 
+              <motion.button 
+                whileTap={{ scale: 0.85 }}
                 onClick={() => setRecordMethod("CASH")}
                 className={`p-1.5 rounded-lg transition-all ${recordMethod === "CASH" ? "bg-[#3A241C] text-white shadow-md" : "text-gray-400 hover:text-[#3A241C]"}`}
               >
                 <Banknote size={14} />
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileTap={{ scale: 0.85 }}
                 onClick={() => setRecordMethod("UPI")}
                 className={`p-1.5 rounded-lg transition-all ${recordMethod === "UPI" ? "bg-[#3A241C] text-white shadow-md" : "text-gray-400 hover:text-[#3A241C]"}`}
               >
                 <CreditCard size={14} />
-              </button>
+              </motion.button>
             </div>
             <input 
               type="number" 
@@ -126,7 +130,8 @@ export default function AdminPaymentSummary({
               onChange={(e) => setRecordAmount(e.target.value)}
               className="flex-1 bg-white border border-gray-100 rounded-xl px-2.5 py-2 text-[10px] font-black outline-none focus:border-[#E76F51] transition-all min-w-0"
             />
-            <button 
+            <motion.button 
+              whileTap={{ scale: 0.95 }}
               onClick={handleRecord}
               disabled={isRecording}
               className={`flex-shrink-0 px-3 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
@@ -134,7 +139,7 @@ export default function AdminPaymentSummary({
               }`}
             >
               {isRecording ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Record
-            </button>
+            </motion.button>
           </div>
         </div>
       )}
@@ -158,18 +163,20 @@ export default function AdminPaymentSummary({
               <span className="text-sm font-black text-[#3A241C]">₹{p.amount}</span>
               {p.status !== "CONFIRMED" && (
                 <div className="flex items-center gap-1.5 ml-2">
-                  <button 
+                  <motion.button 
+                    whileTap={{ scale: 0.8 }}
                     onClick={() => onConfirmPayment(p.id)}
                     className="w-8 h-8 bg-[#6A994E] text-white rounded-lg flex items-center justify-center hover:scale-110 transition-all shadow-sm shadow-[#6A994E]/20"
                   >
                     <Check size={16} />
-                  </button>
-                  <button 
+                  </motion.button>
+                  <motion.button 
+                    whileTap={{ scale: 0.8 }}
                     onClick={() => onDeletePayment(p.id)}
                     className="w-8 h-8 bg-white text-[#B71C1C] border border-red-100 rounded-lg flex items-center justify-center hover:bg-red-50 transition-all"
                   >
                     <X size={16} />
-                  </button>
+                  </motion.button>
                 </div>
               )}
             </div>

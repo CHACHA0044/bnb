@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
+import { getNextSessionNumber } from "../lib/session";
 
 const router = Router();
 
@@ -27,9 +28,9 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     let sessionId = reqSessionId;
 
     if (!sessionId && tableId) {
-      // Create session
+      const sessionNumber = await getNextSessionNumber();
       const newSession = await prisma.session.create({
-        data: { tableId }
+        data: { tableId, sessionNumber }
       });
       sessionId = newSession.id;
     }

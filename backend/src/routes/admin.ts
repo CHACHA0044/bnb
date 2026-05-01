@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
+import { getNextSessionNumber } from "../lib/session";
 
 const router = Router();
 
@@ -203,8 +204,9 @@ router.post("/orders/new", async (req: Request, res: Response): Promise<void> =>
     });
 
     if (!session) {
+      const sessionNumber = await getNextSessionNumber();
       session = await prisma.session.create({
-        data: { tableId, status: "OPEN" }
+        data: { tableId, status: "OPEN", sessionNumber }
       });
     }
 

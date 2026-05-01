@@ -48,7 +48,7 @@ async function getCachedMenu() {
 }
 
 /** Emit menu_updated to all connected clients on active tables */
-function emitMenuUpdate() {
+export function emitMenuUpdate() {
   invalidateCache();
   try {
     const io = getIO();

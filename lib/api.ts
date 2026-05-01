@@ -3,6 +3,7 @@
  */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+import { type OrderMenuItem } from "./menu";
 
 interface FetchOptions extends RequestInit {
   adminSecret?: string;
@@ -34,6 +35,7 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
 
 export interface SessionData {
   id: string;
+  sessionNumber?: number;
   tableId: string;
   status: string;
   paymentReminder: boolean;
@@ -168,20 +170,6 @@ export function fetchMenu() {
   return apiFetch<{ categories: string[]; items: any[] }>("/api/menu");
 }
 
-export interface OrderMenuItem {
-  id: string;
-  name: string;
-  price: number;
-  category: string;
-  image?: string;
-  descriptionEn?: string;
-  outOfStock?: boolean;
-  outOfStockVariants?: string[];
-  variants?: string[];
-  variantPrices?: Record<string, number>;
-  rating?: number;
-}
-
 /** Admin: Fetch full menu for editing */
 export function adminFetchFullMenu(secret: string) {
   return apiFetch<{ categories: { id: string; name: string; items: OrderMenuItem[] }[] }>("/api/menu/admin/full", { adminSecret: secret });
@@ -302,5 +290,39 @@ export function submitRating(itemId: string, rating: number) {
   return apiFetch("/api/menu/rate", {
     method: "POST",
     body: JSON.stringify({ itemId, rating }),
+  });
+}
+
+export interface RestaurantStatusData {
+  isOpen: boolean;
+  closingAt: string | null;
+}
+
+/** Get restaurant status */
+export function fetchRestaurantStatus() {
+  return apiFetch<RestaurantStatusData>("/api/status");
+}
+
+/** Admin: Open restaurant */
+export function adminOpenRestaurant(secret: string) {
+  return apiFetch<RestaurantStatusData>("/api/status/admin/open", {
+    method: "POST",
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Start close countdown */
+export function adminCloseRestaurant(secret: string) {
+  return apiFetch<RestaurantStatusData>("/api/status/admin/close", {
+    method: "POST",
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Force close restaurant */
+export function adminForceCloseRestaurant(secret: string) {
+  return apiFetch<RestaurantStatusData>("/api/status/admin/force-close", {
+    method: "POST",
+    adminSecret: secret,
   });
 }

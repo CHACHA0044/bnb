@@ -5,10 +5,14 @@ import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { 
   ShoppingCart, Plus, Minus, Loader2, 
   Trash2, ChevronRight, Package, Utensils, Star,
-  CreditCard, Banknote, CheckCircle2, X, Bell
+  CreditCard, Banknote, CheckCircle2, X, Bell, Lock
 } from "lucide-react";
 import { type OrderMenuItem } from "@/lib/menu";
-import { fetchSession, placeOrder, createPayment, fetchMenu, type SessionData, type OrderData, type OrderItemData, type PaymentData } from "@/lib/api";
+import { 
+  fetchSession, placeOrder, createPayment, fetchMenu, 
+  fetchRestaurantStatus, type SessionData, type OrderData, type OrderItemData, type PaymentData,
+  type RestaurantStatusData
+} from "@/lib/api";
 import { useSocket } from "@/lib/socket-client";
 import Image from "next/image";
 
@@ -32,6 +36,8 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
   const [menuItems, setMenuItems] = useState<OrderMenuItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>("");
+  const [restaurantStatus, setRestaurantStatus] = useState<RestaurantStatusData>({ isOpen: true, closingAt: null });
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
 
   // Cart & Order Flow
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -77,6 +83,15 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
     setClientId(cid);
   }, []);
 
+  const loadStatus = useCallback(async () => {
+    try {
+      const status = await fetchRestaurantStatus();
+      setRestaurantStatus(status);
+    } catch (err) {
+      console.error("Failed to load restaurant status:", err);
+    }
+  }, []);
+
   /* ─── Load session ─────────────────────── */
   const loadSession = useCallback(async () => {
     try {
@@ -85,12 +100,13 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
       if (data?.status === "CLOSED") {
         setError("This session has been closed. Please ask staff.");
       }
+      await loadStatus();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load session");
     } finally {
       setLoading(false);
     }
-  }, [tableId]);
+  }, [tableId, loadStatus]);
 
   /* ─── Load Menu ────────────────────────── */
   const loadMenuData = useCallback(async () => {
@@ -117,21 +133,53 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
   }, [loadSession]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session) {
+      loadStatus();
+      return;
+    }
     joinSession(session.id);
     const unsubs = [
       on("order_placed", () => loadSession()),
       on("order_updated", () => loadSession()),
       on("payment_confirmed", () => loadSession()),
       on("session_updated", () => loadSession()),
-      on("menu_updated", () => loadMenuData()),
+      on("menu_updated", () => {
+        loadMenuData();
+        loadStatus();
+      }),
       on("takeaway_ready", (data: any) => {
         showToast(data.message);
         loadSession();
       }),
     ];
     return () => unsubs.forEach((u) => u());
-  }, [session?.id, joinSession, on, loadSession, loadMenuData]);
+  }, [session?.id, joinSession, on, loadSession, loadMenuData, loadStatus]);
+
+  // Countdown timer logic
+  useEffect(() => {
+    if (!restaurantStatus.closingAt) {
+      setTimeLeft(null);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const closingDate = new Date(restaurantStatus.closingAt!);
+      const now = new Date();
+      const diff = closingDate.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setTimeLeft("00:00");
+        clearInterval(interval);
+        loadStatus();
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setTimeLeft(`${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [restaurantStatus.closingAt, loadStatus]);
 
   /* ─── Multiplayer Sync ─────────────────── */
   useEffect(() => {
@@ -172,40 +220,57 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
     }
   };
 
-  const handleScroll = useCallback(() => {
-    // Threshold set higher so when a category title is in the upper half of the viewport, it becomes active.
-    const threshold = typeof window !== "undefined" ? Math.max(300, window.innerHeight * 0.4) : 300;
-    let current = activeCategory;
+  // Intersection Observer for Scroll Tracking
+  useEffect(() => {
+    if (categories.length === 0) return;
     
-    // Iterate from bottom to top to find the first category that is near or above threshold
-    for (let i = categories.length - 1; i >= 0; i--) {
-      const cat = categories[i];
+    const observer = new IntersectionObserver(
+      (entries) => {
+        // Get all sections that are at least partially visible
+        const visible = entries.filter((e) => e.isIntersecting);
+        
+        if (visible.length > 0) {
+          // Sort items by their top position to find the one closest to the top of the viewport
+          const topMost = [...visible].sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+          const catId = topMost.target.id;
+          
+          setActiveCategory((prev) => {
+            if (prev === catId) return prev;
+            
+            // Scroll the category button into view if changed
+            const btn = document.getElementById(`cat-btn-${catId}`);
+            if (btn) {
+              const container = btn.parentElement;
+              if (container) {
+                const scrollTarget = btn.offsetLeft - (container.offsetWidth / 2) + (btn.offsetWidth / 2);
+                container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
+              }
+            }
+            return catId;
+          });
+        }
+      },
+      {
+        root: document.getElementById('menu-container'),
+        // rootMargin matches the header height and some padding to trigger when title hits top area
+        rootMargin: '-10% 0px -80% 0px',
+        threshold: 0
+      }
+    );
+
+    categories.forEach((cat) => {
       const el = categoryRefs.current[cat];
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        if (rect.top <= threshold) {
-          current = cat;
-          break;
-        }
-      }
-    }
-    
-    if (current !== activeCategory) {
-      setActiveCategory(current);
-      // Optional: scroll the button list horizontally
-      const btn = document.getElementById(`cat-btn-${current}`);
-      if (btn) {
-        const container = btn.parentElement;
-        if (container) {
-          const scrollTarget = btn.offsetLeft - (container.offsetWidth / 2) + (btn.offsetWidth / 2);
-          container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
-        }
-      }
-    }
-  }, [activeCategory]);
+      if (el) observer.observe(el);
+    });
+
+    return () => observer.disconnect();
+  }, [categories]);
 
   /* ─── Cart Logic ───────────────────────── */
   const addToCart = (item: OrderMenuItem, variant?: string, qty: number = 1) => {
+    if (!restaurantStatus.isOpen && !restaurantStatus.closingAt) {
+      return showToast("Restaurant is closed for today!");
+    }
     if (cartLocked) return showToast("Cart is locked for checkout!");
     if (item.variants && !variant) {
       setVariantModal(item);
@@ -317,6 +382,9 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
 
   /* ─── Order Action ─────────────────────── */
   const handlePlaceOrder = async () => {
+    if (!restaurantStatus.isOpen && !restaurantStatus.closingAt) {
+      return showToast("Restaurant is closed for today!");
+    }
     if (cart.length === 0) return;
     if (cartLocked && lockedBy !== clientId) return showToast("Someone else is placing the order!");
     setOrdering(true);
@@ -427,21 +495,44 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
   }
 
   return (
-    <div className="h-screen bg-[#F9F7F4] flex flex-col overflow-hidden">
+    <div className="h-screen bg-[#F9F7F4] flex flex-col overflow-hidden relative">
+      {/* CLOSED OVERLAY */}
+      {!restaurantStatus.isOpen && !session && (
+        <div className="absolute inset-0 z-[100] bg-[#3A241C] flex items-center justify-center p-6 text-center">
+          <div className="max-w-md">
+            <div className="w-20 h-20 bg-[#E76F51] rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl rotate-3">
+              <Lock size={40} className="text-white" />
+            </div>
+            <h1 className="font-[var(--font-playfair)] text-4xl lg:text-5xl font-bold text-white mb-6">We're Closed</h1>
+            <p className="text-white/60 text-lg mb-10 leading-relaxed font-light">
+              Our kitchen has closed for the day. We serve from <span className="text-[#E76F51] font-bold underline underline-offset-4 decoration-2">4 PM onwards</span>. Please visit us again tomorrow!
+            </p>
+            <div className="h-[1px] w-20 bg-white/20 mx-auto" />
+          </div>
+        </div>
+      )}
+
       {/* FULL WIDTH HEADER */}
       <header className="flex-shrink-0 z-40 bg-[#3A241C] text-white px-4 lg:px-8 py-3 lg:py-4 flex items-center justify-between shadow-xl w-full">
         <div className="flex items-center gap-4 lg:gap-8">
           {session && session.orders.length > 0 && (
             <motion.button
               whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.05 }}
               onClick={handleCloseTable}
-              className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-[9px] lg:text-[10px] font-black uppercase tracking-[0.2em] transition-all ${remaining <= 0 ? "bg-[#6A994E] text-white shadow-lg" : "bg-white/5 text-white/30 border border-white/10"}`}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-2xl text-[9px] lg:text-[10px] font-black uppercase tracking-[0.2em] transition-all ${remaining <= 0 ? "bg-[#6A994E] text-white shadow-lg shadow-[#6A994E]/20" : "bg-white/5 text-white/30 border border-white/10"}`}
             >
               <X size={14} /> Close Table
             </motion.button>
           )}
           <div className="flex items-center gap-3 lg:gap-6">
             <span className="px-4 lg:px-6 py-1.5 lg:py-2 bg-[#E76F51] rounded-2xl lg:rounded-full text-[10px] lg:text-[12px] font-black uppercase tracking-[0.2em] shadow-lg">Table {tableId.replace(/^t/i, '')}</span>
+            {timeLeft && (
+              <div className="flex items-center gap-2 bg-[#B71C1C] px-3 py-1 rounded-lg animate-pulse shadow-lg">
+                <div className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                <span className="text-[9px] font-black uppercase tracking-widest text-white">Closes in {timeLeft}</span>
+              </div>
+            )}
             {!connected && (
               <div className="flex items-center gap-2 lg:gap-2.5">
                 <span className="w-2 lg:w-2.5 h-2 lg:h-2.5 rounded-full animate-pulse bg-orange-400" />
@@ -471,8 +562,7 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
         {/* LEFT: Menu Section */}
         <main 
           id="menu-container"
-          className="flex-1 relative border-r border-[#3A241C]/5 overflow-y-auto w-full scroll-smooth"
-          onScroll={handleScroll}
+          className="flex-1 relative border-r border-[#3A241C]/5 overflow-y-auto w-full scroll-smooth transform-gpu translate-z-0"
         >
           {/* Category Quick Links */}
           <div className="sticky top-0 z-50 bg-[#F9F7F4]/95 backdrop-blur-md px-4 lg:px-8 py-3 lg:py-4 flex gap-2 lg:gap-4 overflow-x-auto scrollbar-hide border-b border-[#3A241C]/5">
@@ -493,6 +583,7 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
             {categories.map((cat, idx) => (
               <section 
                 key={cat} 
+                id={cat}
                 ref={(el) => { categoryRefs.current[cat] = el; }}
                 className="scroll-mt-24 lg:scroll-mt-28"
               >
@@ -510,15 +601,23 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
                         : item.price;
                     const hasDiscount = item.discountPct || item.discountFlat;
 
+                    const isDisabled = item.outOfStock || (!restaurantStatus.isOpen && !restaurantStatus.closingAt);
+
                     return (
                       <div 
                         key={item.id}
-                        className={`bg-white rounded-[2rem] p-4 lg:p-5 shadow-sm border border-[#3A241C]/5 flex gap-4 group transition-all duration-300 relative overflow-hidden h-[140px] lg:h-[164px] ${item.outOfStock ? "grayscale opacity-60" : "hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"}`}
+                        className={`bg-white rounded-[2rem] p-4 lg:p-5 shadow-sm border border-[#3A241C]/5 flex gap-4 group transition-all duration-300 relative overflow-hidden h-[140px] lg:h-[164px] ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-xl hover:scale-[1.02] active:scale-[0.98]"}`}
                       >
                         {item.outOfStock && (
                           <div className="absolute inset-0 z-20 bg-[#3A241C]/20 backdrop-blur-[2px] flex items-center justify-center">
                             <span className="bg-[#3A241C] text-white px-4 py-2 rounded-full font-black text-[10px] lg:text-[12px] uppercase tracking-[0.2em] shadow-2xl">Out of Stock</span>
                           </div>
+                        )}
+
+                        {!restaurantStatus.isOpen && !restaurantStatus.closingAt && !item.outOfStock && (
+                            <div className="absolute inset-0 z-20 bg-[#3A241C]/40 backdrop-blur-[2px] flex items-center justify-center">
+                              <span className="bg-[#B71C1C] text-white px-4 py-2 rounded-full font-black text-[10px] lg:text-[12px] uppercase tracking-[0.2em] shadow-2xl">Kitchen Closed</span>
+                            </div>
                         )}
 
                         {/* Image Box */}

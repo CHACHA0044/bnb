@@ -13,6 +13,7 @@ import orderRouter from "./routes/order";
 import paymentRouter from "./routes/payment";
 import adminRouter from "./routes/admin";
 import menuRouter from "./routes/menu";
+import statusRouter from "./routes/status";
 
 const app = express();
 const server = http.createServer(app);
@@ -45,6 +46,7 @@ app.use("/api/order", orderRouter);
 app.use("/api/payment", paymentRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/menu", menuRouter);
+app.use("/api/status", statusRouter);
 
 import { prisma } from "./lib/prisma";
 

@@ -88,7 +88,7 @@ export default function HistoryPage() {
                     </div>
                     <div>
                       <div className="flex items-center gap-3">
-                        <p className="font-black text-[#3A241C] text-xl">#{session.id.slice(-4).toUpperCase()}</p>
+                        <p className="font-black text-[#3A241C] text-xl">#{session.sessionNumber || session.id.slice(-4).toUpperCase()}</p>
                         <span className="text-[9px] font-black bg-[#6A994E]/10 text-[#6A994E] px-3 py-1 rounded-full uppercase tracking-widest border border-[#6A994E]/10">Settled</span>
                       </div>
                       <div className="flex items-center gap-4 mt-2">

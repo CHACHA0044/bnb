@@ -10,6 +10,7 @@ generator client {
 
 model Session {
   id              String    @id @default(uuid())
+  sessionNumber   Int       @default(0)
   tableId         String
   status          String    @default("OPEN") // OPEN | CLOSED
   paymentReminder Boolean   @default(false)
@@ -96,4 +97,11 @@ model MenuVersion {
   changedBy String   @default("admin")
   note      String?
   createdAt DateTime @default(now())
+}
+
+model RestaurantStatus {
+  id        String   @id @default("CURRENT")
+  isOpen    Boolean  @default(true)
+  closingAt DateTime? // If set, countdown is active
+  updatedAt DateTime @updatedAt
 }

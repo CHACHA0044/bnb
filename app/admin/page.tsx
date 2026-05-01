@@ -50,23 +50,25 @@ export default function DashboardPage() {
               return {
                 ...newO,
                 items: newO.items.map(newI => {
-                  if (pendingUpdates.current.has(newI.id) || isOrderPending) {
-                    // Find old state for this item
+                  const isItemPending = pendingUpdates.current.has(newI.id);
+                  if (isItemPending || isOrderPending) {
                     const oldS = prev.find(ps => ps.id === newS.id);
                     const oldO = oldS?.orders.find(po => po.id === newO.id);
                     const oldI = oldO?.items.find(pi => pi.id === newI.id);
-                    // Use old state if available (optimistic)
-                    if (oldI) return oldI;
-                    // If no old state but order is pending served, return served version
+                    
                     if (isOrderPending) {
-                      const shouldBeServed = prev.find(ps => ps.id === newS.id)?.orders.find(po => po.id === newO.id)?.items[0]?.isServed;
-                      // Actually simpler: just check if the order in prev was being served
-                      return { ...newI, isServed: oldO?.items.every(xi => xi.isServed) ?? newI.isServed };
+                      const targetStatus = prev.find(ps => ps.id === newS.id)?.orders.find(po => po.id === newO.id)?.status;
+                      if (targetStatus === "SERVED") return { ...newI, isServed: true };
+                      if (targetStatus === "PLACED") return { ...newI, isServed: false };
                     }
-                    return newI;
+                    
+                    if (isItemPending && oldI) return oldI;
                   }
                   return newI;
-                })
+                }),
+                status: isOrderPending 
+                  ? (prev.find(ps => ps.id === newS.id)?.orders.find(po => po.id === newO.id)?.status || newO.status) 
+                  : newO.status
               };
             })
           };
@@ -114,6 +116,7 @@ export default function DashboardPage() {
   };
 
   const updateOrderStatus = async (orderId: string, status: string) => {
+    pendingUpdates.current.add(orderId);
     // Optimistic UI update for status
     setSessions(prev => prev.map(s => ({
       ...s,
@@ -140,6 +143,10 @@ export default function DashboardPage() {
     } catch (err) { 
       console.error(err); 
       loadSessions();
+    } finally {
+      setTimeout(() => {
+        pendingUpdates.current.delete(orderId);
+      }, 3000);
     }
   };
 
@@ -341,14 +348,16 @@ export default function DashboardPage() {
               <p className="text-[#3A241C]/60 text-sm leading-relaxed mb-10 font-medium">{confirmModal.message}</p>
               
               <div className="flex flex-col gap-3">
-                <button 
+                <motion.button 
+                  whileTap={{ scale: 0.95 }}
+                  whileHover={{ scale: 1.02 }}
                   onClick={confirmModal.onConfirm}
-                  className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg transition-all active:scale-95 ${
+                  className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg transition-all ${
                     confirmModal.danger ? "bg-[#B71C1C] text-white shadow-red-900/20" : "bg-[#3A241C] text-white shadow-black/20"
                   }`}
                 >
                   Confirm Action
-                </button>
+                </motion.button>
                 <button 
                   onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))}
                   className="w-full py-4 text-[#3A241C]/30 font-black text-[10px] uppercase tracking-[0.2em] hover:text-[#3A241C] transition-colors"

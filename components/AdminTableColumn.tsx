@@ -142,23 +142,29 @@ export default function AdminTableColumn({
       <div className="p-6 bg-gray-50/50 border-b border-gray-100">
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black ${
-              session ? "bg-[#3A241C] text-white" : "bg-gray-100 text-gray-400"
+            <motion.div 
+              whileHover={{ scale: 1.05 }}
+              className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner ${
+              session ? "bg-[#3A241C] text-white shadow-[#3A241C]/20" : "bg-gray-100 text-gray-400"
             }`}>
               {tableId}
-            </div>
+            </motion.div>
             <div>
               <h3 className="font-black text-[#3A241C] text-lg">Table {tableId}</h3>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                {session ? `Active • #${session.id.slice(-4).toUpperCase()}` : "Available"}
+                {session ? `Active • #${session.sessionNumber || session.id.slice(-4).toUpperCase()}` : "Available"}
               </p>
             </div>
           </div>
           
           <div className="relative group">
-            <button className="p-2 hover:bg-white rounded-xl border border-transparent hover:border-gray-200 transition-all">
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              whileHover={{ backgroundColor: "rgba(255,255,255,1)", borderColor: "rgba(229,231,235,1)" }}
+              className="p-2 hover:bg-white rounded-xl border border-transparent transition-all"
+            >
               <QrCode size={20} className="text-gray-400" />
-            </button>
+            </motion.button>
             <div className="absolute right-0 top-full mt-2 p-4 bg-white rounded-2xl shadow-2xl border border-gray-100 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 min-w-[200px]">
               <div className="flex flex-col items-center gap-3">
                 <QRCodeSVG 
@@ -171,9 +177,13 @@ export default function AdminTableColumn({
                   {typeof window !== "undefined" ? window.location.host : "bnb-ten-omega.vercel.app"}/table/{tableId}
                 </p>
                 <div className="flex gap-2 w-full">
-                  <button onClick={downloadQR} className="flex-1 flex items-center justify-center gap-2 py-2 bg-gray-50 rounded-xl text-[10px] font-bold hover:bg-gray-100">
+                  <motion.button 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={downloadQR} 
+                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-gray-50 rounded-xl text-[10px] font-bold hover:bg-gray-100 transition-all"
+                  >
                     <Download size={14} /> Download
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             </div>
@@ -209,16 +219,19 @@ export default function AdminTableColumn({
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <button 
+              <motion.button 
+                whileTap={{ scale: 0.95 }}
+                whileHover={{ scale: 1.02 }}
                 onClick={() => onAddOrder(session.id)}
                 className="py-2.5 bg-[#3A241C] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#E76F51] transition-all shadow-lg shadow-[#3A241C]/10 flex items-center justify-center gap-2"
               >
                 <Plus size={14} /> Add Items
-              </button>
-              <button 
+              </motion.button>
+              <motion.button 
+                whileTap={balance > 0 ? {} : { scale: 0.95 }}
+                whileHover={balance > 0 ? {} : { scale: 1.02 }}
                 onClick={() => {
                   if (balance > 0) {
-                    // Visual feedback or scroll to payment
                     const el = document.getElementById(`payment-${session.id}`);
                     el?.scrollIntoView({ behavior: "smooth" });
                   } else {
@@ -227,7 +240,7 @@ export default function AdminTableColumn({
                 }}
                 className={`py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
                   balance > 0 
-                    ? "bg-orange-50 text-orange-600 border border-orange-200 cursor-not-allowed" 
+                    ? "bg-orange-50 text-orange-600 border border-orange-200 cursor-not-allowed opacity-50" 
                     : "bg-[#6A994E] text-white hover:opacity-90 shadow-lg shadow-[#6A994E]/10"
                 }`}
               >
@@ -240,7 +253,7 @@ export default function AdminTableColumn({
                     <Check size={14} /> Close Session
                   </>
                 )}
-              </button>
+              </motion.button>
             </div>
           </div>
         )}
@@ -297,7 +310,8 @@ export default function AdminTableColumn({
                       <div className="flex justify-between items-start mb-3 ml-2">
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2 mb-1">
-                            <button 
+                            <motion.button 
+                              whileTap={{ scale: 0.8 }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onToggleOrderItems(order.id, !allServed);
@@ -310,7 +324,7 @@ export default function AdminTableColumn({
                               title={allServed ? "Deselect All" : "Select All"}
                             >
                               <CheckSquare size={14} className={allServed ? "opacity-100" : "opacity-0"} />
-                            </button>
+                            </motion.button>
                             <div className="relative">
                               <select
                                 value={status}
@@ -338,9 +352,10 @@ export default function AdminTableColumn({
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {status !== "SERVED" ? (
                               <>
-                                <button
+                                <motion.button
+                                  whileTap={{ scale: 0.8 }}
                                   onClick={() => onUpdateStatus(order.id, status === "PREPARING" ? "PLACED" : "PREPARING")}
-                                  className={`p-2 rounded-xl transition-all active:scale-90 ${
+                                  className={`p-2 rounded-xl transition-all ${
                                     status === "PREPARING" 
                                       ? "bg-[#F4A261] text-white shadow-lg shadow-[#F4A261]/20" 
                                       : "bg-white text-[#F4A261] border border-[#F4A261]/20 hover:bg-[#F4A261]/5"
@@ -348,10 +363,11 @@ export default function AdminTableColumn({
                                   title={status === "PREPARING" ? "Revert to Placed" : "Start Preparing"}
                                 >
                                   <Clock size={16} className={status === "PREPARING" ? "animate-spin-slow" : ""} />
-                                </button>
-                                <button
+                                </motion.button>
+                                <motion.button
+                                  whileTap={{ scale: 0.8 }}
                                   onClick={() => onUpdateStatus(order.id, "SERVED")}
-                                  className={`p-2 rounded-xl transition-all active:scale-90 ${
+                                  className={`p-2 rounded-xl transition-all ${
                                     allServed 
                                       ? "bg-[#6A994E] text-white shadow-lg shadow-[#6A994E]/20" 
                                       : "bg-white text-[#6A994E] border border-[#6A994E]/20 hover:bg-[#6A994E]/5"
@@ -359,17 +375,18 @@ export default function AdminTableColumn({
                                   title="Mark Served"
                                 >
                                   <Check size={16} />
-                                </button>
+                                </motion.button>
                               </>
                             ) : (
-                              <button
+                              <motion.button
+                                whileTap={{ scale: 0.8 }}
                                 onClick={() => onUpdateStatus(order.id, "PLACED")}
-                                className="p-2 bg-[#6A994E]/10 text-[#6A994E] rounded-xl hover:bg-[#B71C1C]/10 hover:text-[#B71C1C] transition-all active:scale-90 group"
+                                className="p-2 bg-[#6A994E]/10 text-[#6A994E] rounded-xl hover:bg-[#B71C1C]/10 hover:text-[#B71C1C] transition-all group"
                                 title="Revert to Placed"
                               >
                                 <CheckCircle2 size={16} className="group-hover:hidden" />
                                 <X size={16} className="hidden group-hover:block" />
-                              </button>
+                              </motion.button>
                             )}
                           </div>
                       </div>
@@ -383,7 +400,7 @@ export default function AdminTableColumn({
                             key={item.id} 
                             onClick={(e) => {
                               e.stopPropagation();
-                              onToggleItemServed(item.id, !item.isServed);
+                              handleToggleItem(item, !item.isServed);
                             }}
                             className={`flex justify-between items-center p-3 rounded-xl cursor-pointer transition-all ${
                               item.isServed 
@@ -392,13 +409,15 @@ export default function AdminTableColumn({
                             }`}
                           >
                             <div className="flex items-center gap-3">
-                              <div className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all ${
+                              <motion.div 
+                                whileTap={{ scale: 0.8 }}
+                                className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all ${
                                 item.isServed 
                                   ? "bg-[#6A994E] border-[#6A994E] text-white shadow-sm" 
                                   : "bg-white border-gray-200 text-transparent"
                               }`}>
                                 {item.isServed ? <CheckSquare size={14} /> : <Square size={14} className="text-gray-200" />}
-                              </div>
+                              </motion.div>
                               <div className="flex flex-col">
                                 <span className={`text-xs font-bold leading-tight ${item.isServed ? "text-gray-400 line-through" : "text-[#3A241C]"}`}>
                                   {item.name}

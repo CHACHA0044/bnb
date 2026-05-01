@@ -7,10 +7,14 @@ import {
   LayoutDashboard, ShoppingBag, X, ChevronRight 
 } from "lucide-react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
-import { adminVerifySecret, adminFetchSessions, type SessionData } from "@/lib/api";
+import { useSocket } from "@/lib/socket-client";
+import { 
+  adminVerifySecret, adminFetchSessions, type SessionData,
+  fetchRestaurantStatus, adminOpenRestaurant, adminCloseRestaurant, adminForceCloseRestaurant,
+  type RestaurantStatusData
+} from "@/lib/api";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useSocket } from "@/lib/socket-client";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { secret, authenticated, loading, logout, setSecret, setAuthenticated } = useAdminAuth();
@@ -20,18 +24,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [loginError, setLoginError] = useState("");
   const [tempSecret, setTempSecret] = useState("");
   const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [restaurantStatus, setRestaurantStatus] = useState<RestaurantStatusData>({ isOpen: true, closingAt: null });
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
   const pathname = usePathname();
   const { on } = useSocket();
+
+  const loadStatus = useCallback(async () => {
+    try {
+      const status = await fetchRestaurantStatus();
+      setRestaurantStatus(status);
+    } catch (err) {
+      console.error("Failed to load restaurant status:", err);
+    }
+  }, []);
 
   const loadStats = useCallback(async () => {
     if (!authenticated || !secret) return;
     try {
       const data = await adminFetchSessions(secret);
       setSessions(data);
+      await loadStatus();
     } catch (err) {
       console.error("Failed to load stats in layout:", err);
     }
-  }, [authenticated, secret]);
+  }, [authenticated, secret, loadStatus]);
 
   useEffect(() => {
     if (authenticated && secret) {
@@ -41,10 +57,60 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         on("order_updated", loadStats),
         on("payment_confirmed", loadStats),
         on("session_updated", loadStats),
+        on("menu_updated", loadStats),
       ];
       return () => unsubs.forEach(u => u());
     }
   }, [authenticated, secret, loadStats, on]);
+
+  // Countdown timer logic
+  useEffect(() => {
+    if (!restaurantStatus.closingAt) {
+      setTimeLeft(null);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const closingDate = new Date(restaurantStatus.closingAt!);
+      const now = new Date();
+      const diff = closingDate.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setTimeLeft("00:00");
+        clearInterval(interval);
+        loadStatus();
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setTimeLeft(`${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [restaurantStatus.closingAt, loadStatus]);
+
+  const handleToggleStatus = async () => {
+    if (!secret) return;
+    const oldStatus = { ...restaurantStatus };
+    try {
+      if (!restaurantStatus.isOpen) {
+        setRestaurantStatus({ isOpen: true, closingAt: null });
+        await adminOpenRestaurant(secret);
+      } else if (restaurantStatus.closingAt) {
+        setRestaurantStatus({ isOpen: false, closingAt: null });
+        await adminForceCloseRestaurant(secret);
+      } else {
+        const closingAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        setRestaurantStatus({ isOpen: true, closingAt });
+        await adminCloseRestaurant(secret);
+      }
+      // Status will be eventually updated by loadStatus from effect or manual call
+      loadStatus();
+    } catch (err) {
+      console.error("Failed to toggle restaurant status:", err);
+      setRestaurantStatus(oldStatus);
+    }
+  };
 
   const liveSessions = sessions.filter(s => s.status === "OPEN");
   const totalDue = liveSessions.reduce((acc, s) => {
@@ -195,7 +261,45 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           ))}
         </nav>
 
-        <div className="p-8 border-t border-white/5">
+        <div className="p-8 border-t border-white/5 space-y-3">
+          {/* Restaurant Status Button */}
+          <button
+            onClick={handleToggleStatus}
+            className={`w-full flex items-center justify-center px-6 py-4 rounded-2xl transition-all group relative overflow-hidden ${
+              !restaurantStatus.isOpen 
+                ? "bg-[#6A994E] text-white shadow-lg shadow-[#6A994E]/20" 
+                : restaurantStatus.closingAt
+                  ? "bg-[#B71C1C] text-white animate-pulse"
+                  : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              {restaurantStatus.isOpen ? (
+                restaurantStatus.closingAt ? <X size={18} /> : <Lock size={18} />
+              ) : (
+                <Shield size={18} />
+              )}
+              <span className="font-bold text-xs uppercase tracking-widest">
+                {!restaurantStatus.isOpen ? "Open Shop" : restaurantStatus.closingAt ? "Close" : "Close Shop"}
+              </span>
+              {timeLeft && (
+                <span className="font-mono text-[10px] font-black opacity-80 ml-2">({timeLeft})</span>
+              )}
+            </div>
+            
+            {/* Progress bar for closing */}
+            {restaurantStatus.closingAt && (
+              <div className="absolute bottom-0 left-0 h-1 bg-white/20 w-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: "100%" }}
+                  animate={{ width: "0%" }}
+                  transition={{ duration: 600, ease: "linear" }}
+                  className="h-full bg-white"
+                />
+              </div>
+            )}
+          </button>
+
           <button 
             onClick={logout}
             className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl bg-white/5 text-white/60 font-bold text-xs uppercase tracking-widest hover:bg-[#B71C1C] hover:text-white transition-all group"
