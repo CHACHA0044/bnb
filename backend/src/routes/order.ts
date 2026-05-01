@@ -133,14 +133,14 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
  */
 router.patch("/item/:itemId/served", requireAdmin, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { itemId } = req.params;
+    const { itemId } = req.params as { itemId: string };
     const { isServed } = req.body as { isServed: boolean };
 
     const item = await prisma.orderItem.update({
       where: { id: itemId },
       data: { isServed },
       include: { order: { include: { session: true } } },
-    });
+    }) as any; // Cast to any to bypass Prisma Client sync issues in types
 
     try {
       const io = getIO();

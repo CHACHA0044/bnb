@@ -8,7 +8,7 @@ import {
   CreditCard, Banknote, CheckCircle2, X, Bell
 } from "lucide-react";
 import { type OrderMenuItem } from "@/lib/menu";
-import { fetchSession, placeOrder, createPayment, fetchMenu, type SessionData, type OrderData } from "@/lib/api";
+import { fetchSession, placeOrder, createPayment, fetchMenu, type SessionData, type OrderData, type OrderItemData, type PaymentData } from "@/lib/api";
 import { useSocket } from "@/lib/socket-client";
 import Image from "next/image";
 
@@ -808,14 +808,14 @@ function CartContent({
   });
 
   if (orderPlaced) {
-    const allOrderedItems = session?.orders.flatMap(o => o.items)
-      .filter(i => !i.name.toLowerCase().includes("packing charges")) || [];
+    const allOrderedItems = (session?.orders ?? []).flatMap((o: OrderData) => o.items)
+      .filter((i: OrderItemData) => !i.name.toLowerCase().includes("packing charges"));
     
-    const preparingItems = allOrderedItems.filter(i => !i.isServed);
-    const servedItems = allOrderedItems.filter(i => i.isServed);
+    const preparingItems = allOrderedItems.filter((i: OrderItemData) => !i.isServed);
+    const servedItems = allOrderedItems.filter((i: OrderItemData) => i.isServed);
     
-    const ratingEligibleItems = allOrderedItems.filter(i => !i.name.toLowerCase().includes("soft drink"));
-    const hasPendingPayment = session?.payments.some(p => p.status === "PENDING" || p.status === "UNPAID");
+    const ratingEligibleItems = allOrderedItems.filter((i: OrderItemData) => !i.name.toLowerCase().includes("soft drink"));
+    const hasPendingPayment = (session?.payments ?? []).some((p: PaymentData) => p.status === "PENDING" || p.status === "UNPAID");
 
     return (
       <div className="p-8 lg:p-10 flex flex-col items-center text-center h-full overflow-y-auto scrollbar-hide">
@@ -897,7 +897,7 @@ function CartContent({
               {preparingItems.length > 0 && (
                 <div className="space-y-3 mb-6">
                    <p className="text-[8px] font-black text-[#F4A261] uppercase tracking-[0.1em] text-left ml-1">Preparing</p>
-                   {preparingItems.map((item, idx) => (
+                   {preparingItems.map((item: OrderItemData, idx: number) => (
                     <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-[#3A241C]/5 shadow-sm">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-[#F4A261] animate-pulse" />
@@ -914,7 +914,7 @@ function CartContent({
               {servedItems.length > 0 && (
                 <div className="space-y-3">
                    <p className="text-[8px] font-black text-[#6A994E] uppercase tracking-[0.1em] text-left ml-1">Served</p>
-                   {servedItems.map((item, idx) => (
+                   {servedItems.map((item: OrderItemData, idx: number) => (
                     <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-[#3A241C]/5 shadow-sm opacity-60">
                       <div className="flex items-center gap-3">
                         <div className="w-2 h-2 rounded-full bg-[#6A994E]" />
@@ -937,7 +937,7 @@ function CartContent({
             <h3 className="font-black text-[#3A241C] text-lg tracking-tight mb-1">Rate Your Experience</h3>
             <p className="text-[10px] font-bold text-[#3A241C]/40 uppercase tracking-widest mb-6 leading-relaxed">Please rate the quality once u have eaten</p>
             <div className="space-y-4">
-              {ratingEligibleItems.map((item, idx) => {
+              {ratingEligibleItems.map((item: OrderItemData, idx: number) => {
                 const isRated = ratedItems.has(item.name);
                 const currentRating = ratings[item.name] || 0;
 

@@ -22,7 +22,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 /* ─── CORS ─────────────────────────────────── */
 app.use(cors({
-  origin: [FRONTEND_URL, "https://bnb-ten-omega.vercel.app"],
+  origin: [FRONTEND_URL, "https://bnb-ten-omega.vercel.app", /\.vercel\.app$/],
   methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
 }));
@@ -32,7 +32,7 @@ app.use(express.json());
 /* ─── Socket.IO ────────────────────────────── */
 const io = new SocketIOServer(server, {
   cors: {
-    origin: [FRONTEND_URL, "https://bnb-ten-omega.vercel.app"],
+    origin: [FRONTEND_URL, "https://bnb-ten-omega.vercel.app", /\.vercel\.app$/],
     methods: ["GET", "POST"],
   },
 });
