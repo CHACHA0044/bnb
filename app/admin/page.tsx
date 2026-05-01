@@ -329,7 +329,7 @@ export default function AdminPage() {
               key={item.id}
               onClick={() => { 
                 setActiveTab(item.id as any); 
-                setIsSidebarOpen(false); 
+                if (isMobile) setIsSidebarOpen(false); 
               }}
               className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl transition-all font-bold text-sm ${activeTab === item.id ? "bg-[#E76F51] text-white shadow-lg shadow-[#E76F51]/20" : "text-white/40 hover:bg-white/5 hover:text-white"}`}
             >

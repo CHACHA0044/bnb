@@ -167,6 +167,8 @@ export interface OrderMenuItem {
   image?: string;
   descriptionEn?: string;
   outOfStock?: boolean;
+  variants?: string[];
+  variantPrices?: Record<string, number>;
 }
 
 /** Admin: Fetch full menu for editing */

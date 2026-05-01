@@ -249,7 +249,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
             <motion.button 
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => setEditingItem({ id: "NEW", name: "", price: 0, categoryId: categories[0]?.id, descriptionEn: "", descriptionHi: "", outOfStock: false })}
+              onClick={() => setEditingItem({ id: "NEW", name: "", price: 0, categoryId: categories[0]?.id, descriptionEn: "", descriptionHi: "", outOfStock: false, variants: [], variantPrices: {} })}
               className="bg-[#E76F51] text-white p-3 rounded-2xl shadow-lg shadow-[#E76F51]/20 transition-all"
             >
               <Plus size={24} />
@@ -341,7 +341,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                                 <div className="flex justify-between items-start mb-1">
                                   <h4 className={`font-bold text-[#3A241C] text-sm leading-tight ${currentStatus ? "opacity-40" : ""}`}>{item.name}</h4>
                                   <div className="flex items-center gap-1">
-                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setEditingItem(item)} className="p-2 text-[#3A241C]/20 hover:text-[#E76F51] transition-colors"><Edit2 size={14} /></motion.button>
+                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setEditingItem({ ...item, variants: item.variants || [], variantPrices: item.variantPrices || {} })} className="p-2 text-[#3A241C]/20 hover:text-[#E76F51] transition-colors"><Edit2 size={14} /></motion.button>
                                     <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleDeleteItem(item.id)} className="p-2 text-[#3A241C]/20 hover:text-[#B71C1C] transition-colors"><Trash2 size={14} /></motion.button>
                                   </div>
                                 </div>
@@ -592,6 +592,53 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                         className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 pl-12 pr-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
                       />
                     </div>
+                  </div>
+                </div>
+
+                {/* Variants Section */}
+                <div className="space-y-4 pt-6 border-t border-[#3A241C]/5">
+                  <div className="flex justify-between items-center px-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Variants (e.g. Coke, Sprite)</label>
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        const vName = prompt("Variant Name?");
+                        if (vName) {
+                          const vPrice = prompt("Price for this variant?", editingItem.price.toString());
+                          const price = vPrice ? parseInt(vPrice) : editingItem.price;
+                          setEditingItem({
+                            ...editingItem,
+                            variants: [...(editingItem.variants || []), vName],
+                            variantPrices: { ...(editingItem.variantPrices || {}), [vName]: price }
+                          });
+                        }
+                      }}
+                      className="text-[10px] font-black text-[#E76F51] uppercase tracking-widest hover:underline"
+                    >
+                      + Add Variant
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {editingItem.variants?.map((v: string) => (
+                      <div key={v} className="flex items-center justify-between bg-[#F9F7F4] p-3 rounded-xl border border-[#3A241C]/5">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-[#3A241C] truncate">{v}</p>
+                          <p className="text-[10px] font-black text-[#E76F51]">₹{editingItem.variantPrices?.[v] || editingItem.price}</p>
+                        </div>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            const newVariants = editingItem.variants.filter((name: string) => name !== v);
+                            const newPrices = { ...editingItem.variantPrices };
+                            delete newPrices[v];
+                            setEditingItem({ ...editingItem, variants: newVariants, variantPrices: newPrices });
+                          }}
+                          className="p-2 text-[#3A241C]/20 hover:text-[#B71C1C]"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
