@@ -152,6 +152,15 @@ export function adminAddOrder(sessionId: string | null, items: { name: string; p
   });
 }
 
+/** Admin: Record a confirmed payment directly */
+export function adminRecordPayment(sessionId: string, amount: number, method: string, secret: string) {
+  return apiFetch("/api/admin/payments/record", {
+    method: "POST",
+    body: JSON.stringify({ sessionId, amount, method }),
+    adminSecret: secret,
+  });
+}
+
 /* ─── Menu Management ────────────────────────── */
 
 /** Fetch public menu */
@@ -170,6 +179,7 @@ export interface OrderMenuItem {
   outOfStockVariants?: string[];
   variants?: string[];
   variantPrices?: Record<string, number>;
+  rating?: number;
 }
 
 /** Admin: Fetch full menu for editing */
@@ -272,6 +282,15 @@ export function adminRollbackMenu(versionId: string, secret: string) {
 /** Admin: Toggle item served status */
 export function adminToggleItemServed(itemId: string, isServed: boolean, secret: string) {
   return apiFetch(`/api/order/item/${itemId}/served`, {
+    method: "PATCH",
+    body: JSON.stringify({ isServed }),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Bulk toggle items served status for an order */
+export function adminToggleOrderItems(orderId: string, isServed: boolean, secret: string) {
+  return apiFetch(`/api/order/${orderId}/items/served`, {
     method: "PATCH",
     body: JSON.stringify({ isServed }),
     adminSecret: secret,

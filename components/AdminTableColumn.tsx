@@ -4,8 +4,10 @@ import { motion } from "framer-motion";
 import { 
   Clock, CheckCircle2, Coffee, 
   CreditCard, Banknote, RotateCcw,
-  QrCode, Download, Plus, Bell, X
+  QrCode, Download, Plus, Bell, X,
+  Square, CheckSquare, PackageCheck, Check
 } from "lucide-react";
+import { useState, useEffect } from "react";
 import { SessionData } from "@/lib/api";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -17,6 +19,7 @@ interface AdminTableColumnProps {
   onAddOrder: (sessionId: string) => void;
   onCloseSession: (sessionId: string) => Promise<void>;
   onToggleItemServed: (itemId: string, isServed: boolean) => Promise<void>;
+  onToggleOrderItems: (orderId: string, isServed: boolean) => Promise<void>;
   onDeletePayment: (paymentId: string) => Promise<void>;
   onToggleReminder: (sessionId: string, reminder: boolean) => Promise<void>;
 }
@@ -40,9 +43,25 @@ export default function AdminTableColumn({
   onAddOrder,
   onCloseSession,
   onToggleItemServed,
+  onToggleOrderItems,
   onDeletePayment,
   onToggleReminder,
 }: AdminTableColumnProps) {
+  const [showPackedNote, setShowPackedNote] = useState(false);
+
+  useEffect(() => {
+    if (showPackedNote) {
+      const timer = setTimeout(() => setShowPackedNote(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showPackedNote]);
+
+  const handleToggleItem = async (item: any, isServed: boolean) => {
+    await onToggleItemServed(item.id, isServed);
+    if (isServed && item.name.toLowerCase().includes("(to-go)")) {
+      setShowPackedNote(true);
+    }
+  };
   
   const getSessionStats = () => {
     if (!session) return { total: 0, paid: 0, balance: 0, paymentMode: "NONE" };
@@ -63,13 +82,39 @@ export default function AdminTableColumn({
     return { total, paid, balance: total - paid, paymentMode };
   };
 
+  const [timeLeft, setTimeLeft] = useState<string>("");
+
+  useEffect(() => {
+    if (!session) return;
+    const updateTimer = () => {
+      const start = new Date(session.createdAt).getTime();
+      const end = start + 90 * 60 * 1000;
+      const now = new Date().getTime();
+      const diff = end - now;
+      
+      if (diff <= 0) {
+        setTimeLeft("00:00");
+        // Auto-reminder if balance exists and not already sent
+        const { balance } = getSessionStats();
+        if (balance > 0 && !session.paymentReminder) {
+          onToggleReminder(session.id, true);
+        }
+        return;
+      }
+      const mins = Math.floor(diff / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+      setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [session, onToggleReminder]);
+
   const { total, paid, balance, paymentMode } = getSessionStats();
 
-  const groupedOrders = {
-    PLACED: session?.orders.filter(o => o.status === "PLACED") || [],
-    PREPARING: session?.orders.filter(o => o.status === "PREPARING") || [],
-    SERVED: session?.orders.filter(o => o.status === "SERVED") || [],
-  };
+  const allOrders = [...(session?.orders || [])].sort((a, b) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
   const downloadQR = () => {
     const svg = document.getElementById(`qr-${tableId}`);
@@ -136,14 +181,66 @@ export default function AdminTableColumn({
         </div>
 
         {session && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 bg-white rounded-2xl border border-gray-100">
-              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Bill</p>
-              <p className="text-sm font-black text-[#3A241C]">₹{total}</p>
+          <div className="mt-4 space-y-4">
+            <div className={`flex justify-between items-center bg-white p-3 rounded-2xl border shadow-sm transition-all ${
+              timeLeft === "00:00" && balance > 0 
+                ? "border-red-200 bg-red-50/30 animate-pulse" 
+                : "border-gray-100"
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  timeLeft === "00:00" && balance > 0 ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "bg-[#E76F51]/10 text-[#E76F51]"
+                }`}>
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-[#3A241C] uppercase">
+                    {timeLeft === "00:00" && balance > 0 ? "Time Expired" : "Session Timer"}
+                  </p>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">
+                    {timeLeft === "00:00" && balance > 0 ? "Pending Payment" : `Started @ ${new Date(session.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className={`text-lg font-black tracking-tighter ${timeLeft === "00:00" ? "text-red-600" : "text-[#3A241C]"}`}>{timeLeft}</p>
+                <p className="text-[7px] font-black text-gray-300 uppercase">Remaining</p>
+              </div>
             </div>
-            <div className="p-3 bg-white rounded-2xl border border-gray-100">
-              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Balance</p>
-              <p className={`text-sm font-black ${balance > 0 ? "text-[#E76F51]" : "text-[#6A994E]"}`}>₹{balance}</p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                onClick={() => onAddOrder(session.id)}
+                className="py-2.5 bg-[#3A241C] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#E76F51] transition-all shadow-lg shadow-[#3A241C]/10 flex items-center justify-center gap-2"
+              >
+                <Plus size={14} /> Add Items
+              </button>
+              <button 
+                onClick={() => {
+                  if (balance > 0) {
+                    // Visual feedback or scroll to payment
+                    const el = document.getElementById(`payment-${session.id}`);
+                    el?.scrollIntoView({ behavior: "smooth" });
+                  } else {
+                    onCloseSession(session.id);
+                  }
+                }}
+                className={`py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                  balance > 0 
+                    ? "bg-orange-50 text-orange-600 border border-orange-200 cursor-not-allowed" 
+                    : "bg-[#6A994E] text-white hover:opacity-90 shadow-lg shadow-[#6A994E]/10"
+                }`}
+              >
+                {balance > 0 ? (
+                  <>
+                    <Banknote size={14} /> Settle ₹{balance}
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} /> Close Session
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}
@@ -168,200 +265,179 @@ export default function AdminTableColumn({
           </div>
         ) : (
           <>
-            {/* Status Groups */}
-            {(["PLACED", "PREPARING", "SERVED"] as const).map(status => {
-              const orders = groupedOrders[status];
-              if (orders.length === 0) return null;
+            {/* Continuous Orders List */}
+            <div className="space-y-4">
+              {allOrders.length === 0 ? (
+                <div className="py-10 text-center opacity-20">
+                  <p className="text-[10px] font-black uppercase tracking-widest">No Orders Yet</p>
+                </div>
+              ) : (
+                allOrders.map(order => {
+                  const status = order.status as "PLACED" | "PREPARING" | "SERVED";
+                  const statusConfig = {
+                    PLACED: { color: "bg-[#B71C1C]", label: "Placed", icon: <Clock size={12} /> },
+                    PREPARING: { color: "bg-[#F4A261]", label: "Preparing", icon: <Clock size={12} className="animate-spin-slow" /> },
+                    SERVED: { color: "bg-[#6A994E]", label: "Served", icon: <CheckCircle2 size={12} /> },
+                  };
+                  const config = statusConfig[status] || statusConfig.PLACED;
+                  const allServed = order.items.every(i => i.isServed);
 
-              return (
-                <div key={status} className="space-y-3">
-                  <div className="flex items-center gap-2 px-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${
-                      status === "PLACED" ? "bg-[#B71C1C]" : 
-                      status === "PREPARING" ? "bg-[#F4A261]" : "bg-[#6A994E]"
-                    }`} />
-                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                      {status} ({orders.length})
-                    </h4>
-                  </div>
-
-                  {orders.map(order => (
-                    <div key={order.id} className="bg-gray-50 rounded-2xl p-4 border border-gray-100 hover:border-gray-200 transition-all group">
-                      <div className="flex justify-between items-start mb-3">
+                  return (
+                    <div 
+                      key={order.id} 
+                      className={`rounded-2xl p-4 border transition-all group relative ${
+                        allServed 
+                          ? "bg-[#6A994E]/5 border-[#6A994E]/20" 
+                          : "bg-gray-50 border-gray-100 hover:border-gray-200"
+                      }`}
+                    >
+                      {/* Status Indicator Bar */}
+                      <div className={`absolute left-0 top-6 bottom-6 w-1 rounded-r-full ${allServed ? "bg-[#6A994E]" : config.color}`} />
+                      
+                      <div className="flex justify-between items-start mb-3 ml-2">
                         <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-gray-400">
-                            {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                          <div className="flex items-center gap-2 mb-1">
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleOrderItems(order.id, !allServed);
+                              }}
+                              className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all shadow-sm ${
+                                allServed 
+                                  ? "bg-[#6A994E] border-[#6A994E] text-white" 
+                                  : "bg-white border-gray-200 text-transparent hover:border-[#3A241C]/20"
+                              }`}
+                              title={allServed ? "Deselect All" : "Select All"}
+                            >
+                              <CheckSquare size={14} className={allServed ? "opacity-100" : "opacity-0"} />
+                            </button>
+                            <div className="relative">
+                              <select
+                                value={status}
+                                onChange={(e) => onUpdateStatus(order.id, e.target.value)}
+                                className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full text-white cursor-pointer outline-none appearance-none border-none transition-colors ${
+                                  allServed ? "bg-[#6A994E]" : config.color
+                                }`}
+                              >
+                                <option value="PLACED">Placed</option>
+                                <option value="PREPARING">Preparing</option>
+                                <option value="SERVED">Served</option>
+                              </select>
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-400">
+                              {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
                           {order.isTakeaway && (
-                            <span className="text-[8px] font-black text-[#E76F51] uppercase tracking-tighter mt-0.5 bg-[#E76F51]/10 px-1.5 py-0.5 rounded-full self-start">
+                            <span className="text-[8px] font-black uppercase tracking-widest bg-[#E76F51]/10 text-[#E76F51] px-2 py-0.5 rounded-full w-fit mt-1">
                               Takeaway
                             </span>
                           )}
                         </div>
-                        
-                        <div className="flex gap-1">
-                          {status === "PLACED" && (
-                            <button 
-                              onClick={() => onUpdateStatus(order.id, "PREPARING")}
-                              className="p-1.5 bg-[#F4A261] text-white rounded-lg hover:scale-110 transition-all shadow-sm"
-                              title="Start Preparing"
-                            >
-                              <Clock size={14} />
-                            </button>
-                          )}
-                          {status === "PREPARING" && (
-                            <>
-                              <button 
+                          {/* Quick Action Button Set */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {status !== "SERVED" ? (
+                              <>
+                                <button
+                                  onClick={() => onUpdateStatus(order.id, status === "PREPARING" ? "PLACED" : "PREPARING")}
+                                  className={`p-2 rounded-xl transition-all active:scale-90 ${
+                                    status === "PREPARING" 
+                                      ? "bg-[#F4A261] text-white shadow-lg shadow-[#F4A261]/20" 
+                                      : "bg-white text-[#F4A261] border border-[#F4A261]/20 hover:bg-[#F4A261]/5"
+                                  }`}
+                                  title={status === "PREPARING" ? "Revert to Placed" : "Start Preparing"}
+                                >
+                                  <Clock size={16} className={status === "PREPARING" ? "animate-spin-slow" : ""} />
+                                </button>
+                                <button
+                                  onClick={() => onUpdateStatus(order.id, "SERVED")}
+                                  className={`p-2 rounded-xl transition-all active:scale-90 ${
+                                    allServed 
+                                      ? "bg-[#6A994E] text-white shadow-lg shadow-[#6A994E]/20" 
+                                      : "bg-white text-[#6A994E] border border-[#6A994E]/20 hover:bg-[#6A994E]/5"
+                                  }`}
+                                  title="Mark Served"
+                                >
+                                  <Check size={16} />
+                                </button>
+                              </>
+                            ) : (
+                              <button
                                 onClick={() => onUpdateStatus(order.id, "PLACED")}
-                                className="p-1.5 bg-gray-200 text-gray-500 rounded-lg hover:scale-110 transition-all"
+                                className="p-2 bg-[#6A994E]/10 text-[#6A994E] rounded-xl hover:bg-[#B71C1C]/10 hover:text-[#B71C1C] transition-all active:scale-90 group"
                                 title="Revert to Placed"
                               >
-                                <RotateCcw size={14} />
+                                <CheckCircle2 size={16} className="group-hover:hidden" />
+                                <X size={16} className="hidden group-hover:block" />
                               </button>
-                              <button 
-                                onClick={() => onUpdateStatus(order.id, "SERVED")}
-                                className="p-1.5 bg-[#6A994E] text-white rounded-lg hover:scale-110 transition-all shadow-sm"
-                                title="Mark as Served"
-                              >
-                                <CheckCircle2 size={14} />
-                              </button>
-                            </>
-                          )}
-                          {status === "SERVED" && (
-                            <button 
-                              onClick={() => onUpdateStatus(order.id, "PREPARING")}
-                              className="p-1.5 bg-gray-200 text-gray-500 rounded-lg hover:scale-110 transition-all"
-                              title="Revert to Preparing"
-                            >
-                              <RotateCcw size={14} />
-                            </button>
-                          )}
-                        </div>
+                            )}
+                          </div>
                       </div>
 
-                      <div className="space-y-2">
+                      {/* Items List */}
+                      <div className="space-y-2 mt-4 ml-2">
                         {order.items
                           .filter(i => i.name !== "Packing Charges")
                           .map((item) => (
-                          <div key={item.id} className="flex justify-between items-center text-xs group/item">
-                            <div className="flex items-center gap-2 flex-1">
-                              <motion.button
-                                whileTap={{ scale: 0.8 }}
-                                onClick={() => onToggleItemServed(item.id, !item.isServed)}
-                                className={`w-5 h-5 rounded-md flex items-center justify-center border transition-all ${
-                                  item.isServed 
-                                    ? "bg-[#6A994E] border-[#6A994E] text-white shadow-sm" 
-                                    : "bg-white border-gray-200 text-transparent hover:border-[#6A994E]/30"
-                                }`}
-                              >
-                                <CheckCircle2 size={12} className={item.isServed ? "opacity-100" : "opacity-0"} />
-                              </motion.button>
-                              <span className={`font-bold transition-all ${item.isServed ? "text-[#3A241C]/30 line-through" : "text-[#3A241C]"}`}>
-                                {item.name} <span className={`font-medium ml-1 ${item.isServed ? "text-gray-200" : "text-gray-400"}`}>× {item.quantity}</span>
-                              </span>
+                          <div 
+                            key={item.id} 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onToggleItemServed(item.id, !item.isServed);
+                            }}
+                            className={`flex justify-between items-center p-3 rounded-xl cursor-pointer transition-all ${
+                              item.isServed 
+                                ? "bg-white/50 opacity-60" 
+                                : "bg-white shadow-sm hover:shadow-md"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all ${
+                                item.isServed 
+                                  ? "bg-[#6A994E] border-[#6A994E] text-white shadow-sm" 
+                                  : "bg-white border-gray-200 text-transparent"
+                              }`}>
+                                {item.isServed ? <CheckSquare size={14} /> : <Square size={14} className="text-gray-200" />}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className={`text-xs font-bold leading-tight ${item.isServed ? "text-gray-400 line-through" : "text-[#3A241C]"}`}>
+                                  {item.name}
+                                </span>
+                                <span className={`text-[10px] font-bold ${item.isServed ? "text-[#6A994E]/40" : "text-[#6A994E]"}`}>
+                                  × {item.quantity}
+                                </span>
+                              </div>
                             </div>
-                            <span className={`font-bold transition-all ${item.isServed ? "text-gray-200" : "text-gray-400"}`}>₹{item.price * item.quantity}</span>
+                            <span className={`text-sm font-black ${item.isServed ? "text-gray-300" : "text-gray-400"}`}>
+                              ₹{item.price * item.quantity}
+                            </span>
                           </div>
                         ))}
                       </div>
                     </div>
-                  ))}
-                </div>
-              );
-            })}
+                  );
+                })
+              )}
+            </div>
 
-            {/* Payments Summary */}
-            {session.payments.length > 0 && (
-              <div className="pt-4 mt-4 border-t border-dashed border-gray-200 space-y-3">
-                <div className="flex justify-between items-center px-2">
-                  <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payments</h4>
-                  <button 
-                    onClick={() => onToggleReminder(session.id, !session.paymentReminder)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all ${
-                      session.paymentReminder 
-                        ? "bg-[#E76F51] text-white shadow-lg shadow-[#E76F51]/20" 
-                        : "bg-[#F9F7F4] text-[#3A241C]/40 hover:bg-[#3A241C]/5"
-                    }`}
-                  >
-                    <Bell size={10} className={session.paymentReminder ? "animate-bounce" : ""} />
-                    {session.paymentReminder ? "Reminder On" : "Send Reminder"}
-                  </button>
+            {/* Notification Portal for this table */}
+            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[200]">
+              <motion.div
+                initial={{ y: 50, opacity: 0 }}
+                animate={{ y: showPackedNote ? 0 : 50, opacity: showPackedNote ? 1 : 0 }}
+                className="bg-[#3A241C] text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10"
+              >
+                <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
+                  <PackageCheck size={18} className="text-[#6A994E]" />
                 </div>
-                {session.payments.map(p => (
-                  <div key={p.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100">
-                    <div className="flex items-center gap-3">
-                      {p.method === "UPI" ? <CreditCard size={14} className="text-purple-500" /> : <Banknote size={14} className="text-green-500" />}
-                      <div>
-                        <p className="text-[10px] font-bold text-[#3A241C]">{p.method}</p>
-                        <p className={`text-[8px] font-black uppercase ${
-                          p.status === "CONFIRMED" ? "text-[#6A994E]" : "text-[#F4A261]"
-                        }`}>{p.status}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-[#3A241C]">₹{p.amount}</span>
-                      {p.status !== "CONFIRMED" && (
-                        <div className="flex items-center gap-1.5">
-                          <button 
-                            onClick={() => onConfirmPayment(p.id)}
-                            className="px-2.5 py-1 bg-[#6A994E] text-white rounded-lg text-[8px] font-bold uppercase hover:opacity-80 shadow-sm"
-                          >
-                            Confirm
-                          </button>
-                          <button 
-                            onClick={() => onDeletePayment(p.id)}
-                            className="p-1 text-[#B71C1C] hover:bg-red-50 rounded-lg transition-colors"
-                            title="Deny Payment"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                <p className="text-[10px] font-black uppercase tracking-widest">Notification sent to table {tableId} about their takeaway!</p>
+              </motion.div>
+            </div>
+
           </>
         )}
       </div>
 
-      {/* Footer Actions */}
-      {session && (
-        <div className="p-6 border-t border-gray-100 space-y-3 bg-white">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-[10px] font-bold text-gray-400 uppercase">Payment Mode</span>
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-              paymentMode === "MIXED" ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-600"
-            }`}>
-              {paymentMode}
-            </span>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-            <motion.button 
-              whileTap={{ scale: 0.95 }}
-              onClick={() => onAddOrder(session.id)}
-              className="py-3 px-4 bg-gray-50 text-[#3A241C] rounded-2xl font-black text-xs hover:bg-gray-100 transition-all border border-gray-100 flex items-center justify-center gap-2"
-            >
-              <Plus size={14} /> Add Items
-            </motion.button>
-            <motion.button 
-              whileHover={balance <= 0 ? { scale: 1.02 } : {}}
-              whileTap={balance <= 0 ? { scale: 0.98 } : {}}
-              onClick={() => onCloseSession(session.id)}
-              disabled={balance > 0}
-              className={`py-3 px-4 rounded-2xl font-black text-xs transition-all flex items-center justify-center gap-2 ${
-                balance > 0 
-                  ? "bg-gray-50 text-gray-300 cursor-not-allowed" 
-                  : "bg-[#3A241C] text-white hover:bg-[#E76F51] shadow-lg shadow-[#3A241C]/10"
-              }`}
-            >
-              Close Session
-            </motion.button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

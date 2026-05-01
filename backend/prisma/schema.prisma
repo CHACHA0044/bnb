@@ -51,6 +51,7 @@ model Payment {
   amount    Int      // Amount in rupees
   status    String   @default("PENDING") // PENDING | CONFIRMED | UNPAID
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 // ─── Menu Management ──────────────────────────

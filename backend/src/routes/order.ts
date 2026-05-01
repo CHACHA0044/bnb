@@ -49,6 +49,21 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       }
     }
 
+    // Smart Timer Extension: If less than 30 mins left, add 30 mins more
+    const start = new Date(session.createdAt).getTime();
+    const end = start + 90 * 60 * 1000;
+    const now = new Date().getTime();
+    const timeLeftMins = (end - now) / (1000 * 60);
+
+    if (timeLeftMins < 30) {
+      // Shift createdAt forward by 30 mins to extend expiration
+      const newCreatedAt = new Date(session.createdAt.getTime() + 30 * 60 * 1000);
+      await prisma.session.update({
+        where: { id: sessionId },
+        data: { createdAt: newCreatedAt }
+      });
+    }
+
     const order = await prisma.order.create({
       data: {
         sessionId: sessionId as string,
@@ -140,7 +155,7 @@ router.patch("/item/:itemId/served", requireAdmin, async (req: Request, res: Res
       where: { id: itemId },
       data: { isServed },
       include: { order: { include: { session: true } } },
-    }) as any; // Cast to any to bypass Prisma Client sync issues in types
+    }) as any;
 
     try {
       const io = getIO();
@@ -150,7 +165,6 @@ router.patch("/item/:itemId/served", requireAdmin, async (req: Request, res: Res
         tableId: item.order.session.tableId,
       });
 
-      // Takeaway Ready Notification
       if (isServed && item.order.isTakeaway) {
         io.to(`session:${item.order.sessionId}`).emit("takeaway_ready", {
           message: "Your order is ready for pick up!",
@@ -163,6 +177,50 @@ router.patch("/item/:itemId/served", requireAdmin, async (req: Request, res: Res
   } catch (err) {
     console.error("[ORDER] Item update error:", err);
     res.status(500).json({ error: "Failed to update item status" });
+  }
+});
+
+/**
+ * PATCH /api/order/:orderId/items/served
+ * Bulk toggle isServed status for all items in an order. Admin only.
+ */
+router.patch("/:orderId/items/served", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orderId } = req.params as { orderId: string };
+    const { isServed } = req.body as { isServed: boolean };
+
+    const items = await prisma.orderItem.updateMany({
+      where: { orderId },
+      data: { isServed }
+    });
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true, session: true }
+    });
+
+    if (order) {
+      try {
+        const io = getIO();
+        io.to(`session:${order.sessionId}`).to("admin").emit("order_updated", {
+          order,
+          sessionId: order.sessionId,
+          tableId: order.session.tableId,
+        });
+
+        if (isServed && order.isTakeaway) {
+          io.to(`session:${order.sessionId}`).emit("takeaway_ready", {
+            message: "Your takeaway order is ready for pick up!",
+            isFullOrder: true
+          });
+        }
+      } catch { /* skip */ }
+    }
+
+    res.json({ success: true, count: items.count });
+  } catch (err) {
+    console.error("[ORDER] Bulk update error:", err);
+    res.status(500).json({ error: "Failed to update items" });
   }
 });
 

@@ -76,6 +76,32 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
   try {
     const { sessionId } = req.params as { sessionId: string };
 
+    // Check balance before closing
+    const sessionData = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        orders: { include: { items: true } },
+        payments: true
+      }
+    });
+
+    if (!sessionData) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
+    const total = sessionData.orders.reduce((acc, o) => 
+      acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0), 0
+    );
+    const paid = sessionData.payments
+      .filter(p => p.status === "CONFIRMED")
+      .reduce((acc, p) => acc + p.amount, 0);
+    
+    if (total - paid > 0) {
+      res.status(400).json({ error: "Cannot close session with outstanding balance. Collect payment first." });
+      return;
+    }
+
     const session = await prisma.session.update({
       where: { id: sessionId as string },
       data: { status: "CLOSED" },
@@ -215,6 +241,45 @@ router.post("/orders/new", async (req: Request, res: Response): Promise<void> =>
   } catch (err) {
     console.error("[ADMIN] Create session/order error:", err);
     res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
+/**
+ * POST /api/admin/payments/record
+ * Record a payment directly (confirmed).
+ */
+router.post("/payments/record", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { sessionId, amount, method } = req.body;
+    
+    if (!sessionId || !amount || !method) {
+      res.status(400).json({ error: "sessionId, amount, and method required" });
+      return;
+    }
+
+    const payment = await prisma.payment.create({
+      data: { 
+        sessionId: sessionId as string, 
+        amount: Number(amount), 
+        method: method as string, 
+        status: "CONFIRMED" 
+      },
+      include: { session: true }
+    });
+
+    try {
+      const io = getIO();
+      io.to(`session:${sessionId}`).to("admin").emit("payment_confirmed", {
+        payment,
+        sessionId,
+        tableId: (payment as any).session.tableId,
+      });
+    } catch { /* skip */ }
+
+    res.status(201).json(payment);
+  } catch (err) {
+    console.error("[ADMIN] Record payment error:", err);
+    res.status(500).json({ error: "Failed to record payment" });
   }
 });
 

@@ -8,6 +8,7 @@ import {
   Tag, Image as ImageIcon, AlertCircle, Save,
   ArrowLeft, History, RotateCcw, Eye, EyeOff
 } from "lucide-react";
+import { useSocket } from "@/lib/socket-client";
 import { 
   adminFetchFullMenu, adminUpdateMenuItem, adminCreateMenuItem,
   adminDeleteMenuItem, adminToggleStock, adminCreateCategory,
@@ -106,6 +107,15 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
       showToast("Failed to load versions", "error");
     }
   }, [secret]);
+
+  const { on } = useSocket();
+
+  useEffect(() => {
+    const unsubs = [
+      on("menu_updated", () => loadData())
+    ];
+    return () => unsubs.forEach(u => u());
+  }, [on, loadData]);
 
   useEffect(() => {
     loadData();
@@ -277,10 +287,10 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="flex-1 overflow-y-auto pr-2 md:pr-12 custom-scrollbar pb-32 px-1 md:px-2"
+          className="flex-1 overflow-y-auto pr-2 md:pr-12 custom-scrollbar pb-16 px-1 md:px-2"
         >
           {activeTab === "ITEMS" && (
-            <div className="space-y-10">
+            <div className="space-y-6">
               {categories.map(cat => {
                 const catItems = cat.items.filter((i: any) => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
                 if (catItems.length === 0 && searchQuery) return null;
@@ -289,7 +299,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                   <motion.div 
                     variants={itemVariants} 
                     key={cat.id}
-                    className="mb-12"
+                    className="mb-6"
                   >
                     <div className="flex items-center justify-between mb-8 group">
                       <div className="flex items-center gap-4">

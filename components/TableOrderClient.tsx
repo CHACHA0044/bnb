@@ -604,6 +604,8 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
               onAdd={addToCart}
               onDelete={deleteFromCart}
               onTogglePacking={toggleItemPacking}
+              sessionTotal={sessionTotal}
+              paidTotal={paidTotal}
               remaining={remaining}
               paymentMode={paymentMode}
               setPaymentMode={setPaymentMode}
@@ -788,7 +790,7 @@ export default function TableOrderClient({ tableId }: { tableId: string }) {
 function CartContent({ 
   cart, cartSubtotal, cartTotal, packingCharges, session, 
   ordering, orderPlaced, setOrderPlaced, onPlaceOrder, onRemove, onAdd, onDelete, onTogglePacking,
-  remaining, paymentMode, setPaymentMode, handleUPIPayment, handleCashPayment, payingUPI, payingCash,
+  sessionTotal, paidTotal, remaining, paymentMode, setPaymentMode, handleUPIPayment, handleCashPayment, payingUPI, payingCash,
   clientId, cartLocked, lockedBy, handleRateItem, ratings, ratedItems
 }: any) {
   const cartCount = cart.reduce((sum: number, c: CartItem) => sum + c.quantity, 0);
@@ -819,16 +821,43 @@ function CartContent({
 
     return (
       <div className="p-8 lg:p-10 flex flex-col items-center text-center h-full overflow-y-auto scrollbar-hide">
-        {session?.paymentReminder && remaining > 0 && (
-          <motion.div 
-            initial={{ y: -20, opacity: 0 }} 
-            animate={{ y: 0, opacity: 1 }} 
-            className="w-full bg-[#B71C1C] text-white p-4 rounded-2xl mb-6 flex items-center gap-3 shadow-lg border border-white/10"
-          >
-            <Bell className="animate-bounce" size={20} />
-            <p className="text-[10px] font-black uppercase tracking-widest text-left flex-1">Please settle your bill at the counter or via UPI!</p>
-          </motion.div>
-        )}
+        {/* Banners Area */}
+        <div className="w-full space-y-3 mb-6">
+          {session?.paymentReminder && remaining > 0 && (
+            <motion.div 
+              initial={{ y: -10, opacity: 0 }} 
+              animate={{ y: 0, opacity: 1 }} 
+              className="w-full bg-[#B71C1C] text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg border border-white/10"
+            >
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
+                <Bell size={20} className="animate-bounce" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-left flex-1">Please settle your bill at the counter or via UPI!</p>
+            </motion.div>
+          )}
+
+          {(() => {
+            const hasReadyTakeaway = (session?.orders ?? []).some((o: any) => 
+              o.items.some((i: any) => i.name.toLowerCase().includes("(to-go)") && i.isServed)
+            );
+            if (!hasReadyTakeaway) return null;
+            return (
+              <motion.div 
+                initial={{ y: -10, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }}
+                className="w-full bg-[#6A994E] text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg border border-white/10"
+              >
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
+                  <Package size={20} className="animate-bounce" />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-0.5">Takeaway Ready!</p>
+                  <p className="text-[9px] font-bold text-white/60 leading-tight">Your packed items are ready at the counter.</p>
+                </div>
+              </motion.div>
+            );
+          })()}
+        </div>
 
         <div className="w-16 lg:w-20 h-16 lg:h-20 rounded-full bg-[#6A994E]/10 flex items-center justify-center text-[#6A994E] mb-4 border border-[#6A994E]/10"><CheckCircle2 size={32} className="lg:w-10 lg:h-10" /></div>
         <h2 className="font-black text-[#3A241C] text-2xl lg:text-3xl mb-1 tracking-tighter uppercase">Ordered!</h2>
@@ -913,7 +942,7 @@ function CartContent({
 
               {servedItems.length > 0 && (
                 <div className="space-y-3">
-                   <p className="text-[8px] font-black text-[#6A994E] uppercase tracking-[0.1em] text-left ml-1">Served</p>
+                   <p className="text-[8px] font-black text-[#6A994E] uppercase tracking-[0.1em] text-left ml-1">Served / Ready</p>
                    {servedItems.map((item: OrderItemData, idx: number) => (
                     <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-[#3A241C]/5 shadow-sm opacity-60">
                       <div className="flex items-center gap-3">
@@ -921,7 +950,7 @@ function CartContent({
                         <span className="text-xs font-bold text-[#3A241C]">{item.name}</span>
                       </div>
                       <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-[#6A994E]/10 text-[#6A994E]">
-                        Served
+                        {item.name.toLowerCase().includes("(to-go)") ? "Ready" : "Served"}
                       </span>
                     </div>
                   ))}
@@ -992,10 +1021,10 @@ function CartContent({
   }
 
   return (
-    <div className="flex flex-col flex-1 relative min-h-0">
-      {/* HEADER SECTION */}
-      <div className="p-6 lg:p-10 pb-0">
-        <div className="flex items-center justify-between mb-6 lg:mb-8 flex-shrink-0 bg-[#F9F7F4]/60 p-4 lg:p-5 rounded-[2rem] border border-[#3A241C]/5 backdrop-blur-md">
+    <div className="flex flex-col h-full relative">
+      {/* HEADER SECTION - Fixed at top */}
+      <div className="px-6 lg:px-10 pt-6 lg:pt-8 flex-shrink-0">
+        <div className="flex items-center justify-between bg-[#F9F7F4]/60 p-4 lg:p-5 rounded-[2rem] border border-[#3A241C]/5 backdrop-blur-md">
           <div className="flex items-center gap-3 lg:gap-4">
             <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-full bg-[#E76F51]/10 flex items-center justify-center border border-[#E76F51]/20">
               <ShoppingCart size={18} className="text-[#E76F51] lg:w-5 lg:h-5" />
@@ -1010,8 +1039,92 @@ function CartContent({
         </div>
       </div>
 
-      {/* SCROLLABLE WRAPPER */}
-      <div className="flex-1 overflow-y-auto px-6 lg:px-10 pb-20 sm:pb-10 flex flex-col relative z-10 min-h-0 touch-auto">
+      {/* SCROLLABLE AREA - Everything else scrolls */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col min-h-0 touch-auto px-6 lg:px-10 pt-4 pb-20 lg:pb-10">
+
+        {/* Banners Area */}
+        <div className="w-full space-y-3 mb-6">
+          {/* 1. Payment Reminder (Priority 1) */}
+          {session?.paymentReminder && remaining > 0 && (
+            <motion.div 
+              initial={{ y: -10, opacity: 0 }} 
+              animate={{ y: 0, opacity: 1 }} 
+              className="w-full bg-[#B71C1C] text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg border border-white/10"
+            >
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
+                <Bell size={20} className="animate-bounce" />
+              </div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-left flex-1">Please settle your bill at the counter or via UPI!</p>
+            </motion.div>
+          )}
+
+          {/* 2. Takeaway Ready (Priority 2) */}
+          {(() => {
+            const takeawayItems = (session?.orders ?? []).flatMap((o: any) => 
+              o.items.filter((i: any) => i.name.toLowerCase().includes("(to-go)"))
+            );
+            
+            if (takeawayItems.length === 0) return null;
+
+            const totalCount = takeawayItems.reduce((acc: number, item: any) => acc + item.quantity, 0);
+            const readyCount = takeawayItems
+              .filter((i: any) => i.isServed)
+              .reduce((acc: number, item: any) => acc + item.quantity, 0);
+
+            if (readyCount === 0) return null;
+
+            const isAllReady = readyCount >= totalCount;
+
+            return (
+              <motion.div 
+                initial={{ y: -10, opacity: 0 }} 
+                animate={{ y: 0, opacity: 1 }}
+                className={`w-full ${isAllReady ? 'bg-[#6A994E]' : 'bg-[#F4A261]'} text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg border border-white/10 transition-colors duration-500`}
+              >
+                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
+                  <Package size={20} className={isAllReady ? "animate-bounce" : "animate-pulse"} />
+                </div>
+                <div className="flex-1 text-left">
+                  <p className="text-[10px] font-black uppercase tracking-widest mb-0.5">
+                    {isAllReady ? 'Takeaway Ready!' : 'Packing in Progress...'}
+                  </p>
+                  <p className="text-[9px] font-bold text-white/80 leading-tight">
+                    {isAllReady 
+                      ? 'Your takeaway order is packed and ready at the counter.' 
+                      : `${readyCount} out of ${totalCount} items are packed. Please wait.`}
+                  </p>
+                </div>
+              </motion.div>
+            );
+          })()}
+        </div>
+
+        {/* Bill Summary - 3 Column Row */}
+        {session && session.orders.length > 0 && (
+          <div className="w-full px-6 lg:px-10 mb-8 space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-[#F9F7F4] p-4 rounded-2xl border border-[#3A241C]/5 flex flex-col justify-center">
+                <p className="text-[7px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-1.5">Total Bill</p>
+                <p className="text-sm lg:text-base font-black text-[#3A241C]">₹{sessionTotal}</p>
+              </div>
+              <div className="bg-[#6A994E]/5 p-4 rounded-2xl border border-[#6A994E]/10 flex flex-col justify-center">
+                <p className="text-[7px] font-black text-[#6A994E]/40 uppercase tracking-[0.2em] mb-1.5">Paid</p>
+                <p className="text-sm lg:text-base font-black text-[#6A994E]">₹{paidTotal}</p>
+              </div>
+              <div 
+                onClick={() => remaining > 0 && setOrderPlaced(true)}
+                className={`bg-[#E76F51]/5 p-4 rounded-2xl border border-[#E76F51]/10 flex flex-col justify-center ring-2 ring-[#E76F51]/5 transition-all active:scale-95 ${remaining > 0 ? 'cursor-pointer hover:bg-[#E76F51]/10' : ''}`}
+              >
+                <p className="text-[7px] font-black text-[#E76F51] uppercase tracking-[0.2em] mb-1.5">Balance</p>
+                <p className="text-sm lg:text-base font-black text-[#3A241C]">₹{remaining}</p>
+              </div>
+            </div>
+            {remaining > 0 && (
+              <p className="text-[8px] font-black text-[#3A241C]/60 uppercase tracking-[0.3em] text-center">Click on balance to get QR for payment</p>
+            )}
+          </div>
+        )}
+
         {/* BASKET ITEMS */}
         <div className="flex-1">
           {cart.length === 0 ? (
@@ -1034,7 +1147,9 @@ function CartContent({
                 </div>
               </motion.div>
               <h3 className="font-black text-lg text-[#3A241C]/40 tracking-tight mb-2 relative z-10">Basket is Empty</h3>
-              <p className="text-[10px] lg:text-[11px] font-bold uppercase tracking-[0.3em] text-[#3A241C]/20 text-center leading-loose relative z-10">Add some delicious items<br/>from the menu</p>
+              <p className="text-[10px] lg:text-[11px] font-bold uppercase tracking-[0.3em] text-[#3A241C]/20 text-center leading-loose relative z-10">
+                Add some delicious items<br/>from the menu
+              </p>
             </motion.div>
           ) : (
             groupedCartArray.map((group: any) => (
@@ -1131,20 +1246,40 @@ function CartContent({
           <div className="pt-8 border-t border-[#3A241C]/5">
             <h3 className="text-[9px] lg:text-[10px] font-black uppercase tracking-[0.4em] text-[#3A241C]/20 mb-6">Order History</h3>
             <div className="space-y-4">
-              {session.orders.map((order: { id: string; status: string; createdAt: string; items: { name: string; price: number; quantity: number }[] }) => (
-                <div key={order.id} className="p-5 lg:p-6 bg-[#F9F7F4]/50 border border-[#3A241C]/5 rounded-[1.5rem] lg:rounded-[2rem]">
-                  <div className="flex justify-between items-center mb-3 lg:mb-4">
-                    <span className={`text-[7px] lg:text-[8px] font-black uppercase tracking-widest px-2 lg:px-2.5 py-0.5 lg:py-1 rounded-md lg:rounded-lg ${order.status === 'SERVED' ? 'bg-[#6A994E]/10 text-[#6A994E]' : 'bg-orange-100 text-orange-600'}`}>{order.status}</span>
-                    <span className="text-[8px] lg:text-[9px] font-black text-[#3A241C]/20">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  </div>
-                  {order.items.map((it: { name: string; price: number; quantity: number }, idx: number) => (
-                    <div key={idx} className="flex justify-between text-[10px] lg:text-[11px] py-1.5 border-b border-[#3A241C]/5 last:border-0">
-                      <span className="text-[#3A241C]/60 font-bold leading-tight">{it.name} <span className="text-[#3A241C]/20 ml-2 font-black tracking-widest">× {it.quantity}</span></span>
-                      <span className="font-black text-[#3A241C]/40 tracking-tight">₹{it.price * it.quantity}</span>
+              {[...session.orders]
+                .sort((a, b) => {
+                  if (a.status !== 'SERVED' && b.status === 'SERVED') return -1;
+                  if (a.status === 'SERVED' && b.status !== 'SERVED') return 1;
+                  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+                })
+                .map((order: OrderData) => {
+                  const isTakeawayOrder = order.items.some(it => it.name.toLowerCase().includes("(to-go)"));
+                  const isReady = order.status === 'SERVED' && isTakeawayOrder;
+                  const displayStatus = isReady ? "READY" : order.status;
+                  const isServed = order.status === 'SERVED';
+
+                  return (
+                    <div 
+                      key={order.id} 
+                      className={`p-5 lg:p-6 border transition-all duration-500 ${
+                        isServed 
+                          ? 'bg-[#F9F7F4]/30 border-[#3A241C]/5 opacity-50 grayscale-[0.5]' 
+                          : 'bg-white border-[#3A241C]/10 shadow-lg shadow-[#3A241C]/5'
+                      } rounded-[1.5rem] lg:rounded-[2rem]`}
+                    >
+                      <div className="flex justify-between items-center mb-3 lg:mb-4">
+                        <span className={`text-[7px] lg:text-[8px] font-black uppercase tracking-widest px-2 lg:px-2.5 py-0.5 lg:py-1 rounded-md lg:rounded-lg ${order.status === 'SERVED' ? 'bg-[#6A994E]/10 text-[#6A994E]' : 'bg-[#E76F51] text-white shadow-sm'}`}>{displayStatus}</span>
+                        <span className="text-[8px] lg:text-[9px] font-black text-[#3A241C]/20">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      {order.items.map((it: { name: string; price: number; quantity: number }, idx: number) => (
+                        <div key={idx} className="flex justify-between text-[10px] lg:text-[11px] py-1.5 border-b border-[#3A241C]/5 last:border-0">
+                          <span className={`${isServed ? 'text-[#3A241C]/40' : 'text-[#3A241C]'} font-bold leading-tight`}>{it.name} <span className="text-[#3A241C]/20 ml-2 font-black tracking-widest">× {it.quantity}</span></span>
+                          <span className={`font-black ${isServed ? 'text-[#3A241C]/20' : 'text-[#3A241C]/40'} tracking-tight`}>₹{it.price * it.quantity}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ))}
+                  );
+                })}
             </div>
           </div>
         )}
