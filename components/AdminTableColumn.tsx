@@ -152,9 +152,19 @@ export default function AdminTableColumn({
       {/* Orders List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar">
         {!session ? (
-          <div className="h-full flex flex-col items-center justify-center text-center opacity-20 py-20">
-            <Coffee size={48} className="mb-4" />
-            <p className="font-bold text-sm">Waiting for guests...</p>
+          <div className="h-full flex flex-col items-center justify-center text-center py-20">
+            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6 opacity-40">
+              <Coffee size={40} className="text-[#3A241C]" />
+            </div>
+            <p className="font-black text-[#3A241C]/40 text-sm uppercase tracking-widest mb-6">Available</p>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => onAddOrder("")}
+              className="px-6 py-3 bg-[#3A241C] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-[#3A241C]/10 flex items-center gap-2"
+            >
+              <Plus size={14} /> Start Order
+            </motion.button>
           </div>
         ) : (
           <>

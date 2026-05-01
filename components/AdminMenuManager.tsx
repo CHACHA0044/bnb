@@ -214,22 +214,24 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 px-2"
       >
-        <div className="flex bg-white p-1.5 rounded-2xl border border-[#3A241C]/5 shadow-sm">
-          {[
-            { id: "ITEMS", label: "Menu Items", icon: UtensilsCrossed },
-            { id: "CATEGORIES", label: "Categories", icon: Settings2 },
-            { id: "VERSIONS", label: "History", icon: History },
-          ].map(tab => (
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-xs transition-all ${activeTab === tab.id ? "bg-[#3A241C] text-white shadow-lg" : "text-[#3A241C]/40 hover:bg-[#F9F7F4] hover:text-[#3A241C]"}`}
-            >
-              <tab.icon size={16} />
-              {tab.label}
-            </motion.button>
-          ))}
+        <div className="flex bg-white p-1.5 rounded-2xl border border-[#3A241C]/5 shadow-sm overflow-x-auto no-scrollbar max-w-full">
+          <div className="flex min-w-max">
+            {[
+              { id: "ITEMS", label: "Menu Items", icon: UtensilsCrossed },
+              { id: "CATEGORIES", label: "Categories", icon: Settings2 },
+              { id: "VERSIONS", label: "History", icon: History },
+            ].map(tab => (
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 md:px-6 py-3 rounded-xl font-bold text-[10px] md:text-xs transition-all whitespace-nowrap ${activeTab === tab.id ? "bg-[#3A241C] text-white shadow-lg" : "text-[#3A241C]/40 hover:bg-[#F9F7F4] hover:text-[#3A241C]"}`}
+              >
+                <tab.icon size={14} className="md:w-4 md:h-4" />
+                {tab.label}
+              </motion.button>
+            ))}
+          </div>
         </div>
 
         {activeTab === "ITEMS" && (
@@ -269,7 +271,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="flex-1 overflow-y-auto pr-4 md:pr-12 custom-scrollbar pb-32 px-2"
+          className="flex-1 overflow-y-auto pr-2 md:pr-12 custom-scrollbar pb-32 px-1 md:px-2"
         >
           {activeTab === "ITEMS" && (
             <div className="space-y-10">
@@ -474,23 +476,25 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
       <AnimatePresence>
         {pendingCount > 0 && (
           <motion.div 
-            initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] w-[90%] max-w-lg bg-[#3A241C] text-white p-4 rounded-[2.5rem] shadow-2xl flex items-center justify-between border border-white/10"
+            initial={{ y: 100, x: "-50%", opacity: 0 }} 
+            animate={{ y: 0, x: "-50%", opacity: 1 }} 
+            exit={{ y: 100, x: "-50%", opacity: 0 }}
+            className="fixed bottom-6 md:bottom-10 left-1/2 z-[100] w-[95%] max-w-lg bg-[#3A241C] text-white p-3 md:p-4 rounded-[2rem] md:rounded-[2.5rem] shadow-2xl flex items-center justify-between border border-white/10"
           >
-            <div className="flex items-center gap-4 ml-4">
-              <div className="w-10 h-10 bg-[#E76F51] rounded-2xl flex items-center justify-center">
-                <AlertCircle size={20} />
+            <div className="flex items-center gap-3 md:gap-4 ml-2 md:ml-4">
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-[#E76F51] rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0">
+                <AlertCircle size={16} className="md:w-5 md:h-5" />
               </div>
-              <div>
-                <p className="text-xs font-black uppercase tracking-widest">{pendingCount} Change{pendingCount > 1 ? "s" : ""} Marked</p>
-                <p className="text-[9px] text-white/40 font-bold uppercase tracking-tighter">Click save to push to ordering page</p>
+              <div className="min-w-0">
+                <p className="text-[10px] md:text-xs font-black uppercase tracking-widest truncate">{pendingCount} Change{pendingCount > 1 ? "s" : ""} Marked</p>
+                <p className="hidden md:block text-[9px] text-white/40 font-bold uppercase tracking-tighter">Click save to push updates</p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-1 md:gap-2 flex-shrink-0">
               <motion.button 
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setPendingStock({})}
-                className="px-6 py-4 rounded-2xl text-[9px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
+                className="px-4 md:px-6 py-3 md:py-4 rounded-xl md:rounded-2xl text-[8px] md:text-[9px] font-black uppercase tracking-widest hover:bg-white/5 transition-all"
               >
                 Reset
               </motion.button>
@@ -499,10 +503,11 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                 whileTap={{ scale: 0.95 }}
                 onClick={handleBulkStockSave}
                 disabled={savingStock}
-                className="bg-[#E76F51] px-8 py-4 rounded-2xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg hover:shadow-[#E76F51]/40 transition-all disabled:opacity-50"
+                className="bg-[#E76F51] px-5 md:px-8 py-3 md:py-4 rounded-xl md:rounded-2xl text-[8px] md:text-[9px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg hover:shadow-[#E76F51]/40 transition-all disabled:opacity-50"
               >
                 {savingStock ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={14} />}
-                Save Changes
+                <span className="hidden sm:inline">Save Changes</span>
+                <span className="sm:hidden">Save</span>
               </motion.button>
             </div>
           </motion.div>

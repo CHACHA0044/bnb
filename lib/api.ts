@@ -143,10 +143,11 @@ export function adminUpdateOrder(orderId: string, status: string, secret: string
 }
 
 /** Admin: Add manual order */
-export function adminAddOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], secret: string, isTakeaway: boolean = false) {
-  return apiFetch<OrderData>(`/api/admin/sessions/${sessionId}/order`, {
+export function adminAddOrder(sessionId: string | null, items: { name: string; price: number; quantity: number; type?: string }[], secret: string, isTakeaway: boolean = false, tableId?: string) {
+  const path = sessionId ? `/api/admin/sessions/${sessionId}/order` : "/api/admin/orders/new";
+  return apiFetch<OrderData>(path, {
     method: "POST",
-    body: JSON.stringify({ items, isTakeaway }),
+    body: JSON.stringify({ items, isTakeaway, tableId }),
     adminSecret: secret,
   });
 }
@@ -158,9 +159,19 @@ export function fetchMenu() {
   return apiFetch<{ categories: string[]; items: any[] }>("/api/menu");
 }
 
+export interface OrderMenuItem {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  image?: string;
+  descriptionEn?: string;
+  outOfStock?: boolean;
+}
+
 /** Admin: Fetch full menu for editing */
 export function adminFetchFullMenu(secret: string) {
-  return apiFetch<{ categories: any[] }>("/api/menu/admin/full", { adminSecret: secret });
+  return apiFetch<{ categories: { id: string; name: string; items: OrderMenuItem[] }[] }>("/api/menu/admin/full", { adminSecret: secret });
 }
 
 /** Admin: Create menu item */

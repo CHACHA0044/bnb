@@ -44,7 +44,7 @@ export default function AdminPage() {
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
 
   // Modals
-  const [addOrderSession, setAddOrderSession] = useState<string | null>(null);
+  const [addOrderData, setAddOrderData] = useState<{ sessionId?: string | null, tableId?: string | null } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
     show: boolean;
     title: string;
@@ -209,9 +209,9 @@ export default function AdminPage() {
     }
   };
 
-  const handleAddManualOrder = async (sessionId: string, items: any[], isTakeaway: boolean) => {
+  const handleAddManualOrder = async (items: any[], isTakeaway: boolean, tableId?: string) => {
     try {
-      await adminAddOrder(sessionId, items, secret, isTakeaway);
+      await adminAddOrder(addOrderData?.sessionId || null, items, secret, isTakeaway, tableId);
       loadSessions();
     } catch (err) {
       console.error(err);
@@ -308,10 +308,14 @@ export default function AdminPage() {
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mt-1">Admin Portal</p>
           </div>
           <button 
-            onClick={() => setIsSidebarOpen(false)} 
-            className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsSidebarOpen(false);
+            }} 
+            className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors active:scale-90 z-[70]"
+            aria-label="Close Sidebar"
           >
-            <X size={18} />
+            <X size={24} />
           </button>
         </div>
 
@@ -353,7 +357,7 @@ export default function AdminPage() {
           paddingLeft: isSidebarOpen && !isMobile ? "320px" : isMobile ? "20px" : "40px",
         }}
         transition={{ type: "spring", damping: 30, stiffness: 200 }}
-        className="flex-1 pr-5 lg:pr-16 pb-32 min-h-screen w-full bg-[#F9F7F4]"
+        className="flex-1 pr-5 lg:pr-16 pb-20 lg:pb-32 min-h-screen w-full bg-[#F9F7F4] scroll-smooth"
       >
         {/* Header Stats */}
         <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-8 sticky top-0 bg-[#F9F7F4]/90 backdrop-blur-md z-40 py-6 lg:py-8">
@@ -401,7 +405,7 @@ export default function AdminPage() {
                   session={session}
                   onUpdateStatus={updateOrderStatus}
                   onConfirmPayment={confirmPayment}
-                  onAddOrder={(sid) => setAddOrderSession(sid)}
+                  onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId })}
                   onCloseSession={closeSession}
                   onToggleItemServed={toggleItemServed}
                   onDeletePayment={deletePayment}
@@ -533,11 +537,13 @@ export default function AdminPage() {
 
       {/* Manual Order Modal */}
       <AnimatePresence>
-        {addOrderSession && (
+        {addOrderData && (
           <AddOrderModal
-            sessionId={addOrderSession}
-            onClose={() => setAddOrderSession(null)}
-            onSubmit={(items, isTakeaway) => handleAddManualOrder(addOrderSession, items, isTakeaway)}
+            sessionId={addOrderData.sessionId}
+            tableId={addOrderData.tableId}
+            availableTables={TABLES}
+            onClose={() => setAddOrderData(null)}
+            onSubmit={handleAddManualOrder}
           />
         )}
       </AnimatePresence>

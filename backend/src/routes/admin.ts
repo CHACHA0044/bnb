@@ -157,4 +157,65 @@ router.post("/sessions/:sessionId/order", async (req: Request, res: Response): P
   }
 });
 
+/**
+ * POST /api/admin/orders/new
+ * Create a new session (if none exists) and add an order.
+ * Body: { tableId, items, isTakeaway }
+ */
+router.post("/orders/new", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { tableId, items, isTakeaway } = req.body;
+
+    if (!tableId || !items || !Array.isArray(items)) {
+      res.status(400).json({ error: "tableId and items[] required" });
+      return;
+    }
+
+    // 1. Find or create session
+    let session = await prisma.session.findFirst({
+      where: { tableId, status: "OPEN" }
+    });
+
+    if (!session) {
+      session = await prisma.session.create({
+        data: { tableId, status: "OPEN" }
+      });
+    }
+
+    // 2. Create order
+    const order = await prisma.order.create({
+      data: {
+        sessionId: session.id,
+        isTakeaway: Boolean(isTakeaway),
+        items: {
+          create: items.map((item: any) => ({
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity || 1,
+            type: item.type || (isTakeaway ? "TAKEAWAY" : "DINE_IN"),
+          })),
+        },
+      },
+      include: { items: true },
+    });
+
+    console.log(`[ADMIN] New session/order created for ${tableId}`);
+
+    // 3. Emit sockets
+    try {
+      const io = getIO();
+      io.to(`session:${session.id}`).to("admin").emit("order_placed", {
+        order,
+        sessionId: session.id,
+        tableId: session.tableId,
+      });
+    } catch { /* skip */ }
+
+    res.status(201).json(order);
+  } catch (err) {
+    console.error("[ADMIN] Create session/order error:", err);
+    res.status(500).json({ error: "Failed to create order" });
+  }
+});
+
 export default router;
