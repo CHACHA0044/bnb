@@ -13,7 +13,10 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
   }
 
   const auth = req.headers.authorization;
+  const providedSecret = auth?.replace("Bearer ", "");
+  
   if (!auth || auth !== `Bearer ${secret}`) {
+    console.warn(`[AUTH] Unauthorized access attempt. Provided length: ${providedSecret?.length || 0}, Expected length: ${secret.length}`);
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

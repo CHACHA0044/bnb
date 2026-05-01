@@ -36,6 +36,7 @@ export default function AdminPage() {
   const [authenticated, setAuthenticated] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [sessions, setSessions] = useState<SessionData[]>([]);
+  const [loggingIn, setLoggingIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"LIVE" | "HISTORY" | "MENU">("LIVE");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -73,13 +74,18 @@ export default function AdminPage() {
   }, []);
 
   const handleLogin = async () => {
+    if (loggingIn) return;
     setLoginError("");
+    setLoggingIn(true);
     try {
       await adminVerifySecret(secret);
       localStorage.setItem("bnb_admin_secret", secret);
       setAuthenticated(true);
-    } catch {
-      setLoginError("Invalid admin secret");
+    } catch (err: any) {
+      console.error("Login failed:", err);
+      setLoginError(err.message === "API Unauthorized" ? "Invalid admin secret" : "Connection error or invalid secret");
+    } finally {
+      setLoggingIn(false);
     }
   };
 
@@ -249,9 +255,21 @@ export default function AdminPage() {
             {loginError && <p className="text-[#B71C1C] text-xs font-bold pl-2">{loginError}</p>}
             <button
               onClick={handleLogin}
-              className="w-full bg-[#3A241C] text-white py-4 rounded-2xl font-bold text-lg hover:bg-[#E76F51] transition-all hover:scale-[1.02] active:scale-[0.98] shadow-xl shadow-[#3A241C]/10"
+              disabled={loggingIn}
+              className={`w-full py-4 rounded-2xl font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-xl ${
+                loggingIn 
+                  ? "bg-[#3A241C]/60 cursor-not-allowed scale-[0.98]" 
+                  : "bg-[#3A241C] text-white hover:bg-[#E76F51] hover:scale-[1.02] active:scale-[0.98] shadow-[#3A241C]/10"
+              }`}
             >
-              Sign In
+              {loggingIn ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  <span>Verifying...</span>
+                </>
+              ) : (
+                "Sign In"
+              )}
             </button>
           </div>
         </div>
