@@ -302,15 +302,10 @@ export default function AdminPage() {
         transition={{ type: "spring", damping: 30, stiffness: 200 }}
         className="fixed left-0 top-0 bottom-0 w-[280px] bg-[#3A241C] text-white z-[60] shadow-2xl flex flex-col overflow-hidden"
       >
-        <div className="p-8 lg:p-10 border-b border-white/5 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 lg:w-12 lg:h-12 bg-[#E76F51] rounded-2xl flex items-center justify-center shadow-lg shadow-[#E76F51]/20">
-              <Coffee size={24} className="text-white" />
-            </div>
-            <div>
-              <h1 className="text-lg lg:text-xl font-black tracking-tight leading-none">BnB</h1>
-              <p className="text-[8px] lg:text-[10px] font-bold uppercase tracking-[0.2em] text-white/40 mt-1">Admin Portal</p>
-            </div>
+        <div className="p-8 border-b border-white/5 flex items-center justify-between">
+          <div className="flex flex-col">
+            <h1 className="text-2xl font-black tracking-tighter leading-none text-[#E76F51]">BnB</h1>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/20 mt-1">Admin Portal</p>
           </div>
           <button 
             onClick={() => setIsSidebarOpen(false)} 
@@ -320,7 +315,7 @@ export default function AdminPage() {
           </button>
         </div>
 
-        <nav className="flex-1 p-6 lg:p-8 space-y-2">
+        <nav className="flex-1 p-6 space-y-2">
           {[
             { id: "LIVE", label: "Live Dashboard", icon: LayoutDashboard },
             { id: "HISTORY", label: "Order History", icon: ShoppingBag },
@@ -355,41 +350,41 @@ export default function AdminPage() {
       <motion.main 
         layout
         animate={{ 
-          paddingLeft: isSidebarOpen && !isMobile ? "320px" : isMobile ? "24px" : "48px",
+          paddingLeft: isSidebarOpen && !isMobile ? "320px" : isMobile ? "20px" : "40px",
         }}
         transition={{ type: "spring", damping: 30, stiffness: 200 }}
-        className="flex-1 pr-6 lg:pr-16 pb-32 min-h-screen w-full bg-[#F9F7F4]"
+        className="flex-1 pr-5 lg:pr-16 pb-32 min-h-screen w-full bg-[#F9F7F4]"
       >
         {/* Header Stats */}
-        <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-8 mb-12 sticky top-0 bg-[#F9F7F4]/90 backdrop-blur-md z-40 py-8 lg:py-10">
-          <div className="flex items-center gap-6">
+        <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-8 sticky top-0 bg-[#F9F7F4]/90 backdrop-blur-md z-40 py-6 lg:py-8">
+          <div className="flex items-center gap-4 lg:gap-6">
             <button
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="w-14 h-14 lg:w-16 lg:h-16 bg-[#3A241C] text-white rounded-[1.5rem] flex items-center justify-center shadow-2xl hover:bg-[#E76F51] transition-all hover:scale-105 active:scale-95"
+              className="w-12 h-12 lg:w-16 lg:h-16 bg-[#3A241C] text-white rounded-2xl lg:rounded-[1.5rem] flex items-center justify-center shadow-xl hover:bg-[#E76F51] transition-all hover:scale-105 active:scale-95 flex-shrink-0"
             >
-              <Coffee size={28} />
+              <Coffee size={isMobile ? 22 : 28} />
             </button>
             <div>
-              <h2 className="text-3xl lg:text-5xl font-[var(--font-playfair)] font-black text-[#3A241C] tracking-tight">
+              <h2 className="text-2xl lg:text-5xl font-[var(--font-playfair)] font-black text-[#3A241C] tracking-tight leading-tight">
                 {activeTab === "LIVE" ? "Live Dashboard" : activeTab === "MENU" ? "Menu Manager" : "Session History"}
               </h2>
-              <div className="flex items-center gap-3 mt-2 lg:mt-3">
-                <span className={`w-3 h-3 rounded-full ${connected ? "bg-[#6A994E]" : "bg-[#B71C1C]"} ${connected ? "animate-pulse" : ""}`} />
-                <span className="text-[10px] lg:text-[12px] font-black uppercase tracking-[0.2em] text-[#3A241C]/30">
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`w-2 h-2 rounded-full ${connected ? "bg-[#6A994E]" : "bg-[#B71C1C]"} ${connected ? "animate-pulse" : ""}`} />
+                <span className="text-[9px] lg:text-[11px] font-black uppercase tracking-[0.2em] text-[#3A241C]/30">
                   {connected ? "Engine Connected" : "Polling Updates"}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-4 w-full xl:w-auto overflow-x-auto pb-2 scrollbar-hide">
-            <div className="flex-1 xl:flex-none bg-white p-6 lg:p-8 rounded-[2.5rem] shadow-xl shadow-[#3A241C]/5 border border-[#3A241C]/5 min-w-[200px]">
-              <p className="text-[10px] lg:text-[11px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-2">Outstanding Revenue</p>
-              <p className="text-3xl lg:text-4xl font-black text-[#B71C1C]">₹{totalDue}</p>
+          <div className="flex gap-3 lg:gap-4 w-full xl:w-auto overflow-x-auto pb-1 scrollbar-hide">
+            <div className="flex-1 xl:flex-none bg-white p-4 lg:p-8 rounded-2xl lg:rounded-[2.5rem] shadow-lg shadow-[#3A241C]/5 border border-[#3A241C]/5 min-w-[140px] lg:min-w-[200px]">
+              <p className="text-[8px] lg:text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-1">Revenue</p>
+              <p className="text-xl lg:text-4xl font-black text-[#B71C1C]">₹{totalDue}</p>
             </div>
-            <div className="flex-1 xl:flex-none bg-white p-6 lg:p-8 rounded-[2.5rem] shadow-xl shadow-[#3A241C]/5 border border-[#3A241C]/5 min-w-[200px]">
-              <p className="text-[10px] lg:text-[11px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-2">Active Tables</p>
-              <p className="text-3xl lg:text-4xl font-black text-[#3A241C]">{liveSessions.length}</p>
+            <div className="flex-1 xl:flex-none bg-white p-4 lg:p-8 rounded-2xl lg:rounded-[2.5rem] shadow-lg shadow-[#3A241C]/5 border border-[#3A241C]/5 min-w-[140px] lg:min-w-[200px]">
+              <p className="text-[8px] lg:text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-1">Active</p>
+              <p className="text-xl lg:text-4xl font-black text-[#3A241C]">{liveSessions.length}</p>
             </div>
           </div>
         </header>
