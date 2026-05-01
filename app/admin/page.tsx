@@ -7,7 +7,7 @@ import {
   LayoutDashboard, ShoppingBag, Bell, X, ChevronRight
 } from "lucide-react";
 import {
-  adminFetchSessions, adminCloseSession, adminConfirmPayment,
+  adminVerifySecret, adminFetchSessions, adminCloseSession, adminConfirmPayment,
   adminUpdateOrder, adminAddOrder, adminToggleItemServed,
   adminDeletePayment, adminToggleReminder,
   type SessionData,
@@ -75,7 +75,7 @@ export default function AdminPage() {
   const handleLogin = async () => {
     setLoginError("");
     try {
-      await adminFetchSessions(secret);
+      await adminVerifySecret(secret);
       localStorage.setItem("bnb_admin_secret", secret);
       setAuthenticated(true);
     } catch {

@@ -92,6 +92,11 @@ export function createPayment(sessionId: string, method: "UPI" | "CASH", amount:
   });
 }
 
+/** Admin: Verify secret */
+export function adminVerifySecret(secret: string) {
+  return apiFetch<{ success: boolean }>("/api/admin/verify", { adminSecret: secret });
+}
+
 /** Admin: Fetch all sessions */
 export function adminFetchSessions(secret: string) {
   return apiFetch<SessionData[]>("/api/admin/sessions", { adminSecret: secret });

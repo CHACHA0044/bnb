@@ -9,6 +9,14 @@ const router = Router();
 router.use(requireAdmin);
 
 /**
+ * GET /api/admin/verify
+ * Simple endpoint to check if the admin secret is valid.
+ */
+router.get("/verify", (_req: Request, res: Response) => {
+  res.json({ success: true });
+});
+
+/**
  * GET /api/admin/sessions
  * Returns all sessions with orders, items, and payments.
  */
