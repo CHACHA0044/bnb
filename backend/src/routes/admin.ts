@@ -34,9 +34,37 @@ router.get("/sessions", async (_req: Request, res: Response): Promise<void> => {
     });
 
     res.json(sessions);
-  } catch (err) {
-    console.error("[ADMIN] Sessions fetch error:", err);
-    res.status(500).json({ error: "Failed to fetch sessions" });
+  } catch (err: any) {
+    console.error("[ADMIN] Sessions fetch error:", {
+      message: err.message,
+      code: err.code,
+      meta: err.meta,
+      stack: err.stack?.split("\n").slice(0, 3).join("\n")
+    });
+    res.status(500).json({ 
+      error: "Failed to fetch sessions",
+      details: err.message,
+      isDbError: err.message?.includes("Can't reach database")
+    });
+  }
+});
+
+/**
+ * GET /api/admin/db-check
+ * Debug endpoint to test DB connectivity directly.
+ */
+router.get("/db-check", async (_req: Request, res: Response) => {
+  try {
+    const result = await prisma.$queryRaw`SELECT 1 as connected`;
+    res.json({ success: true, result });
+  } catch (err: any) {
+    console.error("[ADMIN] DB Check Failed:", err.message);
+    res.status(500).json({ 
+      success: false, 
+      error: err.message,
+      env_db_url_set: !!process.env.DATABASE_URL,
+      env_direct_url_set: !!process.env.DIRECT_URL
+    });
   }
 });
 

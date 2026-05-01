@@ -131,9 +131,18 @@ router.get("/admin/full", requireAdmin, async (_req: Request, res: Response): Pr
     });
 
     res.json({ categories });
-  } catch (err) {
-    console.error("[MENU ADMIN] Fetch error:", err);
-    res.status(500).json({ error: "Failed to fetch menu" });
+  } catch (err: any) {
+    console.error("[MENU ADMIN] Fetch error:", {
+      message: err.message,
+      code: err.code,
+      meta: err.meta,
+      stack: err.stack?.split("\n").slice(0, 3).join("\n")
+    });
+    res.status(500).json({ 
+      error: "Failed to fetch menu",
+      details: err.message,
+      isDbError: err.message?.includes("Can't reach database")
+    });
   }
 });
 
