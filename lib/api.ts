@@ -4,6 +4,7 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 import { type OrderMenuItem } from "./menu";
+export type { OrderMenuItem };
 
 interface FetchOptions extends RequestInit {
   adminSecret?: string;

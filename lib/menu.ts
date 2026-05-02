@@ -13,6 +13,7 @@ export interface OrderMenuItem {
   rating?: number;
   ratingCount?: number;
   outOfStock?: boolean;
+  outOfStockVariants?: string[];
   discountPct?: number;
   discountFlat?: number;
 }
