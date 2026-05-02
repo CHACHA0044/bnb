@@ -444,7 +444,7 @@ export default function DashboardPage() {
           <AddOrderModal
             sessionId={addOrderData.sessionId}
             tableId={addOrderData.tableId}
-            availableTables={ALL_COLUMNS}
+            availableTables={TABLE_COLUMNS}
             onClose={() => setAddOrderData(null)}
             onSubmit={handleAddManualOrder}
           />

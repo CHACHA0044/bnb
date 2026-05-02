@@ -206,8 +206,8 @@ export async function storeReport(
 ): Promise<void> {
   await prisma.report.upsert({
     where: { type_date: { type, date } },
-    update: { data, filename },
-    create: { type, date, filename, data }
+    update: { data: new Uint8Array(data), filename },
+    create: { type, date, filename, data: new Uint8Array(data) }
   });
   console.log(`[REPORTS] Stored ${type} for ${date}`);
 }

@@ -11,7 +11,7 @@ interface AddOrderModalProps {
   sessionId?: string | null;
   tableId?: string | null;
   onClose: () => void;
-  onSubmit: (items: any[], isTakeaway: boolean, selectedTableId?: string, paymentMethod?: string, total?: number) => Promise<void>;
+  onSubmit: (items: any[], isTakeaway: boolean, selectedTableId?: string, paymentMethod?: "CASH" | "QR", total?: number) => Promise<void>;
   availableTables?: string[];
 }
 

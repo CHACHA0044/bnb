@@ -53,6 +53,7 @@ export interface OrderData {
   sessionId: string;
   status: string;
   isTakeaway: boolean;
+  packingCharges: number;
   createdAt: string;
   items: OrderItemData[];
 }
