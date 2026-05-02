@@ -3,6 +3,9 @@ import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
 import { getNextSessionNumber } from "../lib/session";
+import { logOrderAnalytics } from "../lib/analytics";
+import { clearActiveCart, getActiveCart } from "../lib/socket";
+
 
 const router = Router();
 
@@ -13,7 +16,7 @@ const router = Router();
  */
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sessionId: reqSessionId, tableId, items, isTakeaway } = req.body as { sessionId?: string; tableId?: string; items: any[]; isTakeaway?: boolean };
+    const { sessionId: reqSessionId, tableId, items, isTakeaway, packingCharges } = req.body as { sessionId?: string; tableId?: string; items: any[]; isTakeaway?: boolean; packingCharges?: number };
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       res.status(400).json({ error: "items[] required" });
@@ -28,7 +31,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     let sessionId = reqSessionId;
 
     if (!sessionId && tableId) {
-      const sessionNumber = await getNextSessionNumber();
+      const sessionNumber = await getNextSessionNumber(tableId);
       const newSession = await prisma.session.create({
         data: { tableId, sessionNumber }
       });
@@ -69,6 +72,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       data: {
         sessionId: sessionId as string,
         isTakeaway: Boolean(isTakeaway),
+        packingCharges: Number(packingCharges || 0),
         items: {
           create: items.map((item: { name: string; price: number; quantity?: number; type?: string }) => ({
             name: item.name,
@@ -91,13 +95,32 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
         sessionId,
         tableId: session.tableId,
       });
-      // Import clearActiveCart and call it dynamically or add it to socket.ts exports
-      const { clearActiveCart, getActiveCart } = require("../lib/socket");
       clearActiveCart(session.tableId);
       io.to(`table:${session.tableId}`).emit("cart_sync", getActiveCart(session.tableId));
     } catch (e) { console.error("Socket error", e); }
 
-    res.status(201).json(order);
+    // Log analytics (Non-blocking for faster response)
+    try {
+      prisma.session.findUnique({ where: { id: sessionId! } }).then(sessionForAnalytics => {
+        if (sessionForAnalytics) {
+          logOrderAnalytics(sessionForAnalytics, order).catch(e => console.error("[ORDER] Analytics error:", e));
+        }
+      });
+    } catch (e) { console.error("[ORDER] Analytics setup error:", e); }
+
+    // Fetch full session to return to client
+    const updatedSession = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: {
+        orders: {
+          include: { items: true },
+          orderBy: { createdAt: "desc" },
+        },
+        payments: { orderBy: { createdAt: "desc" } },
+      },
+    });
+
+    res.status(201).json({ order, session: updatedSession });
   } catch (err) {
     console.error("[ORDER] Create error:", err);
     res.status(500).json({ error: "Failed to create order" });
@@ -113,7 +136,7 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
   try {
     const { orderId } = req.params as { orderId: string };
     const { status } = req.body;
-    const validStatuses = ["PLACED", "PREPARING", "SERVED"];
+    const validStatuses = ["UNCONFIRMED", "PLACED", "PREPARING", "SERVED"];
 
     if (!status || !validStatuses.includes(status)) {
       res.status(400).json({ error: `status must be one of: ${validStatuses.join(", ")}` });

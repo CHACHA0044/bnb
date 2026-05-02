@@ -14,6 +14,9 @@ import paymentRouter from "./routes/payment";
 import adminRouter from "./routes/admin";
 import menuRouter from "./routes/menu";
 import statusRouter from "./routes/status";
+import qrRouter from "./routes/qr";
+import locationRouter from "./routes/location";
+import reportsRouter from "./routes/reports";
 
 const app = express();
 const server = http.createServer(app);
@@ -47,6 +50,9 @@ app.use("/api/payment", paymentRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/menu", menuRouter);
 app.use("/api/status", statusRouter);
+app.use("/api/qr", qrRouter);
+app.use("/api/location", locationRouter);
+app.use("/api/admin/reports", reportsRouter);
 
 import { prisma } from "./lib/prisma";
 
@@ -90,9 +96,29 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000);
 
+/* ─── Daily Report Generation Job ─────────── */
+import { generateDailyReport, generateMonthlyCSV, storeReport } from "./lib/reports";
+
+// Every 30 minutes, regenerate today's report (keeps it fresh)
+setInterval(async () => {
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const buffer = await generateDailyReport(today);
+    await storeReport("DAILY_EXCEL", today, `BnB_Daily_${today}.xlsx`, buffer);
+    
+    // Also update monthly CSV
+    const month = today.slice(0, 7);
+    const csv = await generateMonthlyCSV(month);
+    await storeReport("MONTHLY_CSV", month, `BnB_Monthly_${month}.csv`, Buffer.from(csv, "utf-8"));
+  } catch (err) {
+    console.error("[JOB] Report generation error:", err);
+  }
+}, 30 * 60 * 1000);
+
 /* ─── Start ────────────────────────────────── */
 server.listen(PORT, () => {
   console.log(`\n🚀 Backend running on http://localhost:${PORT}`);
   console.log(`📡 Socket.IO ready`);
-  console.log(`🔗 CORS: ${FRONTEND_URL}\n`);
+  console.log(`🔗 CORS: ${FRONTEND_URL}`);
+  console.log(`📍 Geo: ${process.env.RESTAURANT_LAT || '26.834906'}, ${process.env.RESTAURANT_LNG || '80.884822'}\n`);
 });

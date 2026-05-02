@@ -4,7 +4,8 @@ const nextConfig: NextConfig = {
   /* Static export for production-ready static site */
   output: "export",
   images: {
-    unoptimized: true, // required for static export; optimise via CDN in production
+    unoptimized: true,
+    qualities: [75, 85],
   },
 };
 

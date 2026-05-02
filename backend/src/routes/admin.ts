@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
 import { getNextSessionNumber } from "../lib/session";
+import { logOrderAnalytics } from "../lib/analytics";
 
 const router = Router();
 
@@ -105,11 +106,7 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
 
     const session = await prisma.session.update({
       where: { id: sessionId as string },
-      data: { status: "CLOSED" },
-      include: {
-        orders: { include: { items: true } },
-        payments: true,
-      },
+      data: { status: "CLOSED" }
     });
 
     console.log(`[ADMIN] Session ${sessionId} → CLOSED`);
@@ -177,6 +174,11 @@ router.post("/sessions/:sessionId/order", async (req: Request, res: Response): P
       });
     } catch { /* skip */ }
 
+    // Log analytics
+    try {
+      await logOrderAnalytics(session, order);
+    } catch (e) { console.error("[ADMIN] Analytics error:", e); }
+
     res.status(201).json(order);
   } catch (err) {
     console.error("[ADMIN] Manual order error:", err);
@@ -204,7 +206,7 @@ router.post("/orders/new", async (req: Request, res: Response): Promise<void> =>
     });
 
     if (!session) {
-      const sessionNumber = await getNextSessionNumber();
+      const sessionNumber = await getNextSessionNumber(tableId);
       session = await prisma.session.create({
         data: { tableId, status: "OPEN", sessionNumber }
       });
@@ -238,6 +240,11 @@ router.post("/orders/new", async (req: Request, res: Response): Promise<void> =>
         tableId: session.tableId,
       });
     } catch { /* skip */ }
+
+    // Log analytics
+    try {
+      await logOrderAnalytics(session, order);
+    } catch (e) { console.error("[ADMIN] Analytics error:", e); }
 
     res.status(201).json(order);
   } catch (err) {

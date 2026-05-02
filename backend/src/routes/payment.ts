@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
+import { updateAnalyticsPayment } from "../lib/analytics";
 
 const router = Router();
 
@@ -80,6 +81,11 @@ router.patch("/:paymentId/confirm", requireAdmin, async (req: Request, res: Resp
         tableId: payment.session.tableId,
       });
     } catch { /* skip */ }
+
+    // Update analytics
+    try {
+      await updateAnalyticsPayment(payment.sessionId, payment.method, "CONFIRMED");
+    } catch (e) { console.error("[PAYMENT] Analytics error:", e); }
 
     res.json(payment);
   } catch (err) {

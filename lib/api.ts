@@ -40,6 +40,8 @@ export interface SessionData {
   tableId: string;
   status: string;
   paymentReminder: boolean;
+  locationVerified: boolean;
+  deviceFingerprint?: string;
   createdAt: string;
   updatedAt: string;
   orders: OrderData[];
@@ -75,15 +77,16 @@ export interface PaymentData {
 }
 
 /** Fetch or create session for a table */
-export function fetchSession(tableId: string) {
-  return apiFetch<SessionData>(`/api/table/${tableId}`);
+export function fetchSession(tableId: string, sessionId?: string) {
+  const query = sessionId ? `?sessionId=${sessionId}` : "";
+  return apiFetch<SessionData>(`/api/table/${tableId}${query}`);
 }
 
 /** Place an order */
-export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false, tableId?: string) {
-  return apiFetch<OrderData>("/api/order", {
+export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false, tableId?: string, packingCharges: number = 0) {
+  return apiFetch<{ order: OrderData, session: SessionData }>("/api/order", {
     method: "POST",
-    body: JSON.stringify({ sessionId, items, isTakeaway, tableId }),
+    body: JSON.stringify({ sessionId, items, isTakeaway, tableId, packingCharges }),
   });
 }
 
@@ -326,4 +329,49 @@ export function adminForceCloseRestaurant(secret: string) {
     method: "POST",
     adminSecret: secret,
   });
+}
+
+/* ─── QR Token Management ────────────────────── */
+
+/** Admin: Generate a QR token for a table/takeaway */
+export function generateQrToken(tableId: string, secret: string) {
+  return apiFetch<{ token: string; expiresAt: string; url: string }>("/api/qr/generate", {
+    method: "POST",
+    body: JSON.stringify({ tableId }),
+    adminSecret: secret,
+  });
+}
+
+/** Public: Validate a QR token */
+export function validateQrToken(tableId: string, token: string) {
+  return apiFetch<{ valid: boolean }>("/api/qr/validate", {
+    method: "POST",
+    body: JSON.stringify({ tableId, token }),
+  });
+}
+
+/* ─── Location Verification ──────────────────── */
+
+/** Public: Verify user location */
+export function verifyLocation(latitude: number, longitude: number, sessionId?: string) {
+  return apiFetch<{ verified: boolean; distance: number }>("/api/location/verify", {
+    method: "POST",
+    body: JSON.stringify({ latitude, longitude, sessionId }),
+  });
+}
+
+/* ─── Reports ────────────────────────────────── */
+
+/** Admin: Get daily report summary */
+export function adminFetchReportSummary(date: string, secret: string) {
+  return apiFetch<{ date: string; totalRevenue: number; totalOrders: number; totalItems: number; upiRevenue: number; cashRevenue: number }>(
+    `/api/admin/reports/summary?date=${date}`, { adminSecret: secret }
+  );
+}
+
+/** Admin: Regenerate daily report */
+export function adminRegenerateReport(date: string, secret: string) {
+  return apiFetch<{ success: boolean; date: string; filename: string }>(
+    `/api/admin/reports/daily/regenerate?date=${date}`, { method: "POST", adminSecret: secret }
+  );
 }

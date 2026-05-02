@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Shield, LogOut, Coffee, Loader2, Lock,
-  LayoutDashboard, ShoppingBag, X, ChevronRight 
+  LayoutDashboard, ShoppingBag, X, ChevronRight, BarChart3 
 } from "lucide-react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useSocket } from "@/lib/socket-client";
@@ -208,6 +208,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { id: "/admin", label: "Live Dashboard", icon: LayoutDashboard },
     { id: "/admin/history", label: "Order History", icon: ShoppingBag },
     { id: "/admin/menu", label: "Menu Manager", icon: Lock },
+    { id: "/admin/reports", label: "Business Reports", icon: BarChart3 },
   ];
 
   return (

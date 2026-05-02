@@ -17,6 +17,9 @@ import AddOrderModal from "@/components/AddOrderModal";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 
 const TABLES = ["T1", "T2", "T3"];
+const TAKEAWAY_ID = "TAKEAWAY";
+const TABLE_COLUMNS = [...TABLES]; // Regular tables stay fixed
+
 
 export default function DashboardPage() {
   const { secret, authenticated } = useAdminAuth();
@@ -157,7 +160,15 @@ export default function DashboardPage() {
       message: "This will finalize all orders and payments for this table. This action cannot be undone.",
       danger: true,
       onConfirm: async () => {
-        try { await adminCloseSession(sessionId, secret!); loadSessions(); } catch (err) { console.error(err); }
+        // Optimistic UI update
+        setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: "CLOSED" } : s));
+        try { 
+          await adminCloseSession(sessionId, secret!); 
+          loadSessions(); 
+        } catch (err) { 
+          console.error(err); 
+          loadSessions(); // Revert on error
+        }
         setConfirmModal(prev => ({ ...prev, show: false }));
       }
     });
@@ -286,44 +297,102 @@ export default function DashboardPage() {
         </span>
       </div>
 
-      {/* NEW PAYMENTS ROW - Tightened Gaps */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6">
-        {TABLES.map((tableId) => {
-          const session = liveSessions.find(s => s.tableId === tableId) || null;
-          return (
+      {/* PAYMENTS ROW */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
+        {TABLE_COLUMNS.map((colId) => (
+          <AdminPaymentSummary
+            key={`pay-${colId}`}
+            tableId={colId}
+            session={liveSessions.find(s => s.tableId === colId) || null}
+            onConfirmPayment={confirmPayment}
+            onDeletePayment={deletePayment}
+            onToggleReminder={toggleReminder}
+            onRecordPayment={recordPayment}
+          />
+        ))}
+        {/* Takeaway sessions: Show all active ones + one placeholder if none active */}
+        {liveSessions.filter(s => s.tableId === TAKEAWAY_ID).length > 0 ? (
+          liveSessions.filter(s => s.tableId === TAKEAWAY_ID).map((session) => (
             <AdminPaymentSummary
-              key={`pay-${tableId}`}
-              tableId={tableId}
+              key={`pay-${session.id}`}
+              tableId={TAKEAWAY_ID}
               session={session}
               onConfirmPayment={confirmPayment}
               onDeletePayment={deletePayment}
               onToggleReminder={toggleReminder}
               onRecordPayment={recordPayment}
+              isTakeaway={true}
             />
-          );
-        })}
+          ))
+        ) : (
+          <AdminPaymentSummary
+            key="pay-takeaway-placeholder"
+            tableId={TAKEAWAY_ID}
+            session={null}
+            onConfirmPayment={confirmPayment}
+            onDeletePayment={deletePayment}
+            onToggleReminder={toggleReminder}
+            onRecordPayment={recordPayment}
+            isTakeaway={true}
+          />
+        )}
       </div>
 
-      {/* TABLES GRID - Tightened Gaps */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4 lg:gap-6 pt-2">
-        {TABLES.map((tableId) => {
-          const session = liveSessions.find(s => s.tableId === tableId) || null;
-          return (
-            <AdminTableColumn
-              key={tableId}
-              tableId={tableId}
-              session={session}
-              onUpdateStatus={updateOrderStatus}
-              onConfirmPayment={confirmPayment}
-              onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId })}
-              onCloseSession={closeSession}
-              onToggleItemServed={toggleItemServed}
-              onToggleOrderItems={toggleOrderItems}
-              onDeletePayment={deletePayment}
-              onToggleReminder={toggleReminder}
-            />
-          );
-        })}
+      {/* TABLES + TAKEAWAY GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6 pt-2">
+        {TABLE_COLUMNS.map((colId) => (
+          <AdminTableColumn
+            key={colId}
+            tableId={colId}
+            session={liveSessions.find(s => s.tableId === colId) || null}
+            onUpdateStatus={updateOrderStatus}
+            onConfirmPayment={confirmPayment}
+            onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: colId })}
+            onCloseSession={closeSession}
+            onToggleItemServed={toggleItemServed}
+            onToggleOrderItems={toggleOrderItems}
+            onDeletePayment={deletePayment}
+            onToggleReminder={toggleReminder}
+          />
+        ))}
+        
+        {/* Multiple Takeaway Columns or Scrollable list? 
+            User wants independent takeaway scans. We'll map all OPEN takeaway sessions.
+        */}
+        {liveSessions.filter(s => s.tableId === TAKEAWAY_ID).map((session) => (
+          <AdminTableColumn
+            key={session.id}
+            tableId={TAKEAWAY_ID}
+            session={session}
+            onUpdateStatus={updateOrderStatus}
+            onConfirmPayment={confirmPayment}
+            onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: TAKEAWAY_ID })}
+            onCloseSession={closeSession}
+            onToggleItemServed={toggleItemServed}
+            onToggleOrderItems={toggleOrderItems}
+            onDeletePayment={deletePayment}
+            onToggleReminder={toggleReminder}
+            isTakeaway={true}
+            allTakeawaySessions={liveSessions.filter(s => s.tableId === TAKEAWAY_ID)}
+          />
+        ))}
+
+        {/* If no takeaway sessions, show empty slot */}
+        {liveSessions.filter(s => s.tableId === TAKEAWAY_ID).length === 0 && (
+          <AdminTableColumn
+            tableId={TAKEAWAY_ID}
+            session={null}
+            onUpdateStatus={updateOrderStatus}
+            onConfirmPayment={confirmPayment}
+            onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: TAKEAWAY_ID })}
+            onCloseSession={closeSession}
+            onToggleItemServed={toggleItemServed}
+            onToggleOrderItems={toggleOrderItems}
+            onDeletePayment={deletePayment}
+            onToggleReminder={toggleReminder}
+            isTakeaway={true}
+          />
+        )}
       </div>
 
       {/* CUSTOM CONFIRM MODAL */}
@@ -375,7 +444,7 @@ export default function DashboardPage() {
           <AddOrderModal
             sessionId={addOrderData.sessionId}
             tableId={addOrderData.tableId}
-            availableTables={TABLES}
+            availableTables={ALL_COLUMNS}
             onClose={() => setAddOrderData(null)}
             onSubmit={handleAddManualOrder}
           />

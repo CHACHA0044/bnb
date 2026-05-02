@@ -19,7 +19,8 @@ export default function Home() {
 
         {/* Dedicated Menu CTA Section */}
         <section className="py-24 bg-[var(--coffee)] relative overflow-hidden text-center">
-          <div className="absolute inset-0 bg-[url('/images/pattern-bg.png')] opacity-5" />
+          <div className="absolute inset-0 bg-[url('/images/pattern-bg.webp')] opacity-40 mix-blend-soft-light bg-repeat" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-[var(--coffee)]" />
           <div className="relative z-10 max-w-3xl mx-auto px-6">
             <h2 className="font-[var(--font-playfair)] text-4xl md:text-6xl font-bold text-white mb-8">
               Explore Our <br />
@@ -28,8 +29,8 @@ export default function Home() {
             <p className="text-white/60 text-lg mb-12 font-light leading-relaxed">
               From our signature Benne Dosas to our authentic Filter Coffee, discover the complete taste of Karnataka.
             </p>
-            <Link 
-              href="/menu" 
+            <Link
+              href="/menu"
               className="inline-flex items-center gap-4 bg-[var(--benne-primary)] text-white px-10 py-5 rounded-full text-xl font-bold shadow-2xl shadow-[var(--benne-primary)]/40 hover:scale-105 transition-all"
             >
               View Dedicated Menu Page <ArrowRight />

@@ -9,26 +9,29 @@ generator client {
 }
 
 model Session {
-  id              String    @id @default(uuid())
-  sessionNumber   Int       @default(0)
-  tableId         String
-  status          String    @default("OPEN") // OPEN | CLOSED
-  paymentReminder Boolean   @default(false)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  orders          Order[]
-  payments        Payment[]
+  id                String    @id @default(uuid())
+  sessionNumber     Int       @default(0)
+  tableId           String
+  status            String    @default("OPEN") // OPEN | CLOSED
+  paymentReminder   Boolean   @default(false)
+  locationVerified  Boolean   @default(false)
+  deviceFingerprint String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  orders            Order[]
+  payments          Payment[]
 }
 
 model Order {
-  id          String      @id @default(uuid())
-  sessionId   String
-  session     Session     @relation(fields: [sessionId], references: [id])
-  status      String      @default("PLACED") // PLACED | PREPARING | SERVED
-  isTakeaway  Boolean     @default(false)
-  createdAt   DateTime    @default(now())
-  items       OrderItem[]
-  payments    Payment[]
+  id              String      @id @default(uuid())
+  sessionId       String
+  session         Session     @relation(fields: [sessionId], references: [id])
+  status          String      @default("UNCONFIRMED") // UNCONFIRMED | PLACED | PREPARING | SERVED
+  isTakeaway      Boolean     @default(false)
+  packingCharges  Int         @default(0)
+  createdAt       DateTime    @default(now())
+  items           OrderItem[]
+  payments        Payment[]
 }
 
 model OrderItem {
@@ -53,6 +56,17 @@ model Payment {
   status    String   @default("PENDING") // PENDING | CONFIRMED | UNPAID
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
+}
+
+// ─── QR Token Access Control ──────────────────
+
+model QrToken {
+  id        String   @id @default(uuid())
+  tableId   String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
 }
 
 // ─── Menu Management ──────────────────────────
@@ -104,4 +118,38 @@ model RestaurantStatus {
   isOpen    Boolean  @default(true)
   closingAt DateTime? // If set, countdown is active
   updatedAt DateTime @updatedAt
+}
+
+// ─── Analytics & Reporting ────────────────────
+
+model AnalyticsLog {
+  id               String   @id @default(uuid())
+  timestamp        DateTime @default(now())
+  date             String   // YYYY-MM-DD
+  tableId          String
+  sessionId        String
+  sessionNumber    Int      @default(0)
+  orderId          String
+  itemName         String
+  quantity         Int
+  basePrice        Int
+  discountApplied  String?  // "10%" or "₹20" or null
+  finalPrice       Int
+  paymentMode      String?  // UPI | CASH | null (if unpaid at log time)
+  paymentStatus    String   // PENDING | CONFIRMED | UNPAID
+  orderStatus      String   // PLACED | PREPARING | SERVED
+  orderType        String   // DINE_IN | TAKEAWAY
+  packingCharges   Int      @default(0)
+  locationVerified Boolean  @default(false)
+}
+
+model Report {
+  id        String   @id @default(uuid())
+  type      String   // DAILY_EXCEL | MONTHLY_CSV
+  date      String   // YYYY-MM-DD for daily, YYYY-MM for monthly
+  filename  String
+  data      Bytes    // File content stored as binary
+  createdAt DateTime @default(now())
+
+  @@unique([type, date])
 }

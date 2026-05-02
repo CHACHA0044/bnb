@@ -1,15 +1,19 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { 
   Clock, CheckCircle2, Coffee, 
   CreditCard, Banknote, RotateCcw,
   QrCode, Download, Plus, Bell, X,
-  Square, CheckSquare, PackageCheck, Check
+  Square, CheckSquare, PackageCheck, Check, Shield, Copy, Package
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { SessionData } from "@/lib/api";
+import { 
+  SessionData, 
+  generateQrToken,
+} from "@/lib/api";
 import { QRCodeSVG } from "qrcode.react";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 
 interface AdminTableColumnProps {
   tableId: string;
@@ -22,6 +26,8 @@ interface AdminTableColumnProps {
   onToggleOrderItems: (orderId: string, isServed: boolean) => Promise<void>;
   onDeletePayment: (paymentId: string) => Promise<void>;
   onToggleReminder: (sessionId: string, reminder: boolean) => Promise<void>;
+  isTakeaway?: boolean;
+  allTakeawaySessions?: SessionData[];
 }
 
 const COLORS = {
@@ -46,8 +52,21 @@ export default function AdminTableColumn({
   onToggleOrderItems,
   onDeletePayment,
   onToggleReminder,
+  isTakeaway = false,
+  allTakeawaySessions = [],
 }: AdminTableColumnProps) {
+  const { secret } = useAdminAuth();
   const [showPackedNote, setShowPackedNote] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  // Duplicate Detection Logic
+  const duplicates = isTakeaway && session && allTakeawaySessions ? allTakeawaySessions.filter(s => {
+    if (s.id === session.id) return false;
+    // Simple comparison: do they have the same items and quantities?
+    const currentItems = session.orders.flatMap(o => o.items.map(i => `${i.name}-${i.quantity}`)).sort().join('|');
+    const otherItems = s.orders.flatMap(o => o.items.map(i => `${i.name}-${i.quantity}`)).sort().join('|');
+    return currentItems === otherItems && currentItems.length > 0;
+  }) : [];
 
   useEffect(() => {
     if (showPackedNote) {
@@ -124,20 +143,56 @@ export default function AdminTableColumn({
     const ctx = canvas.getContext("2d");
     const img = new Image();
     img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx?.drawImage(img, 0, 0);
+      canvas.width = 1000;
+      canvas.height = 1000;
+      ctx!.fillStyle = "white";
+      ctx!.fillRect(0, 0, canvas.width, canvas.height);
+      ctx!.drawImage(img, 100, 100, 800, 800);
       const pngFile = canvas.toDataURL("image/png");
       const downloadLink = document.createElement("a");
-      downloadLink.download = `QR-${tableId}.png`;
-      downloadLink.href = `${pngFile}`;
+      downloadLink.download = `BnB_QR_${isTakeaway ? "Takeaway" : tableId}.png`;
+      downloadLink.href = pngFile;
       downloadLink.click();
     };
-    img.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
+    img.src = "data:image/svg+xml;base64," + btoa(svgData);
+  };
+
+
+
+  const handleCopyLink = () => {
+    const url = `${typeof window !== "undefined" ? window.location.origin : ""}${isTakeaway ? "/takeaway" : `/table/${tableId}`}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
     <div className="flex flex-col h-full bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+      {/* Duplicate Warning */}
+      <AnimatePresence>
+        {duplicates.length > 0 && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="bg-[#B71C1C] text-white p-3 flex items-center justify-between gap-3 overflow-hidden"
+          >
+            <div className="flex items-center gap-2">
+              <Shield size={14} className="animate-pulse" />
+              <p className="text-[9px] font-black uppercase tracking-widest">
+                Duplicate Order Detected ({duplicates[0].tableId === "TAKEAWAY" ? "TW" : duplicates[0].tableId}#{duplicates[0].sessionNumber || duplicates[0].id.slice(-4).toUpperCase()})
+              </p>
+            </div>
+            <button 
+              onClick={() => onCloseSession(session!.id)}
+              className="p-1 hover:bg-white/20 rounded-lg transition-all"
+            >
+              <X size={14} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="p-6 bg-gray-50/50 border-b border-gray-100">
         <div className="flex justify-between items-start mb-4">
@@ -145,15 +200,23 @@ export default function AdminTableColumn({
             <motion.div 
               whileHover={{ scale: 1.05 }}
               className={`w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner ${
-              session ? "bg-[#3A241C] text-white shadow-[#3A241C]/20" : "bg-gray-100 text-gray-400"
+              session 
+                ? isTakeaway ? "bg-[#F4A261] text-white shadow-[#F4A261]/20" : "bg-[#3A241C] text-white shadow-[#3A241C]/20" 
+                : "bg-gray-100 text-gray-400"
             }`}>
-              {tableId}
+              {isTakeaway ? <Package size={24} /> : tableId}
             </motion.div>
             <div>
-              <h3 className="font-black text-[#3A241C] text-lg">Table {tableId}</h3>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                {session ? `Active • #${session.sessionNumber || session.id.slice(-4).toUpperCase()}` : "Available"}
-              </p>
+            <h3 className="font-black text-[#3A241C] text-lg">{isTakeaway ? "TW" : tableId}</h3>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  {session ? (
+                    isTakeaway 
+                      ? `Active • TW#${session.sessionNumber || session.id.slice(-4).toUpperCase()}`
+                      : `Active • ${tableId}#${session.sessionNumber || session.id.slice(-4).toUpperCase()}`
+                  ) : "Available"}
+                </p>
+              </div>
             </div>
           </div>
           
@@ -169,21 +232,33 @@ export default function AdminTableColumn({
               <div className="flex flex-col items-center gap-3">
                 <QRCodeSVG 
                   id={`qr-${tableId}`}
-                  value={`${typeof window !== "undefined" ? window.location.origin : "https://bnb-ten-omega.vercel.app"}/table/${tableId}`} 
+                  value={`${typeof window !== "undefined" ? window.location.origin : ""}${isTakeaway ? "/takeaway" : `/table/${tableId}`}`} 
                   size={150}
                   level="H"
                 />
-                <p className="text-[10px] font-black text-[#3A241C] uppercase tracking-tighter">
-                  {typeof window !== "undefined" ? window.location.host : "bnb-ten-omega.vercel.app"}/table/{tableId}
-                </p>
-                <div className="flex gap-2 w-full">
-                  <motion.button 
-                    whileTap={{ scale: 0.95 }}
-                    onClick={downloadQR} 
-                    className="flex-1 flex items-center justify-center gap-2 py-2 bg-gray-50 rounded-xl text-[10px] font-bold hover:bg-gray-100 transition-all"
-                  >
-                    <Download size={14} /> Download
-                  </motion.button>
+                <div className="text-center">
+                  <p className="text-[10px] font-black text-[#3A241C] uppercase tracking-tighter truncate max-w-[150px]">
+                    {isTakeaway ? "/takeaway" : `/table/${tableId}`}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 w-full">
+
+                  <div className="flex gap-2">
+                    <motion.button 
+                      whileTap={{ scale: 0.95 }}
+                      onClick={downloadQR} 
+                      className="flex-1 flex items-center justify-center gap-2 py-2 bg-gray-50 rounded-xl text-[9px] font-bold hover:bg-gray-100 transition-all uppercase tracking-widest"
+                    >
+                      <Download size={12} /> Save
+                    </motion.button>
+                    <motion.button 
+                      whileTap={{ scale: 0.95 }}
+                      onClick={handleCopyLink} 
+                      className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[9px] font-bold transition-all uppercase tracking-widest ${copied ? "bg-[#6A994E] text-white" : "bg-gray-50 hover:bg-gray-100"}`}
+                    >
+                      {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? "Copied" : "Link"}
+                    </motion.button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -286,8 +361,9 @@ export default function AdminTableColumn({
                 </div>
               ) : (
                 allOrders.map(order => {
-                  const status = order.status as "PLACED" | "PREPARING" | "SERVED";
+                  const status = order.status as "UNCONFIRMED" | "PLACED" | "PREPARING" | "SERVED";
                   const statusConfig = {
+                    UNCONFIRMED: { color: "bg-blue-600", label: "New Order", icon: <Bell size={12} className="animate-bounce" /> },
                     PLACED: { color: "bg-[#B71C1C]", label: "Placed", icon: <Clock size={12} /> },
                     PREPARING: { color: "bg-[#F4A261]", label: "Preparing", icon: <Clock size={12} className="animate-spin-slow" /> },
                     SERVED: { color: "bg-[#6A994E]", label: "Served", icon: <CheckCircle2 size={12} /> },
@@ -310,21 +386,23 @@ export default function AdminTableColumn({
                       <div className="flex justify-between items-start mb-3 ml-2">
                         <div className="flex flex-col">
                           <div className="flex items-center gap-2 mb-1">
-                            <motion.button 
-                              whileTap={{ scale: 0.8 }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onToggleOrderItems(order.id, !allServed);
-                              }}
-                              className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all shadow-sm ${
-                                allServed 
-                                  ? "bg-[#6A994E] border-[#6A994E] text-white" 
-                                  : "bg-white border-gray-200 text-transparent hover:border-[#3A241C]/20"
-                              }`}
-                              title={allServed ? "Deselect All" : "Select All"}
-                            >
-                              <CheckSquare size={14} className={allServed ? "opacity-100" : "opacity-0"} />
-                            </motion.button>
+                            {status !== "UNCONFIRMED" && (
+                              <motion.button 
+                                whileTap={{ scale: 0.8 }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onToggleOrderItems(order.id, !allServed);
+                                }}
+                                className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all shadow-sm ${
+                                  allServed 
+                                    ? "bg-[#6A994E] border-[#6A994E] text-white" 
+                                    : "bg-white border-gray-200 text-transparent hover:border-[#3A241C]/20"
+                                }`}
+                                title={allServed ? "Deselect All" : "Select All"}
+                              >
+                                <CheckSquare size={14} className={allServed ? "opacity-100" : "opacity-0"} />
+                              </motion.button>
+                            )}
                             <div className="relative">
                               <select
                                 value={status}
@@ -333,6 +411,7 @@ export default function AdminTableColumn({
                                   allServed ? "bg-[#6A994E]" : config.color
                                 }`}
                               >
+                                {status === "UNCONFIRMED" && <option value="UNCONFIRMED">New Order</option>}
                                 <option value="PLACED">Placed</option>
                                 <option value="PREPARING">Preparing</option>
                                 <option value="SERVED">Served</option>
@@ -350,7 +429,15 @@ export default function AdminTableColumn({
                         </div>
                           {/* Quick Action Button Set */}
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            {status !== "SERVED" ? (
+                            {status === "UNCONFIRMED" ? (
+                              <motion.button
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => onUpdateStatus(order.id, "PLACED")}
+                                className="px-3 py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-1"
+                              >
+                                <CheckCircle2 size={14} /> Confirm
+                              </motion.button>
+                            ) : status !== "SERVED" ? (
                               <>
                                 <motion.button
                                   whileTap={{ scale: 0.8 }}
@@ -404,25 +491,31 @@ export default function AdminTableColumn({
                             }}
                             className={`flex justify-between items-center p-3 rounded-xl cursor-pointer transition-all ${
                               item.isServed 
-                                ? "bg-white/50 opacity-60" 
+                                ? "bg-white/80 opacity-80" 
                                 : "bg-white shadow-sm hover:shadow-md"
                             }`}
                           >
                             <div className="flex items-center gap-3">
-                              <motion.div 
-                                whileTap={{ scale: 0.8 }}
-                                className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all ${
-                                item.isServed 
-                                  ? "bg-[#6A994E] border-[#6A994E] text-white shadow-sm" 
-                                  : "bg-white border-gray-200 text-transparent"
-                              }`}>
-                                {item.isServed ? <CheckSquare size={14} /> : <Square size={14} className="text-gray-200" />}
-                              </motion.div>
+                              {status !== "UNCONFIRMED" ? (
+                                <motion.div 
+                                  whileTap={{ scale: 0.8 }}
+                                  className={`w-6 h-6 rounded-lg flex items-center justify-center border transition-all ${
+                                  item.isServed 
+                                    ? "bg-[#6A994E] border-[#6A994E] text-white shadow-sm" 
+                                    : "bg-white border-gray-200 text-transparent"
+                                }`}>
+                                  {item.isServed ? <CheckSquare size={14} /> : <Square size={14} className="text-gray-200" />}
+                                </motion.div>
+                              ) : (
+                                <div className="w-6 h-6 flex items-center justify-center">
+                                  <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                                </div>
+                              )}
                               <div className="flex flex-col">
-                                <span className={`text-xs font-bold leading-tight ${item.isServed ? "text-gray-400 line-through" : "text-[#3A241C]"}`}>
-                                  {item.name}
+                                <span className={`text-xs font-bold leading-tight ${item.isServed ? "text-gray-400" : "text-[#3A241C]"}`}>
+                                  {isTakeaway ? item.name.split('(')[0].trim() : item.name}
                                 </span>
-                                <span className={`text-[10px] font-bold ${item.isServed ? "text-[#6A994E]/40" : "text-[#6A994E]"}`}>
+                                <span className={`text-[10px] font-bold ${item.isServed ? "text-[#6A994E]/60" : "text-[#6A994E]"}`}>
                                   × {item.quantity}
                                 </span>
                               </div>

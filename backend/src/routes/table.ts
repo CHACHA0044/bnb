@@ -4,7 +4,7 @@ import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
 
 const router = Router();
-const VALID_TABLES = ["T1", "T2", "T3"];
+const VALID_TABLES = ["T1", "T2", "T3", "TAKEAWAY"];
 
 /**
  * GET /api/table/:tableId
@@ -13,6 +13,7 @@ const VALID_TABLES = ["T1", "T2", "T3"];
 router.get("/:tableId", async (req: Request, res: Response): Promise<void> => {
   try {
     const { tableId } = req.params as { tableId: string };
+    const { sessionId } = req.query as { sessionId?: string };
 
     if (!VALID_TABLES.includes(tableId)) {
       res.status(400).json({ error: `Invalid table. Must be one of: ${VALID_TABLES.join(", ")}` });
@@ -20,7 +21,7 @@ router.get("/:tableId", async (req: Request, res: Response): Promise<void> => {
     }
 
     const session = await prisma.session.findFirst({
-      where: { tableId: tableId as string, status: "OPEN" },
+      where: sessionId ? { id: sessionId, tableId } : { tableId, status: "OPEN" },
       include: {
         orders: {
           include: { items: true },

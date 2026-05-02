@@ -83,13 +83,21 @@ export default function HistoryPage() {
                   className="p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center cursor-pointer hover:bg-[#F9F7F4]/50 transition-colors gap-6"
                 >
                   <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 bg-[#3A241C] rounded-[1.5rem] flex items-center justify-center font-black text-white text-xl shadow-lg shadow-[#3A241C]/10 flex-shrink-0">
-                      {session.tableId}
+                    <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center font-black text-white text-xl shadow-lg flex-shrink-0 ${
+                      session.tableId === "TAKEAWAY" ? "bg-[#F4A261] shadow-[#F4A261]/20" : "bg-[#3A241C] shadow-[#3A241C]/10"
+                    }`}>
+                      {session.tableId === "TAKEAWAY" ? "TW" : session.tableId}
                     </div>
                     <div>
                       <div className="flex items-center gap-3">
-                        <p className="font-black text-[#3A241C] text-xl">#{session.sessionNumber || session.id.slice(-4).toUpperCase()}</p>
-                        <span className="text-[9px] font-black bg-[#6A994E]/10 text-[#6A994E] px-3 py-1 rounded-full uppercase tracking-widest border border-[#6A994E]/10">Settled</span>
+                        <p className="font-black text-[#3A241C] text-xl">
+                          {session.tableId === "TAKEAWAY" ? "TW" : session.tableId}#{session.sessionNumber || session.id.slice(-4).toUpperCase()}
+                        </p>
+                        <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border ${
+                          session.tableId === "TAKEAWAY" ? "bg-[#F4A261]/10 text-[#F4A261] border-[#F4A261]/10" : "bg-[#6A994E]/10 text-[#6A994E] border-[#6A994E]/10"
+                        }`}>
+                          {session.tableId === "TAKEAWAY" ? "Takeaway" : "Dine-in"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-4 mt-2">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#3A241C]/40 uppercase tracking-wider">
@@ -111,7 +119,7 @@ export default function HistoryPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-black text-[#3A241C]">₹{total}</p>
-                      <p className="text-[9px] font-black text-[#3A241C]/20 uppercase tracking-widest">Total Bill</p>
+                      <p className="text-[9px] font-black text-[#3A241C]/20 uppercase tracking-widest">Received</p>
                     </div>
                     <motion.div 
                       animate={{ rotate: isExpanded ? 90 : 0 }}
