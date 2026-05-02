@@ -8,6 +8,7 @@ import { ArrowRight } from "lucide-react";
 
 /**
  * Clean Homepage — Strictly NO menu list.
+ * Pattern-bg.webp removed, using CSS-only gradient.
  */
 export default function Home() {
   return (
@@ -17,9 +18,9 @@ export default function Home() {
         <Hero />
         <SignatureItems />
 
-        {/* Dedicated Menu CTA Section */}
+        {/* Dedicated Menu CTA Section — CSS-only background, no pattern image */}
         <section className="py-24 bg-[var(--coffee)] relative overflow-hidden text-center">
-          <div className="absolute inset-0 bg-[url('/images/pattern-bg.webp')] opacity-40 mix-blend-soft-light bg-repeat" />
+          <div className="absolute inset-0 css-pattern" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-[var(--coffee)]" />
           <div className="relative z-10 max-w-3xl mx-auto px-6">
             <h2 className="font-[var(--font-playfair)] text-4xl md:text-6xl font-bold text-white mb-8">
@@ -31,7 +32,7 @@ export default function Home() {
             </p>
             <Link
               href="/menu"
-              className="inline-flex items-center gap-4 bg-[var(--benne-primary)] text-white px-10 py-5 rounded-full text-xl font-bold shadow-2xl shadow-[var(--benne-primary)]/40 hover:scale-105 transition-all"
+              className="inline-flex items-center gap-4 bg-[var(--benne-primary)] text-white px-10 py-5 rounded-full text-xl font-bold shadow-2xl shadow-[var(--benne-primary)]/40 hover:scale-105 transition-all duration-300"
             >
               View Dedicated Menu Page <ArrowRight />
             </Link>

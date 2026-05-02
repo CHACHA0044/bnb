@@ -53,7 +53,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const [timeLeft, setTimeLeft] = useState<string | null>(null);
 
   // Lazy Section Loading
-  const [visibleCategoriesCount, setVisibleCategoriesCount] = useState(4);
+  const [visibleCategoriesCount, setVisibleCategoriesCount] = useState(20);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const menuContainerRef = useRef<HTMLElement>(null);
 

@@ -50,14 +50,11 @@ body {
 /* ---- Hide native scrollbar (replaced by ScrollIndicator) ---- */
 html {
   scrollbar-width: none;
-  /* Firefox */
   -ms-overflow-style: none;
-  /* IE / Edge legacy */
 }
 
 ::-webkit-scrollbar {
   display: none;
-  /* Chrome / Safari / Edge */
 }
 
 /* ---- Selection ---- */
@@ -68,117 +65,48 @@ html {
 
 /* ---- Utility animations ---- */
 @keyframes float {
-
-  0%,
-  100% {
-    transform: translateY(0px);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
 }
 
 @keyframes steam {
-  0% {
-    opacity: 0;
-    transform: translateY(0) scaleX(1);
-  }
-
-  50% {
-    opacity: 0.6;
-    transform: translateY(-18px) scaleX(1.2);
-  }
-
-  100% {
-    opacity: 0;
-    transform: translateY(-36px) scaleX(0.8);
-  }
+  0% { opacity: 0; transform: translateY(0) scaleX(1); }
+  50% { opacity: 0.6; transform: translateY(-18px) scaleX(1.2); }
+  100% { opacity: 0; transform: translateY(-36px) scaleX(0.8); }
 }
 
 @keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(24px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes shimmer {
-  0% {
-    background-position: -200% center;
-  }
-
-  100% {
-    background-position: 200% center;
-  }
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
 }
 
 @keyframes blurFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes slideInLeft {
-  from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(-30px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  from { opacity: 0; transform: translateX(30px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 @keyframes fade-in-up-hero {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slow-zoom {
-  from {
-    transform: scale(1.05);
-  }
-
-  to {
-    transform: scale(1.15);
-  }
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-float {
   animation: float 4s ease-in-out infinite;
-  /* Pre-promote to GPU layer — no layout cost during the infinite loop */
   will-change: transform;
 }
 
@@ -205,10 +133,6 @@ html {
 
 .animate-fade-in-up-hero {
   animation: fade-in-up-hero 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.animate-slow-zoom {
-  animation: slow-zoom 20s linear infinite alternate;
 }
 
 /* ---- Scroll animations ---- */
@@ -254,12 +178,6 @@ html {
     -webkit-backdrop-filter: blur(6px);
   }
 
-  /* Disable hover transforms on touch devices */
-  .card-hover:hover {
-    transform: none;
-  }
-
-
   /* Simpler shadows on mobile */
   .shadow-soft {
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
@@ -267,11 +185,6 @@ html {
 
   .shadow-soft-lg {
     box-shadow: 0 12px 30px rgba(0, 0, 0, 0.10);
-  }
-
-  /* Faster, subtler transitions on mobile */
-  * {
-    transition-duration: 150ms !important;
   }
 }
 
@@ -313,7 +226,6 @@ html {
 /* ---- Card base ---- */
 .card-hover {
   transition: transform 0.3s ease-out, box-shadow 0.3s ease-out;
-  /* GPU layer — hover transform runs on compositor, no layout thrash */
   will-change: transform;
 }
 
@@ -348,7 +260,6 @@ html {
 
 /* ---- Reduced-motion — accessibility + perf on low-end devices ---- */
 @media (prefers-reduced-motion: reduce) {
-
   *,
   *::before,
   *::after {
@@ -359,19 +270,12 @@ html {
   }
 }
 
-
 /* ---- Touch optimizations ---- */
 @media (pointer: coarse) {
-
   /* Improve touch response */
   a,
   button {
     touch-action: manipulation;
-  }
-
-  /* Disable hover states on touch devices to prevent sticky hover */
-  .group:hover .group-hover\:scale-105 {
-    transform: none;
   }
 
   /* Faster transitions on touch for snappier feel */
@@ -380,20 +284,8 @@ html {
   .transition-colors,
   .transition-opacity,
   .transition-shadow {
-    transition-duration: 100ms;
+    transition-duration: 150ms;
   }
-
-  /* Disable transform animations on hover for touch */
-  *:hover {
-    transform: none !important;
-  }
-}
-
-/* ---- Ensure sections never become invisible ---- */
-section {
-  /* Prevent content from disappearing on scroll */
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
 }
 
 /* ---- Force GPU acceleration for smoother animations ---- */
@@ -402,9 +294,16 @@ section {
   will-change: transform;
 }
 
-/* ---- Premium Pattern Utility ---- */
+/* ---- Premium Pattern Utility (CSS-only, no image) ---- */
 .glassy-pattern {
   background-image:
     radial-gradient(circle at 2px 2px, rgba(255, 255, 255, 0.05) 1px, transparent 0);
   background-size: 24px 24px;
+}
+
+/* ---- Subtle dot pattern (CSS-only replacement for pattern-bg.webp) ---- */
+.css-pattern {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0);
+  background-size: 20px 20px;
 }

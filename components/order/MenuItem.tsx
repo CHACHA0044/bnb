@@ -1,8 +1,7 @@
 "use client";
 
-import React, { memo, useState, useCallback, useEffect } from "react";
+import React, { memo, useCallback } from "react";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Star, Check } from "lucide-react";
 import { type OrderMenuItem } from "@/lib/menu";
 
@@ -23,16 +22,6 @@ const MenuItem = ({
   isRestaurantOpen,
   priority = false 
 }: MenuItemProps) => {
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
   const discountedPrice = item.discountPct 
     ? Math.round(item.price * (1 - item.discountPct / 100))
     : item.discountFlat 
@@ -42,33 +31,26 @@ const MenuItem = ({
   const hasDiscount = item.discountPct || item.discountFlat;
   const isDisabled = item.outOfStock || !isRestaurantOpen;
 
+  const [isAnimating, setIsAnimating] = React.useState(false);
+
   const handleAdd = useCallback(() => {
     if (isDisabled || isAnimating) return;
     setIsAnimating(true);
     onAdd({ ...item, price: discountedPrice });
     
-    // Tactile reset delay
+    // Fast tactile reset — 300ms instead of 1100ms
     setTimeout(() => {
       setIsAnimating(false);
-    }, 1100);
+    }, 300);
   }, [isDisabled, isAnimating, onAdd, item, discountedPrice]);
 
-  // Premium transitions
-  const springTransition: any = { type: "spring", stiffness: 400, damping: 25 };
-  const smoothTransition: any = { duration: 0.3, ease: [0.22, 1, 0.36, 1] };
-
   return (
-    <motion.div 
-      initial={false}
-      animate={{ 
-        borderColor: isAnimating ? "#6A994E" : "rgba(58, 36, 28, 0.05)",
-        boxShadow: isAnimating 
-          ? "inset 0 0 0 1.5px #6A994E, 0 10px 40px rgba(106, 153, 78, 0.2)" 
-          : "inset 0 0 0 0px transparent, 0 1px 2px rgba(58, 36, 28, 0.05)"
-      }}
-      transition={smoothTransition}
-      style={{ willChange: "border-color, box-shadow" }}
-      className={`bg-white rounded-[2rem] p-3 lg:p-4 border flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-xl cursor-pointer"}`}
+    <div 
+      className={`bg-white rounded-[2rem] p-3 lg:p-4 border flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-200 ${
+        isAnimating 
+          ? "border-[#6A994E] shadow-[inset_0_0_0_1.5px_#6A994E,0_10px_40px_rgba(106,153,78,0.2)]" 
+          : "border-[#3A241C]/5 shadow-[0_1px_2px_rgba(58,36,28,0.05)]"
+      } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-xl cursor-pointer"}`}
     >
       {item.outOfStock && (
         <div className="absolute inset-0 z-20 bg-[#3A241C]/20 backdrop-blur-[2px] flex items-center justify-center">
@@ -91,7 +73,7 @@ const MenuItem = ({
             priority={priority}
             sizes="(max-width: 768px) 110px, 130px"
             className="object-cover opacity-0 transition-opacity duration-300" 
-            onLoadingComplete={(img) => img.classList.remove('opacity-0')} 
+            onLoad={(e) => (e.target as HTMLImageElement).classList.remove('opacity-0')} 
           />
         )}
       </div>
@@ -134,50 +116,27 @@ const MenuItem = ({
             )}
           </div>
           
-          <motion.button 
-            whileTap={!isDisabled ? { scale: 0.8 } : {}}
+          {/* Add Button — instant feedback, no AnimatePresence */}
+          <button 
             onClick={handleAdd}
             disabled={isDisabled}
-            animate={{
-              backgroundColor: isAnimating ? "#6A994E" : (isMobile ? "#E76F51" : "#F9F7F4"),
-              color: (isMobile || isAnimating) ? "#FFFFFF" : "#3A241C",
-              y: isAnimating ? [0, -4, 0] : 0
-            }}
-            transition={{
-              ...springTransition,
-              y: { duration: 0.3, ease: "easeInOut" } // Use duration for keyframes to avoid spring error
-            }}
-            style={{ willChange: "background-color, color, transform" }}
-            className={`w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shadow-lg overflow-hidden touch-none select-none ${isDisabled ? "bg-gray-100 text-gray-300 cursor-not-allowed" : "lg:hover:bg-[#E76F51] lg:hover:text-white"}`}
+            className={`w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shadow-lg overflow-hidden touch-none select-none active:scale-75 transition-all duration-150 ${
+              isAnimating 
+                ? "bg-[#6A994E] text-white scale-90" 
+                : isDisabled 
+                  ? "bg-gray-100 text-gray-300 cursor-not-allowed" 
+                  : "bg-[#E76F51] text-white lg:bg-[#F9F7F4] lg:text-[#3A241C] lg:hover:bg-[#E76F51] lg:hover:text-white"
+            }`}
           >
-            <AnimatePresence initial={false} mode="wait">
-              {isAnimating ? (
-                <motion.div
-                  key="check"
-                  initial={{ rotate: -90, scale: 0.5, opacity: 0 }}
-                  animate={{ rotate: 0, scale: 1.2, opacity: 1 }}
-                  transition={{ type: "spring", stiffness: 500, damping: 15 }}
-                  className="flex items-center justify-center absolute transform-gpu"
-                >
-                  <Check size={isMobile ? 18 : 20} strokeWidth={4} />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="plus"
-                  initial={{ rotate: 90, scale: 0.5, opacity: 0 }}
-                  animate={{ rotate: 0, scale: 1, opacity: 1 }}
-                  exit={{ rotate: -90, scale: 0.5, opacity: 0 }}
-                  transition={smoothTransition}
-                  className="flex items-center justify-center absolute transform-gpu"
-                >
-                  <Plus size={isMobile ? 18 : 20} strokeWidth={4} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.button>
+            {isAnimating ? (
+              <Check size={18} strokeWidth={4} className="lg:w-5 lg:h-5" />
+            ) : (
+              <Plus size={18} strokeWidth={4} className="lg:w-5 lg:h-5" />
+            )}
+          </button>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

@@ -9,12 +9,12 @@ export const metadata = {
 
 export default function GalleryPage() {
   return (
-    <>
+    <div className="min-h-screen bg-[var(--coffee)]">
       <Navbar />
       <main className="pt-24">
         <Gallery />
       </main>
       <Footer />
-    </>
+    </div>
   );
 }

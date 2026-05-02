@@ -4,21 +4,21 @@ import { ArrowRight, MapPin } from "lucide-react";
 
 /**
  * Hero component optimized as a Server Component.
- * Removed framer-motion in favor of high-performance CSS animations.
  * Uses priority loading for the LCP image.
+ * Removed infinite CSS zoom animation for mobile performance.
  */
 export default function Hero() {
   return (
     <section className="relative h-screen min-h-[700px] w-full overflow-hidden bg-[var(--coffee)]">
-      {/* Background with optimized Image */}
+      {/* Background with optimized Image — static scale, no infinite animation */}
       <div className="absolute inset-0 z-0">
         <Image
           src="/images/benne-dosa.webp"
           alt="Benne n Beans Café Karnataka flavours"
           fill
           priority
-          quality={85}
-          className="object-cover opacity-40 scale-105 animate-slow-zoom"
+          quality={75}
+          className="object-cover opacity-40 scale-110"
           sizes="100vw"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-[var(--coffee)]" />
@@ -42,15 +42,15 @@ export default function Hero() {
           <div className="flex flex-col sm:flex-row gap-5">
             <Link 
               href="/menu"
-              className="group flex items-center justify-center gap-3 bg-[var(--benne-primary)] text-white px-8 py-4 rounded-full text-lg font-bold shadow-2xl shadow-[var(--benne-primary)]/30 hover:bg-[var(--benne-primary)]/90 transition-all hover:translate-y-[-2px]"
+              className="group flex items-center justify-center gap-3 bg-[var(--benne-primary)] text-white px-8 py-4 rounded-full text-lg font-bold shadow-2xl shadow-[var(--benne-primary)]/30 hover:bg-[var(--benne-primary)]/90 transition-all duration-300 hover:translate-y-[-2px]"
             >
               Order Online
-              <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+              <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
             
             <Link 
               href="/location"
-              className="flex items-center justify-center gap-3 bg-white/10 backdrop-blur-md text-white border border-white/20 px-8 py-4 rounded-full text-lg font-semibold hover:bg-white/20 transition-all"
+              className="flex items-center justify-center gap-3 bg-white/10 backdrop-blur-md text-white border border-white/20 px-8 py-4 rounded-full text-lg font-semibold hover:bg-white/20 transition-all duration-300"
             >
               <MapPin className="w-5 h-5 text-[var(--benne-primary)]" />
               Visit Us
@@ -58,7 +58,7 @@ export default function Hero() {
           </div>
         </div>
 
-        {/* Scroll Indicator - Optimized CSS */}
+        {/* Scroll Indicator */}
         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce opacity-50">
           <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center pt-2">
             <div className="w-1 h-2 bg-white rounded-full" />

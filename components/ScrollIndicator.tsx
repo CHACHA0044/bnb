@@ -1,18 +1,19 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useRef } from "react";
 
-const foodIcons = [
-  { emoji: "🥞", color: "#E76F51" },
-  { emoji: "☕", color: "#F4A261" },
-  { emoji: "🧈", color: "#D35400" },
-  { emoji: "🥥", color: "#6A994E" },
-];
+/**
+ * Pure CSS + minimal JS scroll indicator.
+ * No Framer Motion, no React state — directly manipulates DOM for zero re-renders.
+ * Shows a thin progress bar on the right side with a food emoji marker.
+ */
+const foodEmojis = ["🥞", "☕", "🧈", "🥥"];
 
 export default function ScrollIndicator() {
-  const [progress, setProgress] = useState(0);
-  const [visible, setVisible] = useState(false);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const iconRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
@@ -21,8 +22,20 @@ export default function ScrollIndicator() {
       rafRef.current = requestAnimationFrame(() => {
         const total = document.documentElement.scrollHeight - window.innerHeight;
         const current = window.scrollY;
-        setProgress(total > 0 ? current / total : 0);
-        setVisible(current > 300);
+        const progress = total > 0 ? current / total : 0;
+        const visible = current > 300;
+
+        if (containerRef.current) {
+          containerRef.current.style.opacity = visible ? "1" : "0";
+          containerRef.current.style.transform = visible ? "translateX(0)" : "translateX(20px)";
+        }
+        if (barRef.current) {
+          barRef.current.style.height = `${progress * 100}%`;
+        }
+        if (iconRef.current) {
+          const idx = Math.min(Math.floor(progress * foodEmojis.length), foodEmojis.length - 1);
+          iconRef.current.textContent = foodEmojis[idx];
+        }
       });
     };
 
@@ -33,37 +46,28 @@ export default function ScrollIndicator() {
     };
   }, []);
 
-  const iconIndex = Math.min(Math.floor(progress * foodIcons.length), foodIcons.length - 1);
-  const icon = foodIcons[iconIndex];
-
   return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: 20 }}
-          className="fixed right-6 top-1/2 -translate-y-1/2 z-[60] hidden lg:flex flex-col items-center gap-4"
-        >
-          {/* Progress Track */}
-          <div className="relative w-[4px] h-64 bg-[var(--coffee)]/10 rounded-full overflow-hidden">
-            <motion.div 
-              className="absolute top-0 left-0 w-full bg-[var(--benne-primary)] origin-top rounded-full"
-              style={{ height: `${progress * 100}%` }}
-            />
-          </div>
+    <div
+      ref={containerRef}
+      className="fixed right-6 top-1/2 -translate-y-1/2 z-[60] hidden lg:flex flex-col items-center gap-4 transition-all duration-300 ease-out"
+      style={{ opacity: 0, transform: "translateX(20px)" }}
+    >
+      {/* Progress Track */}
+      <div ref={trackRef} className="relative w-[4px] h-64 bg-[var(--coffee)]/10 rounded-full overflow-hidden">
+        <div
+          ref={barRef}
+          className="absolute top-0 left-0 w-full bg-[var(--benne-primary)] rounded-full transition-[height] duration-100 ease-out"
+          style={{ height: "0%" }}
+        />
+      </div>
 
-          {/* Floating Icon */}
-          <motion.div
-            key={iconIndex}
-            initial={{ scale: 0.5, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center text-2xl border border-[var(--cream)]"
-          >
-            {icon.emoji}
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+      {/* Floating Icon */}
+      <div
+        ref={iconRef}
+        className="w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center text-2xl border border-[var(--cream)]"
+      >
+        🥞
+      </div>
+    </div>
   );
 }

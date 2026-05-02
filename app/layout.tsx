@@ -224,7 +224,7 @@ export default function RootLayout({
          *     idle time so they are already cached when the user scrolls.
          * ──────────────────────────────────────────────────────────────── */}
 
-        {/* ① LCP — maximum priority */}
+        {/* ① LCP — maximum priority (hero background) */}
         <link
           rel="preload"
           as="image"
@@ -232,17 +232,6 @@ export default function RootLayout({
           type="image/webp"
           fetchPriority="high"
         />
-
-        {/* ② First-scroll images */}
-        <link rel="preload" as="image" href="/images/thatte-idli.webp" type="image/webp" />
-        <link rel="preload" as="image" href="/images/filter-coffee.webp" type="image/webp" />
-        <link rel="preload" as="image" href="/images/uttapam.webp" type="image/webp" />
-
-        {/* ③ Gallery + mid-page — idle prefetch */}
-        <link rel="prefetch" as="image" href="/images/gallery1.webp" />
-        <link rel="prefetch" as="image" href="/images/gallery2.webp" />
-        <link rel="prefetch" as="image" href="/images/gallery3.webp" />
-        <link rel="prefetch" as="image" href="/images/gallery4.webp" />
 
         {/* ── DNS prefetch & preconnect ─────────────────────────────────
             Eliminates DNS lookup + TLS handshake latency for Google

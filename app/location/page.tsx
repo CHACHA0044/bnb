@@ -9,12 +9,12 @@ export const metadata = {
 
 export default function LocationPage() {
   return (
-    <>
+    <div className="min-h-screen bg-[var(--cream)]">
       <Navbar />
       <main className="pt-24">
         <LocationSection />
       </main>
       <Footer />
-    </>
+    </div>
   );
 }
