@@ -43,21 +43,19 @@ const CartItem = ({
 
   return (
     <motion.div 
-      layout
-      initial={{ x: 30, opacity: 0 }}
+      layout="position"
+      initial={{ opacity: 0, scale: 0.95 }}
       animate={{ 
-        x: isDeleting ? 300 : 0, 
         opacity: isDeleting ? 0 : 1,
-        borderColor: isDeleting ? "#B71C1C" : "rgba(58, 36, 28, 0.05)",
+        borderColor: isDeleting ? "#B71C1C" : (item.forPacking ? "rgba(58, 36, 28, 0.15)" : "rgba(58, 36, 28, 0.05)"),
         borderWidth: isDeleting ? "2px" : "1px",
-        backgroundColor: isDeleting ? "#FDECEA" : "rgba(249, 247, 244, 0.4)",
+        backgroundColor: isDeleting ? "#FDECEA" : (item.forPacking ? "#F4EFEB" : "rgba(255, 255, 255, 1)"),
         scale: isDeleting ? 0.95 : 1,
-        filter: isDeleting ? "blur(8px)" : "blur(0px)"
+        filter: isDeleting ? "blur(4px)" : "blur(0px)"
       }}
       exit={{ 
-        x: 400, 
         opacity: 0, 
-        scale: 0.9,
+        scale: 0.8,
         transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] } 
       }}
       transition={smoothTransition}

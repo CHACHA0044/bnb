@@ -19,6 +19,7 @@ import MenuHeader from "./order/MenuHeader";
 import CategoryBar from "./order/CategoryBar";
 import MenuSection from "./order/MenuSection";
 import CartContent from "./order/CartContent";
+import { AnimatedAmount } from "./order/OrderSummary";
 
 // Lazy load modals for better initial load performance
 const VariantModal = dynamic(() => import("./order/VariantModal"), { ssr: false });
@@ -373,7 +374,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       const packingState = isTakeawayGlobal;
       const existing = prev.find((c) => c.id === item.id && c.forPacking === packingState && c.variant === variant && c.addedBy === clientId);
       if (existing) return prev.map((c) => (c.id === item.id && c.forPacking === packingState && c.variant === variant && c.addedBy === clientId) ? { ...c, quantity: c.quantity + qty } : c);
-      return [...prev, { ...item, price: actualPrice, quantity: qty, forPacking: packingState, variant, addedBy: clientId, addedByName: me?.friendlyName || "You" }];
+      return [...prev, { ...item, price: actualPrice, quantity: qty, forPacking: packingState, variant, addedBy: clientId, addedByName: me?.friendlyName || "You", cartItemId: Math.random().toString(36).substring(7) }];
     });
   }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cartLocked, cartUsers, clientId, isTakeawayGlobal, syncCart, showToast]);
 
@@ -431,6 +432,13 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (cartLocked) return;
     syncCart((prev) => prev.map(c => ({ ...c, forPacking: isTakeaway })));
   }, [isTakeawayMode, cartLocked, syncCart]);
+
+  // Auto-close mobile cart drawer when empty
+  useEffect(() => {
+    if (cart.length === 0 && !orderPlaced && showCartMobile) {
+      setShowCartMobile(false);
+    }
+  }, [cart.length, orderPlaced, showCartMobile]);
 
   /* ─── Calculations ─────────────────────── */
   const packingCharges = useMemo(() => {
@@ -646,7 +654,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
         {/* Mobile Cart UI - Synchronized and Butter Smooth */}
         <AnimatePresence initial={false}>
-          {!showCartMobile ? (
+          {!showCartMobile && (cartCount > 0 || orderPlaced) && (
             <motion.div 
               key="cart-trigger"
               initial={{ y: 150, opacity: 0 }} 
@@ -656,6 +664,12 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
               className="lg:hidden fixed bottom-8 left-6 right-6 z-[120] transform-gpu translate-z-0"
             >
               <motion.button 
+                key={`cart-trigger-${cartCount}-${orderPlaced}`}
+                initial={{ scale: 1 }}
+                animate={{ 
+                  scale: [1, 1.05, 1],
+                }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
                 whileTap={{ scale: 0.94 }}
                 onClick={() => setShowCartMobile(true)} 
                 className="w-full h-16 bg-[#3A241C] text-white rounded-[2.5rem] flex items-center justify-between px-8 shadow-[0_20px_50px_rgba(58,36,28,0.3)] border border-white/5 overflow-hidden relative touch-none select-none"
@@ -664,10 +678,18 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                   <div className={`w-8 h-8 rounded-full ${orderPlaced ? 'bg-[#6A994E]' : 'bg-[#E76F51]'} flex items-center justify-center text-[11px] font-black`}>{orderPlaced ? <Package size={14} /> : cartCount}</div>
                   <span className="font-black text-[11px] uppercase tracking-widest">{orderPlaced ? "View Order" : "Cart Items"}</span>
                 </div>
-                <span className="font-black text-sm tracking-tight">{orderPlaced ? (remaining > 0 ? `Pay ₹${remaining}` : "View Status") : `₹${cartTotal}`}</span>
+                <span className="font-black text-sm tracking-tight">
+                  {orderPlaced ? (remaining > 0 ? `Pay ₹${remaining}` : "View Status") : (
+                    <span className="flex items-center gap-0.5">
+                      <AnimatedAmount value={cartTotal} />
+                    </span>
+                  )}
+                </span>
               </motion.button>
             </motion.div>
-          ) : (
+          )}
+
+          {showCartMobile && (
             <div key="cart-drawer-container">
               <motion.div 
                 initial={{ opacity: 0 }} 

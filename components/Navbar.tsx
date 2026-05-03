@@ -33,6 +33,7 @@ export default function Navbar() {
   const navLinks = [
     { name: "Home", href: "/" },
     { name: "Menu", href: "/menu" },
+    { name: "Reviews", href: "/reviews" },
     { name: "Our Story", href: "/story" },
     { name: "Gallery", href: "/gallery" },
     { name: "Location", href: "/location" },
@@ -93,12 +94,14 @@ export default function Navbar() {
                 />
               </Link>
             ))}
-            <Link
-              href="/menu"
+            <a
+              href="https://www.zomato.com/lucknow/benne-n-beans-3-aashiana/order"
+              target="_blank"
+              rel="noopener noreferrer"
               className="bg-[var(--benne-primary)] text-white px-8 py-3 rounded-full text-[11px] font-black shadow-2xl shadow-[var(--benne-primary)]/40 hover:scale-105 active:scale-95 transition-all duration-200 uppercase tracking-[0.2em]"
             >
               Order Now
-            </Link>
+            </a>
           </div>
 
           {/* Mobile Toggle */}
@@ -158,13 +161,15 @@ export default function Navbar() {
               </nav>
 
               <div className="mt-auto">
-                <Link
-                  href="/menu"
+                <a
+                  href="https://www.zomato.com/lucknow/benne-n-beans-3-aashiana/order"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   onClick={() => setIsOpen(false)}
                   className="w-full flex items-center justify-center bg-[var(--benne-primary)] text-white py-5 rounded-2xl text-lg font-black shadow-2xl shadow-[var(--benne-primary)]/30 uppercase tracking-widest"
                 >
                   Order Now
-                </Link>
+                </a>
               </div>
             </motion.div>
           </div>

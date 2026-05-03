@@ -4,17 +4,24 @@ import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import SignatureItems from "@/components/SignatureItems";
 import Footer from "@/components/Footer";
-import ScrollIndicator from "@/components/ScrollIndicator";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
 /**
- * Clean Homepage — Strictly NO menu list.
- * Pattern-bg.webp removed, using CSS-only gradient.
+ * Clean Homepage with consistent reveal animations.
  */
 export default function Home() {
+  const revealVariants = {
+    hidden: { opacity: 0, y: 40 },
+    visible: { 
+      opacity: 1, 
+      y: 0,
+      transition: { duration: 0.8, ease: [0.21, 0.47, 0.32, 0.98] }
+    }
+  };
+
   return (
     <>
       <Navbar />
@@ -22,7 +29,7 @@ export default function Home() {
         <Hero />
         <SignatureItems />
 
-        {/* Dedicated Menu CTA Section — High Impact with background image */}
+        {/* Dedicated Menu CTA Section */}
         <section className="py-20 md:py-32 relative overflow-hidden group">
           <div className="absolute inset-0">
             <Image 
@@ -36,9 +43,11 @@ export default function Home() {
           
           <div className="relative z-10 max-w-4xl mx-auto px-6 text-center">
             <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
+              initial="hidden"
+              whileInView="visible"
+              viewport={{ once: true, margin: "-100px" }}
+              variants={revealVariants}
+              className="reveal-on-scroll"
             >
               <h2 className="font-[var(--font-playfair)] text-4xl md:text-7xl font-bold text-white mb-6 md:mb-8 tracking-tight">
                 Explore Our <br className="md:hidden" />
@@ -62,10 +71,11 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-20 items-center">
               <motion.div 
-                initial={{ opacity: 0, x: -30 }}
+                initial={{ opacity: 0, x: -40 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                className="relative aspect-[4/3] rounded-[2rem] md:rounded-[3rem] overflow-hidden shadow-[0_40px_80px_-15px_rgba(58,36,28,0.2)] border-4 md:border-8 border-white"
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="relative aspect-[4/3] rounded-[2rem] md:rounded-[3rem] overflow-hidden shadow-[0_40px_80px_-15px_rgba(58,36,28,0.2)] border-4 md:border-8 border-white reveal-on-scroll"
               >
                 <Image 
                   src="/images/ownersimage.webp" 
@@ -76,10 +86,11 @@ export default function Home() {
               </motion.div>
 
               <motion.div 
-                initial={{ opacity: 0, x: 30 }}
+                initial={{ opacity: 0, x: 40 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                className="space-y-6 md:space-y-8"
+                viewport={{ once: true, margin: "-100px" }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="space-y-6 md:space-y-8 reveal-on-scroll"
               >
                 <div className="flex items-center gap-4">
                   <div className="h-[1px] w-12 bg-[var(--benne-primary)]" />

@@ -181,7 +181,7 @@ const CartContent = ({
                     <AnimatePresence initial={false} mode="popLayout">
                       {group.items.map((item: any) => (
                         <CartItem 
-                          key={`${item.id}-${item.forPacking}-${item.variant}`}
+                          key={item.cartItemId || `${item.id}-${item.forPacking}-${item.variant}`}
                           item={item}
                           isTakeaway={isTakeaway}
                           cartLocked={cartLocked}

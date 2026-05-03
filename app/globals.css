@@ -291,7 +291,12 @@ html {
 /* ---- Force GPU acceleration for smoother animations ---- */
 .gpu-accelerate {
   transform: translateZ(0);
-  will-change: transform;
+  will-change: transform, opacity;
+}
+
+/* ---- Reveal Animation Utility ---- */
+.reveal-on-scroll {
+  will-change: transform, opacity;
 }
 
 /* ---- Premium Pattern Utility (CSS-only, no image) ---- */

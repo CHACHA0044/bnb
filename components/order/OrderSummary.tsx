@@ -1,8 +1,25 @@
 "use client";
 
-import React, { memo } from "react";
-import { motion } from "framer-motion";
+import React, { memo, useEffect, useState } from "react";
+import { motion, animate } from "framer-motion";
 import { Loader2, ChevronRight } from "lucide-react";
+
+export function AnimatedAmount({ value }: { value: number }) {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    const controls = animate(displayValue, value, {
+      duration: 0.8,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate(v) {
+        setDisplayValue(Math.round(v));
+      }
+    });
+    return controls.stop;
+  }, [value]); // intentionally not including displayValue in dependency array to animate from current value
+
+  return <span>₹ {displayValue}</span>;
+}
 
 interface OrderSummaryProps {
   cartSubtotal: number;
@@ -54,7 +71,9 @@ const OrderSummary = ({
         )}
         <div className="pt-4 lg:pt-6 border-t border-white/10 flex justify-between items-end">
           <span className="font-black text-base lg:text-xl uppercase tracking-tighter">Payable</span>
-          <span className="text-3xl lg:text-4xl font-black text-[#E76F51] tracking-tighter">₹ {cartTotal}</span>
+          <span className="text-3xl lg:text-4xl font-black text-[#E76F51] tracking-tighter">
+            <AnimatedAmount value={cartTotal} />
+          </span>
         </div>
       </div>
       <button 

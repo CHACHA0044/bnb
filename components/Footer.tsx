@@ -1,11 +1,15 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Coffee, Instagram, Facebook, MapPin, Phone, Clock, Mail } from "lucide-react";
 
 /**
- * Footer refactored as a Server Component.
+ * Footer refactored as a Client Component to hide current page links.
  * Optimized layout for mobile and clean premium aesthetic.
  */
 export default function Footer() {
+  const pathname = usePathname();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -42,6 +46,19 @@ export default function Footer() {
               >
                 <Facebook size={18} />
               </a>
+              <a 
+                href="http://zoma.to/r/22526240" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-[#CB202D] hover:border-transparent transition-all group"
+                title="Order on Zomato"
+              >
+                <div className="w-5 h-5 flex items-center justify-center transition-transform group-hover:scale-110">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+                    <path d="m5 11 4-7" /><path d="m19 11-4-7" /><path d="M2 11h20" /><path d="m3.5 11 1.6 7.4a2 2 0 0 0 2 1.6h9.8a2 2 0 0 0 2-1.6l1.7-7.4" /><path d="m9 11 1 9" /><path d="m15 11-1 9" />
+                  </svg>
+                </div>
+              </a>
             </div>
           </div>
 
@@ -49,7 +66,10 @@ export default function Footer() {
           <div>
             <h4 className="font-bold mb-8 tracking-wider uppercase text-xs text-[var(--benne-primary)]">Quick Links</h4>
             <ul className="space-y-4">
-              {["Home", "Menu", "Our Story", "Gallery", "Location"].map((item) => (
+              {["Home", "Menu", "Reviews", "Our Story", "Gallery", "Location"].filter(item => {
+                const href = item === "Home" ? "/" : `/${item.toLowerCase().replace(" ", "-")}`;
+                return pathname !== href;
+              }).map((item) => (
                 <li key={item}>
                   <Link 
                     href={item === "Home" ? "/" : `/${item.toLowerCase().replace(" ", "-")}`}
@@ -72,11 +92,11 @@ export default function Footer() {
               </li>
               <li className="flex items-center gap-3 text-white/70 text-sm">
                 <Phone className="text-[var(--benne-primary)] shrink-0" size={18} />
-                <a href="tel:+919140391147" className="hover:text-[var(--benne-primary)] transition-colors">+91 9140391147</a>
+                <a href="tel:+919140391147" className="hover:text-[var(--benne-primary)] transition-colors">Call Us</a>
               </li>
               <li className="flex items-center gap-3 text-white/70 text-sm">
                 <Mail className="text-[var(--benne-primary)] shrink-0" size={18} />
-                <a href="mailto:pdembla@student.iul.ac.in" className="hover:text-[var(--benne-primary)] transition-colors break-all">pdembla@student.iul.ac.in</a>
+                <a href="mailto:pdembla@student.iul.ac.in" className="hover:text-[var(--benne-primary)] transition-colors">Email Us</a>
               </li>
             </ul>
           </div>
@@ -102,8 +122,8 @@ export default function Footer() {
             © {currentYear} Benne n Beans. All rights reserved.
           </p>
           <div className="flex gap-8 text-white/40 text-xs">
-            <Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link>
-            <Link href="#" className="hover:text-white transition-colors">Terms of Service</Link>
+            <Link href="/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
+            <Link href="/terms" className="hover:text-white transition-colors">Terms of Service</Link>
           </div>
         </div>
       </div>

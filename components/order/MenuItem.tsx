@@ -1,7 +1,8 @@
 "use client";
 
-import React, { memo, useCallback } from "react";
+import React, { memo, useCallback, useState } from "react";
 import Image from "next/image";
+import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Star, Check } from "lucide-react";
 import { type OrderMenuItem } from "@/lib/menu";
 
@@ -33,25 +34,39 @@ const MenuItem = ({
 
   const [isAnimating, setIsAnimating] = React.useState(false);
 
-  const handleAdd = useCallback(() => {
+  const handleAdd = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
     if (isDisabled || isAnimating) return;
+    
     setIsAnimating(true);
     onAdd({ ...item, price: discountedPrice });
     
-    // Fast tactile reset — 300ms instead of 1100ms
+    // Increased duration for a more premium, visible confirmation (800ms)
     setTimeout(() => {
       setIsAnimating(false);
-    }, 300);
+    }, 800);
   }, [isDisabled, isAnimating, onAdd, item, discountedPrice]);
 
   return (
-    <div 
-      className={`bg-white rounded-[2rem] p-3 lg:p-4 border flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-200 ${
+    <motion.div 
+      onClick={handleAdd as any}
+      className={`bg-white rounded-[2rem] p-3 lg:p-4 border flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-500 ease-[var(--cubic-bezier)] ${
         isAnimating 
-          ? "border-[#6A994E] shadow-[inset_0_0_0_1.5px_#6A994E,0_10px_40px_rgba(106,153,78,0.2)]" 
+          ? "border-[#6A994E] shadow-[0_20px_50px_-15px_rgba(106,153,78,0.25)] ring-2 ring-[#6A994E]" 
           : "border-[#3A241C]/5 shadow-[0_1px_2px_rgba(58,36,28,0.05)]"
-      } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-xl cursor-pointer"}`}
+      } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-[0_25px_60px_-15px_rgba(58,36,28,0.12)] cursor-pointer"}`}
     >
+      <AnimatePresence>
+        {isAnimating && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 bg-[#6A994E]/5 pointer-events-none z-10"
+          />
+        )}
+      </AnimatePresence>
+
       {item.outOfStock && (
         <div className="absolute inset-0 z-20 bg-[#3A241C]/20 backdrop-blur-[2px] flex items-center justify-center">
           <span className="bg-[#3A241C] text-white px-4 py-2 rounded-full font-black text-[10px] lg:text-[12px] uppercase tracking-[0.2em] shadow-2xl">Out of Stock</span>
@@ -79,7 +94,7 @@ const MenuItem = ({
       </div>
       
       {/* Content */}
-      <div className="flex-1 flex flex-col justify-between h-full py-1 min-w-0">
+      <div className="flex-1 flex flex-col justify-between h-full py-1 min-w-0 z-20">
         <div className="min-w-0">
           <div className="flex justify-between items-start mb-1 gap-2">
             <h3 className="font-black text-[#3A241C] text-sm lg:text-base group-hover:text-[#E76F51] transition-colors tracking-tight line-clamp-2 leading-tight flex-1">{item.name}</h3>
@@ -116,27 +131,59 @@ const MenuItem = ({
             )}
           </div>
           
-          {/* Add Button — instant feedback, no AnimatePresence */}
-          <button 
+          {/* Add Button — Enhanced with AnimatePresence and Spring transitions */}
+          <motion.button 
+            whileTap={{ scale: 0.85 }}
             onClick={handleAdd}
             disabled={isDisabled}
-            className={`w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shadow-lg overflow-hidden touch-none select-none active:scale-75 transition-all duration-150 ${
+            className={`w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shadow-lg transition-all duration-500 relative overflow-hidden ${
               isAnimating 
-                ? "bg-[#6A994E] text-white scale-90" 
+                ? "bg-[#6A994E] text-white" 
                 : isDisabled 
                   ? "bg-gray-100 text-gray-300 cursor-not-allowed" 
                   : "bg-[#E76F51] text-white lg:bg-[#F9F7F4] lg:text-[#3A241C] lg:hover:bg-[#E76F51] lg:hover:text-white"
             }`}
           >
-            {isAnimating ? (
-              <Check size={18} strokeWidth={4} className="lg:w-5 lg:h-5" />
-            ) : (
-              <Plus size={18} strokeWidth={4} className="lg:w-5 lg:h-5" />
-            )}
-          </button>
+            <AnimatePresence mode="wait">
+              {isAnimating ? (
+                <motion.div
+                  key="check"
+                  initial={{ opacity: 0, scale: 0, rotate: -45 }}
+                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                  exit={{ opacity: 0, scale: 0 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 25 }}
+                >
+                  <Check size={18} strokeWidth={4} className="lg:w-5 lg:h-5" />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="plus"
+                  initial={{ opacity: 0, scale: 0 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 2 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Plus size={18} strokeWidth={4} className="lg:w-5 lg:h-5" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            {/* Rippling circle effect on add */}
+            <AnimatePresence>
+              {isAnimating && (
+                <motion.div 
+                  initial={{ scale: 0, opacity: 1 }}
+                  animate={{ scale: 4, opacity: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.6 }}
+                  className="absolute inset-0 bg-white/30 rounded-full pointer-events-none"
+                />
+              )}
+            </AnimatePresence>
+          </motion.button>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 
