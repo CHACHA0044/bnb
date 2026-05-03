@@ -22,9 +22,23 @@ router.get("/verify", (_req: Request, res: Response) => {
  * GET /api/admin/sessions
  * Returns all sessions with orders, items, and payments.
  */
-router.get("/sessions", async (_req: Request, res: Response): Promise<void> => {
+router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
   try {
+    const { from, to } = req.query;
+
+    const whereClause: any = {};
+    if (from || to) {
+      whereClause.createdAt = {};
+      if (from) whereClause.createdAt.gte = new Date(from as string);
+      if (to) {
+        const toDate = new Date(to as string);
+        toDate.setHours(23, 59, 59, 999);
+        whereClause.createdAt.lte = toDate;
+      }
+    }
+
     const sessions = await prisma.session.findMany({
+      where: whereClause,
       include: {
         orders: {
           include: { items: true },

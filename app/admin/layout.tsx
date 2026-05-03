@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Shield, LogOut, Coffee, Loader2, Lock,
-  LayoutDashboard, ShoppingBag, X, ChevronRight, BarChart3 
+  LayoutDashboard, ShoppingBag, X, ChevronRight, BarChart3, PieChart 
 } from "lucide-react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useSocket } from "@/lib/socket-client";
@@ -209,6 +209,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { id: "/admin/history", label: "Order History", icon: ShoppingBag },
     { id: "/admin/menu", label: "Menu Manager", icon: Lock },
     { id: "/admin/reports", label: "Business Reports", icon: BarChart3 },
+    { id: "/admin/analytics", label: "Analytics", icon: PieChart },
   ];
 
   return (
@@ -313,7 +314,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main Content */}
       <motion.main 
-        layout
         animate={{ 
           paddingLeft: isSidebarOpen && !isMobile ? "300px" : isMobile ? "16px" : "32px",
         }}
@@ -351,7 +351,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           )}
         </div>
 
-        {children}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={pathname}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
+            {children}
+          </motion.div>
+        </AnimatePresence>
       </motion.main>
     </div>
   );

@@ -2,6 +2,113 @@ import ExcelJS from "exceljs";
 import { prisma } from "./prisma";
 
 /**
+ * Helper to group logs by order and assign sequential numbers per day.
+ * Hybrid orders (Dine-In + Takeaway) are split into separate rows.
+ */
+async function processLogsForReport(logs: any[]) {
+  const sortedLogs = [...logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  
+  const sessionIds = [...new Set(sortedLogs.map(l => l.sessionId))];
+  const sessions = await prisma.session.findMany({
+    where: { id: { in: sessionIds } },
+    include: { payments: { where: { status: "CONFIRMED" } } }
+  });
+  const sessionMap = new Map(sessions.map(s => [s.id, s]));
+
+  const dayMap = new Map<string, any[]>(); 
+  sortedLogs.forEach(l => {
+    if (!dayMap.has(l.date)) dayMap.set(l.date, []);
+    dayMap.get(l.date)!.push(l);
+  });
+
+  const finalRows: any[] = [];
+  const sortedDates = [...dayMap.keys()].sort();
+
+  for (const date of sortedDates) {
+    const dayLogs = dayMap.get(date)!;
+    const orderGroups = new Map<string, any>();
+    const orderSequence: string[] = [];
+
+    dayLogs.forEach(l => {
+      const groupKey = l.orderId; // Group strictly by orderId now
+      if (!orderGroups.has(groupKey)) {
+        const session = sessionMap.get(l.sessionId);
+        const confirmedPayments = session?.payments || [];
+        
+        const upiTotal = confirmedPayments.filter(p => p.method === "UPI").reduce((s, p) => s + p.amount, 0);
+        const cashTotal = confirmedPayments.filter(p => p.method === "CASH").reduce((s, p) => s + p.amount, 0);
+
+        const payTime = confirmedPayments.length > 0 
+          ? confirmedPayments.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0].createdAt.toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase()
+          : "-";
+
+        orderGroups.set(groupKey, {
+          date: l.date,
+          orderId: l.orderId,
+          timestamp: l.timestamp,
+          tableId: l.tableId,
+          sessionNumber: l.sessionNumber,
+          items: [],
+          foodTotal: 0,
+          packingTotal: 0,
+          upiPaid: upiTotal || null,
+          cashPaid: cashTotal || null,
+          payTime: payTime
+        });
+        
+        if (!orderSequence.includes(l.orderId)) orderSequence.push(l.orderId);
+      }
+      
+      const group = orderGroups.get(groupKey);
+      if (l.itemName === "Packing Charges") {
+        group.packingTotal += l.finalPrice;
+      } else {
+        group.items.push(l);
+        group.foodTotal += l.finalPrice;
+      }
+    });
+
+    orderSequence.forEach((orderId, idx) => {
+      const group = orderGroups.get(orderId);
+      const timeStr = new Date(group.timestamp).toLocaleTimeString("en-IN", { 
+        hour: '2-digit', minute: '2-digit', hour12: true 
+      }).toLowerCase();
+
+      let tableDisplay = group.tableId;
+      if (group.tableId === "TAKEAWAY") {
+        tableDisplay = `TW${group.sessionNumber}`;
+      }
+
+      // Format items: mark (To-Go) only if hybrid
+      const hasTakeaway = group.items.some((i: any) => i.orderType === "TAKEAWAY");
+      const hasDineIn = group.items.some((i: any) => i.orderType === "DINE_IN");
+      const isHybrid = hasTakeaway && hasDineIn;
+
+      const itemStr = group.items.map((i: any) => {
+        let name = i.itemName;
+        if (isHybrid && i.orderType === "TAKEAWAY") name += " (To-Go)";
+        return `${i.quantity}x ${name}`;
+      }).join(", ");
+
+      finalRows.push({
+        date: group.date,
+        orderNo: `Order ${idx + 1}`,
+        time: timeStr,
+        table: tableDisplay,
+        items: itemStr,
+        foodTotal: group.foodTotal,
+        packing: group.packingTotal || null,
+        grandTotal: group.foodTotal + group.packingTotal,
+        upi: group.upiPaid,
+        cash: group.cashPaid,
+        payTime: group.payTime
+      });
+    });
+  }
+  return finalRows;
+}
+
+/**
  * Generate a daily Excel report with multiple sheets.
  */
 export async function generateDailyReport(date: string): Promise<Buffer> {
@@ -11,188 +118,105 @@ export async function generateDailyReport(date: string): Promise<Buffer> {
   });
 
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Benne n Beans";
-  workbook.created = new Date();
-
-  // ─── Sheet 1: All Transactions ───────────────
-  const txSheet = workbook.addWorksheet("Transactions", {
-    properties: { tabColor: { argb: "FFE76F51" } }
-  });
-
+  const txSheet = workbook.addWorksheet("Transactions");
+  
   txSheet.columns = [
-    { header: "Time", key: "timestamp", width: 20 },
-    { header: "Table", key: "tableId", width: 12 },
-    { header: "Session", key: "sessionId", width: 15 },
-    { header: "Order", key: "orderId", width: 15 },
-    { header: "Item", key: "itemName", width: 30 },
-    { header: "Qty", key: "quantity", width: 8 },
-    { header: "Unit Price", key: "basePrice", width: 12 },
-    { header: "Discount", key: "discountApplied", width: 12 },
-    { header: "Total", key: "finalPrice", width: 12 },
-    { header: "Type", key: "orderType", width: 12 },
-    { header: "Payment", key: "paymentMode", width: 12 },
-    { header: "Pay Status", key: "paymentStatus", width: 14 },
-    { header: "Order Status", key: "orderStatus", width: 14 },
-    { header: "Location", key: "locationVerified", width: 12 },
+    { header: "Date", key: "date", width: 12 },
+    { header: "Order", key: "orderNo", width: 12 },
+    { header: "Order Time", key: "time", width: 12 },
+    { header: "Table/TW", key: "table", width: 12 },
+    { header: "Items Ordered", key: "items", width: 45 },
+    { header: "Food Total", key: "foodTotal", width: 12 },
+    { header: "Packing", key: "packing", width: 10 },
+    { header: "Grand Total", key: "grandTotal", width: 12 },
+    { header: "UPI Paid", key: "upi", width: 12 },
+    { header: "Cash Paid", key: "cash", width: 12 },
+    { header: "Payment Time", key: "payTime", width: 15 },
   ];
 
-  // Style header
-  txSheet.getRow(1).font = { bold: true, size: 11 };
-  txSheet.getRow(1).fill = {
-    type: "pattern", pattern: "solid",
-    fgColor: { argb: "FF3A241C" }
-  };
-  txSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11 };
+  txSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  txSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3A241C" } };
 
-  for (const log of logs) {
-    txSheet.addRow({
-      timestamp: new Date(log.timestamp).toLocaleTimeString("en-IN"),
-      tableId: log.tableId,
-      sessionId: log.orderType === "TAKEAWAY" ? `TW${log.sessionNumber}` : `#${log.sessionNumber}`,
-      orderId: log.orderId.slice(-6).toUpperCase(),
-      itemName: log.itemName,
-      quantity: log.quantity,
-      basePrice: log.basePrice,
-      discountApplied: log.discountApplied || "-",
-      finalPrice: log.finalPrice,
-      orderType: log.orderType,
-      paymentMode: log.paymentMode || "Pending",
-      paymentStatus: log.paymentStatus,
-      orderStatus: log.orderStatus,
-      locationVerified: log.locationVerified ? "Yes" : "No",
-    });
-  }
+  const rows = await processLogsForReport(logs);
+  rows.forEach(r => txSheet.addRow(r));
 
-  // ─── Sheet 2: Summary ───────────────────────
-  const summarySheet = workbook.addWorksheet("Summary", {
-    properties: { tabColor: { argb: "FF6A994E" } }
+  // Style currency columns
+  ["F", "G", "H", "I", "J"].forEach(col => {
+    txSheet.getColumn(col).numFmt = "₹#,##0";
   });
 
-  const totalRevenue = logs.reduce((sum, l) => sum + l.finalPrice, 0);
-  const totalOrders = new Set(logs.map(l => l.orderId)).size;
-  const totalSessions = new Set(logs.map(l => l.sessionId)).size;
-  const totalItems = logs.filter(l => l.itemName !== "Packing Charges").reduce((sum, l) => sum + l.quantity, 0);
-  const upiTotal = logs.filter(l => l.paymentMode === "UPI").reduce((sum, l) => sum + l.finalPrice, 0);
-  const cashTotal = logs.filter(l => l.paymentMode === "CASH").reduce((sum, l) => sum + l.finalPrice, 0);
-  const packingTotal = logs.filter(l => l.itemName === "Packing Charges").reduce((sum, l) => sum + l.finalPrice, 0);
-  const dineInTotal = logs.filter(l => l.orderType === "DINE_IN").reduce((sum, l) => sum + l.finalPrice, 0);
-  const takeawayTotal = logs.filter(l => l.orderType === "TAKEAWAY").reduce((sum, l) => sum + l.finalPrice, 0);
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
 
-  summarySheet.columns = [
-    { header: "Metric", key: "metric", width: 25 },
-    { header: "Value", key: "value", width: 20 },
-  ];
 
-  summarySheet.getRow(1).font = { bold: true, size: 12 };
-
-  const summaryRows = [
-    { metric: "Date", value: date },
-    { metric: "Total Revenue", value: `₹${totalRevenue}` },
-    { metric: "Total Orders", value: totalOrders },
-    { metric: "Total Sessions", value: totalSessions },
-    { metric: "Total Items Sold", value: totalItems },
-    { metric: "UPI Revenue", value: `₹${upiTotal}` },
-    { metric: "Cash Revenue", value: `₹${cashTotal}` },
-    { metric: "Dine-In Revenue", value: `₹${dineInTotal}` },
-    { metric: "Takeaway Revenue", value: `₹${takeawayTotal}` },
-    { metric: "Packing Charges", value: `₹${packingTotal}` },
-  ];
-
-  summaryRows.forEach(r => summarySheet.addRow(r));
-
-  // ─── Sheet 3: Item Breakdown ────────────────
-  const itemSheet = workbook.addWorksheet("Items Sold", {
-    properties: { tabColor: { argb: "FFF4A261" } }
+/**
+ * Generate an Excel report for a specific date range.
+ */
+export async function generateRangeReport(from: string, to: string): Promise<Buffer> {
+  const logs = await prisma.analyticsLog.findMany({
+    where: { date: { gte: from, lte: to } },
+    orderBy: { timestamp: "asc" }
   });
 
-  itemSheet.columns = [
-    { header: "Item", key: "name", width: 30 },
-    { header: "Quantity Sold", key: "qty", width: 15 },
-    { header: "Revenue", key: "revenue", width: 15 },
+  const workbook = new ExcelJS.Workbook();
+  const txSheet = workbook.addWorksheet("Range Report");
+  
+  txSheet.columns = [
+    { header: "Date", key: "date", width: 12 },
+    { header: "Order", key: "orderNo", width: 12 },
+    { header: "Order Time", key: "time", width: 12 },
+    { header: "Table/TW", key: "table", width: 12 },
+    { header: "Items Ordered", key: "items", width: 45 },
+    { header: "Food Total", key: "foodTotal", width: 12 },
+    { header: "Packing", key: "packing", width: 10 },
+    { header: "Grand Total", key: "grandTotal", width: 12 },
+    { header: "UPI Paid", key: "upi", width: 12 },
+    { header: "Cash Paid", key: "cash", width: 12 },
+    { header: "Payment Time", key: "payTime", width: 15 },
   ];
-  itemSheet.getRow(1).font = { bold: true, size: 11 };
 
-  // Aggregate items
-  const itemMap = new Map<string, { qty: number; revenue: number }>();
-  for (const log of logs.filter(l => l.itemName !== "Packing Charges")) {
-    const existing = itemMap.get(log.itemName) || { qty: 0, revenue: 0 };
-    existing.qty += log.quantity;
-    existing.revenue += log.finalPrice;
-    itemMap.set(log.itemName, existing);
-  }
+  txSheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+  txSheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF3A241C" } };
 
-  for (const [name, data] of [...itemMap.entries()].sort((a, b) => b[1].revenue - a[1].revenue)) {
-    itemSheet.addRow({ name, qty: data.qty, revenue: `₹${data.revenue}` });
-  }
+  const rows = await processLogsForReport(logs);
+  rows.forEach(r => txSheet.addRow(r));
 
-  // ─── Sheet 4: Table-wise Summary ────────────
-  const tableSheet = workbook.addWorksheet("Table Summary", {
-    properties: { tabColor: { argb: "FF3A241C" } }
+  ["F", "G", "H", "I", "J"].forEach(col => {
+    txSheet.getColumn(col).numFmt = "₹#,##0";
   });
-
-  tableSheet.columns = [
-    { header: "Table", key: "table", width: 15 },
-    { header: "Orders", key: "orders", width: 12 },
-    { header: "Items", key: "items", width: 12 },
-    { header: "Revenue", key: "revenue", width: 15 },
-  ];
-  tableSheet.getRow(1).font = { bold: true, size: 11 };
-
-  const tableMap = new Map<string, { orders: Set<string>; items: number; revenue: number }>();
-  for (const log of logs) {
-    const existing = tableMap.get(log.tableId) || { orders: new Set<string>(), items: 0, revenue: 0 };
-    existing.orders.add(log.orderId);
-    existing.items += log.quantity;
-    existing.revenue += log.finalPrice;
-    tableMap.set(log.tableId, existing);
-  }
-
-  for (const [table, data] of tableMap) {
-    tableSheet.addRow({ table, orders: data.orders.size, items: data.items, revenue: `₹${data.revenue}` });
-  }
 
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
 
 /**
- * Generate a monthly CSV string from all analytics logs for a given month.
+ * Generate a monthly CSV string.
  */
 export async function generateMonthlyCSV(month: string): Promise<string> {
-  // month format: YYYY-MM
   const logs = await prisma.analyticsLog.findMany({
-    where: {
-      date: { startsWith: month }
-    },
+    where: { date: { startsWith: month } },
     orderBy: { timestamp: "asc" }
   });
 
-  const headers = [
-    "Date", "Time", "Table", "Session", "Order", "Item", "Qty",
-    "Unit Price", "Discount", "Total", "Type", "Payment Mode",
-    "Payment Status", "Order Status", "Packing Charges", "Location Verified"
-  ];
-
-  const rows = logs.map(log => [
-    log.date,
-    new Date(log.timestamp).toLocaleTimeString("en-IN"),
-    log.tableId,
-    log.orderType === "TAKEAWAY" ? `TW${log.sessionNumber}` : `#${log.sessionNumber}`,
-    log.orderId.slice(-6).toUpperCase(),
-    `"${log.itemName}"`,
-    log.quantity,
-    log.basePrice,
-    log.discountApplied || "-",
-    log.finalPrice,
-    log.orderType,
-    log.paymentMode || "Pending",
-    log.paymentStatus,
-    log.orderStatus,
-    log.packingCharges,
-    log.locationVerified ? "Yes" : "No"
+  const processed = await processLogsForReport(logs);
+  const headers = ["Date", "Order", "Order Time", "Table/TW", "Items", "Food Total", "Packing", "Grand Total", "UPI Paid", "Cash Paid", "Payment Time"];
+  
+  const csvRows = processed.map(r => [
+    r.date,
+    r.orderNo,
+    r.time,
+    r.table,
+    `"${r.items}"`,
+    r.foodTotal,
+    r.packing || 0,
+    r.grandTotal,
+    r.upi || 0,
+    r.cash || 0,
+    r.payTime
   ]);
 
-  return [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+  return [headers.join(","), ...csvRows.map(r => r.join(","))].join("\n");
 }
 
 /**

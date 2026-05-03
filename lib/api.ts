@@ -104,9 +104,13 @@ export function adminVerifySecret(secret: string) {
   return apiFetch<{ success: boolean }>("/api/admin/verify", { adminSecret: secret });
 }
 
-/** Admin: Fetch all sessions */
-export function adminFetchSessions(secret: string) {
-  return apiFetch<SessionData[]>("/api/admin/sessions", { adminSecret: secret });
+/** Admin: Fetch all sessions (optional date filtering) */
+export function adminFetchSessions(secret: string, from?: string, to?: string) {
+  let query = "";
+  if (from) query += `&from=${from}`;
+  if (to) query += `&to=${to}`;
+  query = query ? `?${query.slice(1)}` : "";
+  return apiFetch<SessionData[]>(`/api/admin/sessions${query}`, { adminSecret: secret });
 }
 
 /** Admin: Close a session */
@@ -364,9 +368,33 @@ export function verifyLocation(latitude: number, longitude: number, sessionId?: 
 /* ─── Reports ────────────────────────────────── */
 
 /** Admin: Get daily report summary */
-export function adminFetchReportSummary(date: string, secret: string) {
-  return apiFetch<{ date: string; totalRevenue: number; totalOrders: number; totalItems: number; upiRevenue: number; cashRevenue: number }>(
-    `/api/admin/reports/summary?date=${date}`, { adminSecret: secret }
+export function adminFetchReportSummary(date: string, secret: string, from?: string, to?: string) {
+  let query = `?date=${date}`;
+  if (from) query += `&from=${from}`;
+  if (to) query += `&to=${to}`;
+  return apiFetch<{ 
+    date: string; 
+    totalRevenue: number; 
+    totalOrders: number; 
+    totalItems: number; 
+    upiRevenue: number; 
+    cashRevenue: number;
+    logs: Array<{
+      id: string;
+      tableId: string;
+      type: string;
+      itemSummary: string;
+      foodTotal: number;
+      packingTotal: number;
+      amount: number;
+      upiPaid: number | null;
+      cashPaid: number | null;
+      paymentStatus: string;
+      createdAt: string;
+      payTime?: string;
+    }>;
+  }>(
+    `/api/admin/reports/summary${query}`, { adminSecret: secret }
   );
 }
 
@@ -375,4 +403,58 @@ export function adminRegenerateReport(date: string, secret: string) {
   return apiFetch<{ success: boolean; date: string; filename: string }>(
     `/api/admin/reports/daily/regenerate?date=${date}`, { method: "POST", adminSecret: secret }
   );
+}
+
+/** Admin: Get analytics data */
+export function adminFetchAnalyticsData(from: string, to: string, secret: string) {
+  return apiFetch<{
+    summary: {
+      totalRevenue: number;
+      totalOrders: number;
+      totalItems: number;
+      avgOrderValue: number;
+      upiRevenue: number;
+      cashRevenue: number;
+      packingRevenue: number;
+      dineInRevenue: number;
+      takeawayRevenue: number;
+    };
+    dailyRevenue: Array<{
+      date: string;
+      revenue: number;
+      upi: number;
+      cash: number;
+      orderCount: number;
+    }>;
+    hourlyPattern: Array<{
+      hour: number;
+      label: string;
+      orderCount: number;
+      revenue: number;
+    }>;
+    weekdayPattern: Array<{
+      day: string;
+      orderCount: number;
+      revenue: number;
+      avgOrder: number;
+    }>;
+    topItems: Array<{
+      name: string;
+      quantity: number;
+      revenue: number;
+    }>;
+    tablePerformance: Array<{
+      tableId: string;
+      orderCount: number;
+      revenue: number;
+      avgOrder: number;
+    }>;
+    insights: Array<{
+      type: string;
+      icon: string;
+      text: string;
+    }>;
+    empty?: boolean;
+    message?: string;
+  }>(`/api/admin/analytics?from=${from}&to=${to}`, { adminSecret: secret });
 }

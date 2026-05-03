@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronRight, Star, Calendar, Clock, CreditCard, Banknote } from "lucide-react";
 import { adminFetchSessions, adminFetchFullMenu, type SessionData, type OrderMenuItem } from "@/lib/api";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import CustomDatePicker from "@/components/admin/CustomDatePicker";
 
 export default function HistoryPage() {
   const { secret, authenticated } = useAdminAuth();
@@ -12,13 +13,14 @@ export default function HistoryPage() {
   const [menuItems, setMenuItems] = useState<OrderMenuItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<{from: string, to: string}>({from: "", to: ""});
 
   const loadData = useCallback(async () => {
     if (!authenticated || !secret) return;
     setLoading(true);
     try {
       const [sessionData, menuData] = await Promise.all([
-        adminFetchSessions(secret),
+        adminFetchSessions(secret, dateRange.from, dateRange.to),
         adminFetchFullMenu(secret)
       ]);
       setSessions(sessionData.filter(s => s.status === "CLOSED").sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -30,7 +32,7 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  }, [authenticated, secret]);
+  }, [authenticated, secret, dateRange.from, dateRange.to]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -40,6 +42,54 @@ export default function HistoryPage() {
     const item = menuItems.find(m => m.name === baseName);
     return item?.rating || null;
   };
+
+  const historyEntries = useMemo(() => {
+    const entries: any[] = [];
+    
+    sessions.forEach(session => {
+      const dineInItems: any[] = [];
+      const takeawayItems: any[] = [];
+      
+      session.orders.forEach(order => {
+        order.items.forEach(item => {
+          if (item.type === "TAKEAWAY") takeawayItems.push({...item, orderCreatedAt: order.createdAt});
+          else dineInItems.push({...item, orderCreatedAt: order.createdAt});
+        });
+      });
+
+      // Dine-In Entry
+      if (dineInItems.length > 0) {
+        entries.push({
+          id: `${session.id}_DINE`,
+          sessionId: session.id,
+          sessionNumber: session.sessionNumber,
+          tableId: session.tableId,
+          type: "DINE_IN",
+          items: dineInItems,
+          createdAt: session.createdAt,
+          payment: session.payments.find(p => p.status === "CONFIRMED"),
+          total: dineInItems.reduce((acc, i) => acc + i.price * i.quantity, 0)
+        });
+      }
+
+      // Takeaway Entry
+      if (takeawayItems.length > 0) {
+        entries.push({
+          id: `${session.id}_TA`,
+          sessionId: session.id,
+          sessionNumber: session.sessionNumber,
+          tableId: session.tableId,
+          type: "TAKEAWAY",
+          items: takeawayItems,
+          createdAt: session.createdAt,
+          payment: session.payments.find(p => p.status === "CONFIRMED"),
+          total: takeawayItems.reduce((acc, i) => acc + i.price * i.quantity, 0)
+        });
+      }
+    });
+
+    return entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [sessions]);
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pt-8 px-4 pb-20">
@@ -59,54 +109,59 @@ export default function HistoryPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center justify-between px-2 mb-8">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-2 mb-8 gap-4">
              <div>
                <h3 className="text-sm font-black text-[#3A241C] uppercase tracking-[0.2em]">All Settled Orders</h3>
                <p className="text-[10px] font-bold text-[#3A241C]/30 uppercase tracking-widest mt-1">Showing {sessions.length} sessions</p>
              </div>
+             <CustomDatePicker 
+               mode="range" 
+               fromDate={dateRange.from} 
+               toDate={dateRange.to} 
+               onRangeChange={(from, to) => setDateRange({from, to})} 
+             />
           </div>
 
-          {sessions.map(session => {
-            const isExpanded = expandedSession === session.id;
-            const subtotal = session.orders.reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0), 0);
-            const total = subtotal; // Already includes packing if added as items
-            const paymentMethod = session.payments.find(p => p.status === "CONFIRMED")?.method || "N/A";
+          {historyEntries.map(entry => {
+            const isExpanded = expandedSession === entry.id;
+            const paymentMethod = entry.payment?.method || "PAID";
+            const paymentTime = entry.payment ? new Date(entry.payment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-";
             
             return (
               <motion.div 
                 layout
-                key={session.id} 
+                key={entry.id} 
                 className={`bg-white rounded-[2.5rem] border transition-all duration-500 overflow-hidden ${isExpanded ? "border-[#E76F51]/30 shadow-xl shadow-[#3A241C]/5 ring-1 ring-[#E76F51]/5" : "border-[#3A241C]/5 shadow-sm hover:shadow-md"}`}
               >
                 <div 
-                  onClick={() => setExpandedSession(isExpanded ? null : session.id)}
+                  onClick={() => setExpandedSession(isExpanded ? null : entry.id)}
                   className="p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center cursor-pointer hover:bg-[#F9F7F4]/50 transition-colors gap-6"
                 >
                   <div className="flex items-center gap-6">
                     <div className={`w-16 h-16 rounded-[1.5rem] flex items-center justify-center font-black text-white text-xl shadow-lg flex-shrink-0 ${
-                      session.tableId === "TAKEAWAY" ? "bg-[#F4A261] shadow-[#F4A261]/20" : "bg-[#3A241C] shadow-[#3A241C]/10"
+                      entry.type === "TAKEAWAY" ? "bg-[#F4A261] shadow-[#F4A261]/20" : "bg-[#3A241C] shadow-[#3A241C]/10"
                     }`}>
-                      {session.tableId === "TAKEAWAY" ? "TW" : session.tableId}
+                      {entry.type === "TAKEAWAY" ? "TW" : entry.tableId}
                     </div>
                     <div>
                       <div className="flex items-center gap-3">
                         <p className="font-black text-[#3A241C] text-xl">
-                          {session.tableId === "TAKEAWAY" ? "TW" : session.tableId}#{session.sessionNumber || session.id.slice(-4).toUpperCase()}
+                          {entry.type === "TAKEAWAY" ? "TW" : entry.tableId}#{entry.sessionNumber}
                         </p>
                         <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest border ${
-                          session.tableId === "TAKEAWAY" ? "bg-[#F4A261]/10 text-[#F4A261] border-[#F4A261]/10" : "bg-[#6A994E]/10 text-[#6A994E] border-[#6A994E]/10"
+                          entry.type === "TAKEAWAY" ? "bg-[#F4A261]/10 text-[#F4A261] border-[#F4A261]/10" : "bg-[#6A994E]/10 text-[#6A994E] border-[#6A994E]/10"
                         }`}>
-                          {session.tableId === "TAKEAWAY" ? "Takeaway" : "Dine-in"}
+                          {entry.type === "TAKEAWAY" ? "Takeaway" : "Dine-in"}
                         </span>
                       </div>
                       <div className="flex items-center gap-4 mt-2">
                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#3A241C]/40 uppercase tracking-wider">
                           <Calendar size={12} className="text-[#E76F51]" />
-                          {new Date(session.createdAt).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
+                          {new Date(entry.createdAt).toLocaleDateString("en-IN", { day: 'numeric', month: 'short' })}
                         </div>
                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-[#3A241C]/40 uppercase tracking-wider">
                           <Clock size={12} className="text-[#E76F51]" />
-                          {new Date(session.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          Pay: {paymentTime}
                         </div>
                       </div>
                     </div>
@@ -118,7 +173,7 @@ export default function HistoryPage() {
                       <span className="text-[10px] font-black text-[#3A241C]/40 uppercase tracking-widest">{paymentMethod}</span>
                     </div>
                     <div className="text-right">
-                      <p className="text-2xl font-black text-[#3A241C]">₹{total}</p>
+                      <p className="text-2xl font-black text-[#3A241C]">₹{entry.total}</p>
                       <p className="text-[9px] font-black text-[#3A241C]/20 uppercase tracking-widest">Received</p>
                     </div>
                     <motion.div 
@@ -138,60 +193,27 @@ export default function HistoryPage() {
                       exit={{ height: 0, opacity: 0 }}
                       className="border-t border-[#3A241C]/5 bg-[#F9F7F4]/20"
                     >
-                      <div className="p-6 md:p-10 space-y-8">
-                        {session.orders.map((order, oIdx) => (
-                          <div key={order.id} className="relative bg-white rounded-3xl p-6 md:p-8 border border-[#3A241C]/5 shadow-sm">
-                            <div className="absolute top-0 left-8 -translate-y-1/2 bg-[#E76F51] text-white px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.2em] shadow-lg shadow-[#E76F51]/20">
-                              Order #{oIdx + 1}
-                            </div>
-                            <div className="flex justify-end mb-6">
-                              <p className="text-[10px] font-bold text-[#3A241C]/20 uppercase tracking-widest">{new Date(order.createdAt).toLocaleTimeString()}</p>
-                            </div>
-                            <div className="space-y-5">
-                              {order.items.map((item, iIdx) => {
-                                const rating = getItemRating(item.name);
-                                return (
-                                  <div key={iIdx} className="flex justify-between items-center group/item">
-                                    <div className="flex items-center gap-4">
-                                      <div className="w-10 h-10 bg-[#3A241C]/5 rounded-xl flex items-center justify-center text-xs font-black text-[#3A241C]/40 group-hover/item:bg-[#E76F51]/10 group-hover/item:text-[#E76F51] transition-all">
-                                        {item.quantity}x
-                                      </div>
-                                      <div>
-                                        <p className="text-sm font-black text-[#3A241C]">{item.name}</p>
-                                        {rating && (
-                                          <div className="flex items-center gap-1 mt-1">
-                                            {[...Array(5)].map((_, i) => (
-                                              <Star key={i} size={8} className={`${i < Math.floor(rating) ? "fill-[#E76F51] text-[#E76F51]" : "text-gray-200"}`} />
-                                            ))}
-                                            <span className="text-[8px] font-black text-[#E76F51]/40 ml-1">{rating.toFixed(1)}</span>
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <p className="text-sm font-black text-[#3A241C]">₹{item.price * item.quantity}</p>
+                      <div className="p-6 md:p-10">
+                        <div className="bg-white rounded-3xl p-6 md:p-8 border border-[#3A241C]/5 shadow-sm space-y-5">
+                          {entry.items.map((item: any, iIdx: number) => {
+                            const rating = getItemRating(item.name);
+                            return (
+                              <div key={iIdx} className="flex justify-between items-center group/item">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-10 h-10 bg-[#3A241C]/5 rounded-xl flex items-center justify-center text-xs font-black text-[#3A241C]/40 group-hover/item:bg-[#E76F51]/10 group-hover/item:text-[#E76F51] transition-all">
+                                    {item.quantity}x
                                   </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        ))}
-                        
-                        {/* Session Summary Footer */}
-                        <div className="bg-[#3A241C] rounded-[2rem] p-8 text-white flex flex-col md:flex-row justify-between items-center gap-6">
-                           <div className="flex gap-8">
-                             <div>
-                               <p className="text-[8px] font-black uppercase tracking-[0.2em] text-white/30 mb-1">Items</p>
-                               <p className="text-lg font-black">{session.orders.reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.quantity, 0), 0)}</p>
-                             </div>
-                             <div>
-                               <p className="text-[8px] font-black uppercase tracking-[0.2em] text-white/30 mb-1">Status</p>
-                               <p className="text-lg font-black text-[#6A994E]">Settled</p>
-                             </div>
-                           </div>
-                           <div className="text-center md:text-right">
-                             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#E76F51] mb-1">Grand Total Collected</p>
-                             <p className="text-4xl font-black">₹{total}</p>
-                           </div>
+                                  <div>
+                                    <p className="text-sm font-black text-[#3A241C]">{item.name}</p>
+                                    <p className="text-[8px] font-bold text-[#3A241C]/20 uppercase tracking-widest mt-0.5">
+                                      {new Date(item.orderCreatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                </div>
+                                <p className="text-sm font-black text-[#3A241C]">₹{item.price * item.quantity}</p>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </motion.div>

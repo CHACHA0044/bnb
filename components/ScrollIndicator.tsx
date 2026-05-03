@@ -8,10 +8,15 @@ import { motion, AnimatePresence, useScroll, useSpring, useTransform } from "fra
  * Features a minimalist vertical track and animated emoji transitions.
  * Hidden on mobile for peak performance.
  */
+import { usePathname } from "next/navigation";
+
 const foodEmojis = ["🥞", "☕", "🧈", "🥥", "🍯", "🥐"];
 
 export default function ScrollIndicator() {
+  const pathname = usePathname();
   const { scrollYProgress } = useScroll();
+
+  if (pathname.startsWith("/admin")) return null;
   const scaleY = useSpring(scrollYProgress, {
     stiffness: 100,
     damping: 30,

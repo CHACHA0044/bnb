@@ -192,6 +192,30 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     }
   }, [session?.id, tryVerifyLocation, locationVerified]);
 
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  useEffect(() => {
+    if (!socket || !connected) return;
+    const unsubs = [
+      on("menu_updated", () => {
+        loadMenuData();
+        loadStatus();
+      }),
+      on("menu_item_stock_updated", (updates: any) => {
+        if (!updates || !Array.isArray(updates)) return;
+        setMenuItems(prev => prev.map(item => {
+          const update = updates.find((u: any) => u.id === item.id);
+          if (update) return { ...item, outOfStock: update.outOfStock };
+          return item;
+        }));
+      }),
+    ];
+    return () => unsubs.forEach(u => u());
+  }, [socket, connected, on, loadMenuData, loadStatus]);
+
   useEffect(() => {
     if (!session) {
       loadStatus();
@@ -203,17 +227,13 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       on("order_updated", () => loadSession()),
       on("payment_confirmed", () => loadSession()),
       on("session_updated", () => loadSession()),
-      on("menu_updated", () => {
-        loadMenuData();
-        loadStatus();
-      }),
       on("takeaway_ready", (data: any) => {
         showToast(data.message);
         loadSession();
       }),
     ];
     return () => unsubs.forEach((u) => u());
-  }, [session?.id, joinSession, on, loadSession, loadMenuData, loadStatus]);
+  }, [session?.id, joinSession, on, loadSession, loadStatus, showToast]);
 
   // Countdown timer logic
   useEffect(() => {
@@ -348,10 +368,6 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   }, [categories.length]);
 
   /* ─── Cart Logic ───────────────────────── */
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }, []);
 
   const addToCart = useCallback((item: OrderMenuItem, variant?: string, qty: number = 1) => {
     if (!restaurantStatus.isOpen && !restaurantStatus.closingAt) {

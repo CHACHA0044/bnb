@@ -47,12 +47,16 @@ async function getCachedMenu() {
   return menuCache;
 }
 
-/** Emit menu_updated to all connected clients on active tables */
-export function emitMenuUpdate() {
+/** Emit menu_updated or specific item stock updates to all connected clients */
+export function emitMenuUpdate(updates?: { id: string; outOfStock: boolean }[]) {
   invalidateCache();
   try {
     const io = getIO();
-    io.emit("menu_updated"); // Global emit — all clients re-fetch
+    if (updates && updates.length > 0) {
+      io.emit("menu_item_stock_updated", updates);
+    } else {
+      io.emit("menu_updated"); // Global emit — all clients re-fetch
+    }
   } catch { /* socket not ready */ }
 }
 
@@ -286,7 +290,7 @@ router.patch("/admin/items/:id/stock", requireAdmin, async (req: Request, res: R
     });
 
     console.log(`[MENU ADMIN] Stock toggle: ${item.name} → ${outOfStock ? "OUT OF STOCK" : "IN STOCK"}`);
-    emitMenuUpdate();
+    emitMenuUpdate([{ id: item.id, outOfStock: Boolean(outOfStock) }]);
     res.json(item);
   } catch (err) {
     console.error("[MENU ADMIN] Stock toggle error:", err);
@@ -307,7 +311,7 @@ router.patch("/admin/items/bulk-stock", requireAdmin, async (req: Request, res: 
       return;
     }
 
-    await saveVersionSnapshot(`Bulk stock update: ${updates.length} items`);
+    // Removed saveVersionSnapshot for stock updates to make it instantaneous
 
     // We use a transaction to ensure all updates succeed or fail together
     await prisma.$transaction(
@@ -323,7 +327,7 @@ router.patch("/admin/items/bulk-stock", requireAdmin, async (req: Request, res: 
     );
 
     console.log(`[MENU ADMIN] Bulk stock update completed for ${updates.length} items`);
-    emitMenuUpdate();
+    emitMenuUpdate(updates.map((u: any) => ({ id: u.id, outOfStock: Boolean(u.outOfStock) })));
     res.json({ success: true });
   } catch (err) {
     console.error("[MENU ADMIN] Bulk stock update error:", err);

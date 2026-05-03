@@ -17,6 +17,7 @@ import statusRouter from "./routes/status";
 import qrRouter from "./routes/qr";
 import locationRouter from "./routes/location";
 import reportsRouter from "./routes/reports";
+import analyticsRouter from "./routes/analytics";
 
 const app = express();
 const server = http.createServer(app);
@@ -53,6 +54,7 @@ app.use("/api/status", statusRouter);
 app.use("/api/qr", qrRouter);
 app.use("/api/location", locationRouter);
 app.use("/api/admin/reports", reportsRouter);
+app.use("/api/admin/analytics", analyticsRouter);
 
 import { prisma } from "./lib/prisma";
 

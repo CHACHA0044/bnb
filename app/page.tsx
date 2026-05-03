@@ -6,19 +6,19 @@ import SignatureItems from "@/components/SignatureItems";
 import Footer from "@/components/Footer";
 import Link from "next/link";
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { motion, Variants } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
 /**
  * Clean Homepage with consistent reveal animations.
  */
 export default function Home() {
-  const revealVariants = {
+  const revealVariants: Variants = {
     hidden: { opacity: 0, y: 40 },
     visible: { 
       opacity: 1, 
       y: 0,
-      transition: { duration: 0.8, ease: [0.21, 0.47, 0.32, 0.98] }
+      transition: { duration: 0.8, ease: "easeOut" }
     }
   };
 
