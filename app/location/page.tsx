@@ -11,7 +11,7 @@ export default function LocationPage() {
   return (
     <div className="min-h-screen bg-[var(--cream)]">
       <Navbar />
-      <main className="pt-24">
+      <main className="pt-16">
         <LocationSection />
       </main>
       <Footer />

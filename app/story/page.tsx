@@ -16,11 +16,8 @@ export default function StoryPage() {
   return (
     <div className="bg-[var(--cream)] min-h-screen">
       <Navbar />
-      <main className="pt-40 pb-20">
+      <main className="pt-32 pb-0">
         <OwnerStory />
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="h-px bg-[var(--coffee)]/10 w-full my-20" />
-        </div>
         <DosaProcess />
       </main>
       <Footer />

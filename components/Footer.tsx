@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Coffee, Instagram, Facebook, MapPin, Phone, Clock } from "lucide-react";
+import { Coffee, Instagram, Facebook, MapPin, Phone, Clock, Mail } from "lucide-react";
 
 /**
  * Footer refactored as a Server Component.
@@ -26,10 +26,20 @@ export default function Footer() {
               Bringing the authentic Davangere Benne Dosa and traditional Filter Coffee experience to the heart of Lucknow.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--benne-primary)] hover:border-transparent transition-all">
+              <a 
+                href="https://www.instagram.com/bennenbeans?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--benne-primary)] hover:border-transparent transition-all"
+              >
                 <Instagram size={18} />
               </a>
-              <a href="#" className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--benne-primary)] hover:border-transparent transition-all">
+              <a 
+                href="https://www.facebook.com/people/Benne-N-Beans/61584002647606/" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center hover:bg-[var(--benne-primary)] hover:border-transparent transition-all"
+              >
                 <Facebook size={18} />
               </a>
             </div>
@@ -62,7 +72,11 @@ export default function Footer() {
               </li>
               <li className="flex items-center gap-3 text-white/70 text-sm">
                 <Phone className="text-[var(--benne-primary)] shrink-0" size={18} />
-                <span>+91 9123456789</span>
+                <a href="tel:+919140391147" className="hover:text-[var(--benne-primary)] transition-colors">+91 9140391147</a>
+              </li>
+              <li className="flex items-center gap-3 text-white/70 text-sm">
+                <Mail className="text-[var(--benne-primary)] shrink-0" size={18} />
+                <a href="mailto:pdembla@student.iul.ac.in" className="hover:text-[var(--benne-primary)] transition-colors break-all">pdembla@student.iul.ac.in</a>
               </li>
             </ul>
           </div>
@@ -74,8 +88,9 @@ export default function Footer() {
               <li className="flex items-start gap-3 text-white/70 text-sm">
                 <Clock className="text-[var(--benne-primary)] shrink-0" size={18} />
                 <div>
-                  <p className="font-semibold text-white">Mon — Sun</p>
-                  <p className="text-white/50">8:00 AM — 10:30 PM</p>
+                  <p className="font-semibold text-white">Tue — Sun</p>
+                  <p className="text-white/50">4:00 PM — 10:00 PM</p>
+                  <p className="text-[var(--benne-primary)] text-[10px] font-bold uppercase mt-1">Monday: Closed</p>
                 </div>
               </li>
             </ul>

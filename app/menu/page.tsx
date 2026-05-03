@@ -24,7 +24,7 @@ export default function MenuPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--coffee)] via-transparent to-[var(--coffee)]" />
 
         <div className="max-w-7xl mx-auto px-6 relative z-10 text-center">
-          <div className="w-16 h-16 bg-[var(--benne-primary)] rounded-2xl flex items-center justify-center mx-auto mb-8 rotate-3 shadow-xl shadow-[var(--benne-primary)]/20">
+          <div className="w-16 h-16 bg-[var(--benne-primary)] rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-xl shadow-[var(--benne-primary)]/20">
             <Coffee size={32} className="text-white" />
           </div>
 

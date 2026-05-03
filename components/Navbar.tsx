@@ -38,7 +38,7 @@ export default function Navbar() {
     { name: "Location", href: "/location" },
   ];
 
-  const isDarkHeaderPage = pathname === "/menu";
+  const isDarkHeaderPage = pathname === "/menu" || pathname === "/gallery";
   const shouldBeWhite = !scrolled && (pathname === "/" || isDarkHeaderPage);
   const textColor = shouldBeWhite ? "#FFFFFF" : "#3A241C";
 
@@ -48,21 +48,20 @@ export default function Navbar() {
     <>
       {/* Navbar — CSS transitions only, no Framer Motion on scroll */}
       <nav
-        className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-300 ease-out ${
+        className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-500 ease-in-out transform-gpu ${
           scrolled
-            ? "py-3 bg-white/80 backdrop-blur-xl shadow-[0_20px_50px_rgba(58,36,28,0.15)] rounded-b-[2.5rem] border-b border-[var(--benne-primary)]/15"
+            ? "py-3 bg-white/85 backdrop-blur-2xl shadow-[0_20px_50px_rgba(58,36,28,0.12)] rounded-b-[3rem] border-b border-[var(--benne-primary)]/10"
             : "py-6 bg-transparent border-b border-transparent"
         }`}
         style={{
-          WebkitBackdropFilter: scrolled ? "blur(32px) saturate(180%)" : "none",
+          WebkitBackdropFilter: scrolled ? "blur(40px) saturate(180%)" : "none",
         }}
       >
         <div className="max-w-7xl mx-auto px-6 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3 group">
             <div
-              className={`w-10 h-10 bg-[var(--benne-primary)] rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:rotate-12 shadow-lg shadow-[var(--benne-primary)]/20 ${
-                scrolled ? "scale-90" : "scale-100"
-              }`}
+              className={`w-10 h-10 bg-[var(--benne-primary)] rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:rotate-12 shadow-lg shadow-[var(--benne-primary)]/20 ${scrolled ? "scale-90" : "scale-100"
+                }`}
             >
               <Coffee className="text-white" size={20} />
             </div>
@@ -89,9 +88,8 @@ export default function Navbar() {
                   {link.name}
                 </span>
                 <span
-                  className={`absolute -bottom-2 left-0 h-[3px] bg-[var(--benne-primary)] rounded-full transition-all duration-300 ${
-                    isActive(link.href) ? "w-full" : "w-0 group-hover/link:w-full"
-                  }`}
+                  className={`absolute -bottom-2 left-0 h-[3px] bg-[var(--benne-primary)] rounded-full transition-all duration-300 ${isActive(link.href) ? "w-full" : "w-0 group-hover/link:w-full"
+                    }`}
                 />
               </Link>
             ))}
@@ -105,15 +103,15 @@ export default function Navbar() {
 
           {/* Mobile Toggle */}
           <button
-            className="md:hidden w-12 h-12 rounded-xl flex items-center justify-center backdrop-blur-md transition-colors duration-300"
+            className="md:hidden w-12 h-12 flex items-center justify-center transition-all duration-300 active:scale-90"
             style={{
-              backgroundColor: shouldBeWhite ? "rgba(255,255,255,0.15)" : "rgba(58,36,28,0.08)",
+              backgroundColor: "transparent",
               color: textColor,
             }}
             onClick={() => setIsOpen(true)}
             aria-label="Open Menu"
           >
-            <Menu size={24} />
+            <Menu size={28} />
           </button>
         </div>
       </nav>
@@ -150,9 +148,8 @@ export default function Navbar() {
                     key={link.name}
                     href={link.href}
                     onClick={() => setIsOpen(false)}
-                    className={`flex items-center justify-between group p-5 rounded-2xl transition-all duration-200 ${
-                      isActive(link.href) ? "bg-white text-[var(--benne-primary)] shadow-sm" : "text-[var(--coffee)] hover:bg-white/50"
-                    }`}
+                    className={`flex items-center justify-between group p-5 rounded-2xl transition-all duration-200 ${isActive(link.href) ? "bg-white text-[var(--benne-primary)] shadow-sm" : "text-[var(--coffee)] hover:bg-white/50"
+                      }`}
                   >
                     <span className="text-xl font-bold tracking-tight">{link.name}</span>
                     <ChevronRight size={18} className="opacity-40" />

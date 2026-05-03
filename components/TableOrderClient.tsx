@@ -578,7 +578,8 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-[200] bg-[#3A241C]/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center">
           <div className="w-24 h-24 rounded-full bg-[#E76F51]/10 flex items-center justify-center text-[#E76F51] mb-8 border border-[#E76F51]/20"><MapPin size={48} className="animate-pulse" /></div>
           <h2 className="text-3xl font-black text-white mb-4 tracking-tighter uppercase">Remote Orders Restricted</h2>
-          <p className="text-[#F9F7F4]/60 text-xs font-bold uppercase tracking-[0.2em] max-w-xs leading-loose">We only accept orders from users within the restaurant premises (50m range).</p>
+          <p className="text-[#F9F7F4]/60 text-xs font-bold uppercase tracking-[0.2em] max-w-xs leading-loose mb-4">We only accept orders from users within the restaurant premises (50m range).</p>
+          <p className="text-[#E76F51] text-[10px] font-black uppercase tracking-[0.2em] max-w-xs leading-loose">If at restaurant, please enable location and refresh to start ordering.</p>
         </motion.div>
       )}
 

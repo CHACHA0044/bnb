@@ -44,7 +44,7 @@ export default function Hero() {
               href="/menu"
               className="group flex items-center justify-center gap-3 bg-[var(--benne-primary)] text-white px-8 py-4 rounded-full text-lg font-bold shadow-2xl shadow-[var(--benne-primary)]/30 hover:bg-[var(--benne-primary)]/90 transition-all duration-300 hover:translate-y-[-2px]"
             >
-              Order Online
+              View Menu
               <ArrowRight className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1" />
             </Link>
             
@@ -55,13 +55,6 @@ export default function Hero() {
               <MapPin className="w-5 h-5 text-[var(--benne-primary)]" />
               Visit Us
             </Link>
-          </div>
-        </div>
-
-        {/* Scroll Indicator */}
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce opacity-50">
-          <div className="w-6 h-10 border-2 border-white/30 rounded-full flex justify-center pt-2">
-            <div className="w-1 h-2 bg-white rounded-full" />
           </div>
         </div>
       </div>
