@@ -1,64 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model Session {
   id                String    @id @default(uuid())
-  sessionNumber     Int       @default(0)
   tableId           String
-  status            String    @default("OPEN") // OPEN | CLOSED
-  paymentReminder   Boolean   @default(false)
-  locationVerified  Boolean   @default(false)
-  deviceFingerprint String?
+  status            String    @default("OPEN")
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+  paymentReminder   Boolean   @default(false)
+  sessionNumber     Int       @default(0)
+  deviceFingerprint String?
+  locationVerified  Boolean   @default(false)
   orders            Order[]
   payments          Payment[]
 }
 
 model Order {
-  id              String      @id @default(uuid())
-  sessionId       String
-  session         Session     @relation(fields: [sessionId], references: [id])
-  status          String      @default("UNCONFIRMED") // UNCONFIRMED | PLACED | PREPARING | SERVED
-  isTakeaway      Boolean     @default(false)
-  packingCharges  Int         @default(0)
-  createdAt       DateTime    @default(now())
-  items           OrderItem[]
-  payments        Payment[]
+  id             String      @id @default(uuid())
+  sessionId      String
+  status         String      @default("UNCONFIRMED")
+  createdAt      DateTime    @default(now())
+  isTakeaway     Boolean     @default(false)
+  packingCharges Int         @default(0)
+  session        Session     @relation(fields: [sessionId], references: [id])
+  items          OrderItem[]
+  payments       Payment[]
 }
 
 model OrderItem {
-  id       String @id @default(uuid())
+  id       String  @id @default(uuid())
   orderId  String
-  order    Order  @relation(fields: [orderId], references: [id])
   name     String
-  price    Int    // Price in rupees
-  quantity Int    @default(1)
-  type     String @default("DINE_IN") // DINE_IN | TAKEAWAY
+  price    Int
+  quantity Int     @default(1)
+  type     String  @default("DINE_IN")
   isServed Boolean @default(false)
+  order    Order   @relation(fields: [orderId], references: [id])
 }
 
 model Payment {
   id        String   @id @default(uuid())
   sessionId String
-  session   Session  @relation(fields: [sessionId], references: [id])
-  orderId   String?
-  order     Order?   @relation(fields: [orderId], references: [id])
-  method    String   // UPI | CASH
-  amount    Int      // Amount in rupees
-  status    String   @default("PENDING") // PENDING | CONFIRMED | UNPAID
+  method    String
+  amount    Int
+  status    String   @default("PENDING")
   createdAt DateTime @default(now())
+  orderId   String?
   updatedAt DateTime @default(now()) @updatedAt
+  order     Order?   @relation(fields: [orderId], references: [id])
+  session   Session  @relation(fields: [sessionId], references: [id])
 }
-
-// ─── QR Token Access Control ──────────────────
 
 model QrToken {
   id        String   @id @default(uuid())
@@ -68,8 +66,6 @@ model QrToken {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
 }
-
-// ─── Menu Management ──────────────────────────
 
 model Category {
   id        String     @id @default(uuid())
@@ -81,74 +77,73 @@ model Category {
 }
 
 model MenuItem {
-  id            String   @id @default(uuid())
-  name          String
-  price         Int
-  categoryId    String
-  category      Category @relation(fields: [categoryId], references: [id])
-  descriptionEn String?
-  descriptionHi String?
-  image         String?
-  priceLabel    String?
-  rating        Float?
-  ratingCount   Int?
-  variants      String[]   // PostgreSQL text array
-  variantPrices Json?      // { "Thums Up": 20, "Diet Coke": 30 }
-  tags          String[]
-  outOfStock    Boolean  @default(false)
-  outOfStockVariants String[] @default([])
-  outOfStockUntil DateTime? // Optional: auto-restock after this time
-  discountPct   Int?     // e.g. 10 for 10% off (item-level overrides category)
-  discountFlat  Int?     // e.g. 20 for ₹20 off
-  sortOrder     Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String    @id @default(uuid())
+  name               String
+  price              Int
+  categoryId         String
+  descriptionEn      String?
+  descriptionHi      String?
+  image              String?
+  priceLabel         String?
+  rating             Float?
+  ratingCount        Int?
+  variants           String[]
+  variantPrices      Json?
+  tags               String[]
+  outOfStock         Boolean   @default(false)
+  outOfStockUntil    DateTime?
+  discountPct        Int?
+  discountFlat       Int?
+  sortOrder          Int       @default(0)
+  volume             String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  outOfStockVariants String[]  @default([])
+  category           Category  @relation(fields: [categoryId], references: [id])
 }
 
 model MenuVersion {
   id        String   @id @default(uuid())
-  snapshot  Json     // Full menu snapshot for rollback
+  snapshot  Json
   changedBy String   @default("admin")
   note      String?
   createdAt DateTime @default(now())
 }
 
 model RestaurantStatus {
-  id        String   @id @default("CURRENT")
-  isOpen    Boolean  @default(true)
-  closingAt DateTime? // If set, countdown is active
-  updatedAt DateTime @updatedAt
+  id        String    @id @default("CURRENT")
+  isOpen    Boolean   @default(true)
+  closingAt DateTime?
+  updatedAt DateTime  @updatedAt
 }
-
-// ─── Analytics & Reporting ────────────────────
 
 model AnalyticsLog {
   id               String   @id @default(uuid())
   timestamp        DateTime @default(now())
-  date             String   // YYYY-MM-DD
+  date             String
   tableId          String
   sessionId        String
-  sessionNumber    Int      @default(0)
   orderId          String
   itemName         String
   quantity         Int
   basePrice        Int
-  discountApplied  String?  // "10%" or "₹20" or null
+  discountApplied  String?
   finalPrice       Int
-  paymentMode      String?  // UPI | CASH | null (if unpaid at log time)
-  paymentStatus    String   // PENDING | CONFIRMED | UNPAID
-  orderStatus      String   // PLACED | PREPARING | SERVED
-  orderType        String   // DINE_IN | TAKEAWAY
+  paymentMode      String?
+  paymentStatus    String
+  orderStatus      String
+  orderType        String
   packingCharges   Int      @default(0)
   locationVerified Boolean  @default(false)
+  sessionNumber    Int      @default(0)
 }
 
 model Report {
   id        String   @id @default(uuid())
-  type      String   // DAILY_EXCEL | MONTHLY_CSV
-  date      String   // YYYY-MM-DD for daily, YYYY-MM for monthly
+  type      String
+  date      String
   filename  String
-  data      Bytes    // File content stored as binary
+  data      Bytes
   createdAt DateTime @default(now())
 
   @@unique([type, date])

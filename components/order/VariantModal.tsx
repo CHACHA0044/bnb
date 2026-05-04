@@ -49,8 +49,14 @@ const VariantModal = ({
         
         <div className="space-y-3 lg:space-y-4 mb-8 lg:mb-10">
           {item.variants?.map((v: string) => {
+            const variantData = item.variantPrices?.[v];
+            const price = typeof variantData === 'object' ? variantData.price : (variantData || item.price);
+            const volume = typeof variantData === 'object' ? variantData.volume : "";
+            const isOOS = item.outOfStockVariants?.includes(v);
             const animState = animatingVariants[v];
-            const borderClass = animState === "add"
+            const borderClass = isOOS
+              ? "border-red-100 opacity-50 grayscale"
+              : animState === "add"
               ? "border-[#6A994E] shadow-[0_10px_20px_-10px_rgba(106,153,78,0.25)] ring-2 ring-[#6A994E]"
               : animState === "reduce"
               ? "border-[#B71C1C] shadow-[0_10px_20px_-10px_rgba(183,28,28,0.25)] ring-2 ring-[#B71C1C]"
@@ -59,7 +65,7 @@ const VariantModal = ({
             return (
               <div 
                 key={v} 
-                className={`relative flex items-center justify-between p-4 lg:p-5 bg-[#F9F7F4] rounded-2xl border transition-all duration-300 ${borderClass} overflow-hidden`}
+                className={`relative flex items-center justify-between p-4 lg:p-5 bg-[#F9F7F4] rounded-2xl border transition-all duration-300 ${borderClass} overflow-hidden ${isOOS ? "pointer-events-none" : ""}`}
               >
                 <AnimatePresence>
                   {animState === "add" && (
@@ -75,9 +81,17 @@ const VariantModal = ({
                     />
                   )}
                 </AnimatePresence>
-                <span className="font-black text-[10px] lg:text-xs uppercase tracking-widest text-[#3A241C] z-10 relative">
-                  {v} <span className="text-[#E76F51] ml-1 opacity-80">₹{item.variantPrices?.[v] || item.price}</span>
-                </span>
+                <div className="flex flex-col z-10 relative">
+                  <span className="font-black text-[10px] lg:text-xs uppercase tracking-widest text-[#3A241C]">
+                    {v} {volume && <span className="text-[#3A241C]/40 text-[9px] normal-case tracking-normal">({volume})</span>}
+                  </span>
+                  <span className="text-[#E76F51] font-black text-[10px]">₹{price}</span>
+                </div>
+                {isOOS && (
+                  <div className="absolute inset-0 z-20 bg-[#3A241C]/20 backdrop-blur-[2px] flex items-center justify-center">
+                    <span className="bg-[#3A241C] text-white px-4 py-2 rounded-full font-black text-[10px] lg:text-[12px] uppercase tracking-[0.2em] shadow-2xl">OUT OF STOCK</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-3 lg:gap-4 z-10 relative">
                   <button 
                     onClick={() => handleUpdate(v, -1)}

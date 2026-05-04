@@ -14,9 +14,12 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
   const { adminSecret, headers: customHeaders, ...rest } = options;
 
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(customHeaders as Record<string, string>),
   };
+
+  if (!(rest.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (adminSecret) {
     headers["Authorization"] = `Bearer ${adminSecret}`;
@@ -176,7 +179,7 @@ export function adminRecordPayment(sessionId: string, amount: number, method: st
 
 /** Fetch public menu */
 export function fetchMenu() {
-  return apiFetch<{ categories: string[]; items: any[] }>("/api/menu");
+  return apiFetch<{ categories: string[]; items: any[] }>(`/api/menu?t=${Date.now()}`);
 }
 
 /** Admin: Fetch full menu for editing */
@@ -207,6 +210,22 @@ export function adminDeleteMenuItem(id: string, secret: string) {
   return apiFetch(`/api/menu/admin/items/${id}`, {
     method: "DELETE",
     adminSecret: secret,
+  });
+}
+
+/** Admin: Upload and optimize image */
+export function adminUploadImage(file: File, itemName: string, secret: string) {
+  const formData = new FormData();
+  formData.append("image", file);
+  formData.append("itemName", itemName);
+
+  return apiFetch<{ success: boolean; path: string; filename: string }>("/api/menu/admin/upload", {
+    method: "POST",
+    body: formData as any, // apiFetch handles headers, but for FormData we must let fetch set it
+    adminSecret: secret,
+    headers: {
+      // Don't set Content-Type, fetch will set it with boundary
+    }
   });
 }
 

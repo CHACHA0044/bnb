@@ -6,14 +6,16 @@ import {
   Plus, Search, Edit2, Trash2, Check, X, 
   ChevronRight, UtensilsCrossed, Settings2, 
   Tag, Image as ImageIcon, AlertCircle, Save,
-  ArrowLeft, History, RotateCcw, Eye, EyeOff
+  ArrowLeft, History, RotateCcw, Eye, EyeOff, Loader2,
+  Upload, X as XIcon, CloudUpload, ImageIcon as ImageIconLucide
 } from "lucide-react";
 import { useSocket } from "@/lib/socket-client";
 import { 
   adminFetchFullMenu, adminUpdateMenuItem, adminCreateMenuItem,
   adminDeleteMenuItem, adminToggleStock, adminCreateCategory,
   adminUpdateCategory, adminDeleteCategory, adminBulkDiscount,
-  adminFetchMenuVersions, adminRollbackMenu, adminBulkUpdateStock
+  adminFetchMenuVersions, adminRollbackMenu, adminBulkUpdateStock,
+  adminUploadImage
 } from "@/lib/api";
 import Image from "next/image";
 
@@ -62,6 +64,107 @@ function CustomCategoryDropdown({
   );
 }
 
+function ImageUpload({ 
+  currentImage, 
+  onFileSelect, 
+  onReset 
+}: { 
+  currentImage: string | null, 
+  onFileSelect: (file: File) => void, 
+  onReset: () => void 
+}) {
+  const [dragActive, setDragActive] = useState(false);
+  const [preview, setPreview] = useState<string | null>(null);
+
+  const handleFile = (file: File) => {
+    if (file && (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp")) {
+      const url = URL.createObjectURL(file);
+      setPreview(url);
+      onFileSelect(file);
+    } else {
+      alert("Please upload a JPG, PNG or WebP image.");
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) handleFile(e.target.files[0]);
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files?.[0]) handleFile(e.dataTransfer.files[0]);
+  };
+
+  const displayImage = preview || currentImage;
+
+  return (
+    <div className="flex flex-col h-full gap-2">
+      <div className="flex items-center justify-between px-1 shrink-0 pb-1">
+        <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Item Image</label>
+        {displayImage && (
+          <button 
+            type="button" 
+            onClick={() => { setPreview(null); onReset(); }}
+            className="text-[10px] font-black text-[#B71C1C] uppercase tracking-widest hover:underline"
+          >
+            Remove Image
+          </button>
+        )}
+      </div>
+
+      <div 
+        onDragEnter={handleDrag}
+        onDragOver={handleDrag}
+        onDragLeave={handleDrag}
+        onDrop={handleDrop}
+        className={`relative group flex-1 rounded-[2rem] border-2 border-dashed transition-all duration-300 flex flex-col items-center justify-center overflow-hidden gap-3 block w-full min-h-[12rem] ${dragActive ? "border-[#E76F51] bg-[#E76F51]/5" : "border-[#3A241C]/10 bg-[#F9F7F4] hover:border-[#E76F51]/30 hover:bg-[#F9F7F4]/80"}`}
+      >
+        {displayImage ? (
+          <>
+            <Image 
+              src={displayImage} 
+              alt="Preview" 
+              fill 
+              className="object-cover group-hover:scale-105 transition-transform duration-700" 
+            />
+            <div className="absolute inset-0 bg-[#3A241C]/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center backdrop-blur-sm z-10 rounded-[2rem]">
+              <div className="bg-white/20 p-4 rounded-full border border-white/20 mb-2">
+                <Upload className="text-white" size={24} />
+              </div>
+              <span className="text-white text-xs font-bold uppercase tracking-widest drop-shadow-md">Upload</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm text-[#3A241C]/10">
+              <CloudUpload size={32} />
+            </div>
+            <div className="text-center">
+              <p className="text-xs font-bold text-[#3A241C]">Drag & Drop to upload</p>
+              <p className="text-[10px] font-medium text-[#3A241C]/40 uppercase tracking-widest mt-1">or click to browse</p>
+            </div>
+          </>
+        )}
+        <input 
+          type="file" 
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleChange}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50" 
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -76,12 +179,22 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
   // Stock Management (Mark & Save)
   const [pendingStock, setPendingStock] = useState<Record<string, boolean>>({});
   const [savingStock, setSavingStock] = useState(false);
+  const [savingItem, setSavingItem] = useState(false);
+  const [savingCategory, setSavingCategory] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Dropdown state
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  // Modals for Variants and Delete
+  const [variantToEdit, setVariantToEdit] = useState<{ index: number | "NEW", name: string, price: number, volume: string } | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<any | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(async (isInitial = true) => {
+    if (isInitial) setLoading(true);
+    else setRefreshing(true);
     try {
       const data = await adminFetchFullMenu(secret);
       const filtered = data.categories
@@ -95,7 +208,8 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
     } catch (err) {
       showToast("Failed to load menu", "error");
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
+      setRefreshing(false);
     }
   }, [secret]);
 
@@ -112,14 +226,14 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
 
   useEffect(() => {
     const unsubs = [
-      on("menu_updated", () => loadData())
+      on("menu_updated", () => loadData(false))
     ];
     return () => unsubs.forEach(u => u());
   }, [on, loadData]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadData(true);
+  }, []); // Only on mount
 
   useEffect(() => {
     if (activeTab === "VERSIONS") loadVersions();
@@ -157,7 +271,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
       
       const count = updates.length;
       showToast(`Successfully updated stock for ${count} item${count > 1 ? "s" : ""}`);
-      await loadData();
+      await loadData(false);
     } catch (err) {
       showToast("Failed to save changes", "error");
     } finally {
@@ -167,27 +281,71 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
 
   const handleSaveItem = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingItem) return;
+    setSavingItem(true);
     try {
+      let finalItem = { ...editingItem };
+
+      // 1. Handle image upload if a new file is selected
+      if (selectedFile) {
+        try {
+          const uploadRes = await adminUploadImage(selectedFile, editingItem.name || "item", secret);
+          if (uploadRes.success) {
+            finalItem.image = uploadRes.path;
+          }
+        } catch (err) {
+          showToast("Image upload failed", "error");
+          setSavingItem(false);
+          return;
+        }
+      }
+
+      // 2. Save the item
       if (editingItem.id === "NEW") {
-        await adminCreateMenuItem(editingItem, secret);
+        await adminCreateMenuItem(finalItem, secret);
         showToast("Item created");
       } else {
-        await adminUpdateMenuItem(editingItem.id, editingItem, secret);
+        await adminUpdateMenuItem(editingItem.id, finalItem, secret);
         showToast("Item updated");
       }
       setEditingItem(null);
-      loadData();
+      setSelectedFile(null);
+      loadData(false);
     } catch (err) {
       showToast("Save failed", "error");
+    } finally {
+      setSavingItem(false);
     }
   };
 
-  const handleDeleteItem = async (id: string) => {
-    if (!confirm("Delete this item permanently?")) return;
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCategory) return;
+    setSavingCategory(true);
     try {
-      await adminDeleteMenuItem(id, secret);
+      if (editingCategory.id === "NEW") {
+        await adminCreateCategory(editingCategory.name, editingCategory.sortOrder, secret);
+        showToast("Category created");
+      } else {
+        await adminUpdateCategory(editingCategory.id, editingCategory, secret);
+        showToast("Category updated");
+      }
+      setEditingCategory(null);
+      loadData(false);
+    } catch (err) {
+      showToast("Save failed", "error");
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!itemToDelete) return;
+    try {
+      await adminDeleteMenuItem(itemToDelete.id, secret);
       showToast("Item deleted");
-      loadData();
+      setItemToDelete(null);
+      loadData(false);
     } catch (err) {
       showToast("Delete failed", "error");
     }
@@ -198,7 +356,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
     try {
       await adminRollbackMenu(versionId, secret);
       showToast("Menu rolled back successfully");
-      loadData();
+      await loadData(false);
       setActiveTab("ITEMS");
     } catch (err) {
       showToast("Rollback failed", "error");
@@ -230,7 +388,16 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
         animate={{ opacity: 1, y: 0 }}
         className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8 px-2"
       >
-        <div className="flex bg-white p-1.5 rounded-2xl border border-[#3A241C]/5 shadow-sm overflow-x-auto no-scrollbar max-w-full">
+        <div className="flex bg-white p-1.5 rounded-2xl border border-[#3A241C]/5 shadow-sm overflow-x-auto no-scrollbar max-w-full relative">
+          {refreshing && (
+            <div className="absolute top-0 right-0 p-1">
+              <motion.div 
+                animate={{ rotate: 360 }}
+                transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                className="w-3 h-3 border-2 border-[#E76F51] border-t-transparent rounded-full" 
+              />
+            </div>
+          )}
           <div className="flex min-w-max">
             {[
               { id: "ITEMS", label: "Menu Items", icon: UtensilsCrossed },
@@ -358,7 +525,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                                   <h4 className={`font-bold text-[#3A241C] text-sm leading-tight ${currentStatus ? "opacity-40" : ""}`}>{item.name}</h4>
                                   <div className="flex items-center gap-1">
                                     <motion.button whileTap={{ scale: 0.8 }} onClick={() => setEditingItem({ ...item, variants: item.variants || [], variantPrices: item.variantPrices || {}, outOfStockVariants: item.outOfStockVariants || [] })} className="p-2 text-[#3A241C]/20 hover:text-[#E76F51] transition-colors"><Edit2 size={14} /></motion.button>
-                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => handleDeleteItem(item.id)} className="p-2 text-[#3A241C]/20 hover:text-[#B71C1C] transition-colors"><Trash2 size={14} /></motion.button>
+                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setItemToDelete(item)} className="p-2 text-[#3A241C]/20 hover:text-[#B71C1C] transition-colors"><Trash2 size={14} /></motion.button>
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -413,7 +580,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                     </div>
                     <div className="flex items-center gap-2">
                       <motion.button whileTap={{ scale: 0.8 }} onClick={() => setEditingCategory(cat)} className="p-3 text-[#3A241C]/20 hover:text-[#3A241C] transition-colors"><Edit2 size={18} /></motion.button>
-                      <motion.button whileTap={{ scale: 0.8 }} onClick={() => { if(confirm("Delete category?")) adminDeleteCategory(cat.id, secret).then(loadData) }} className="p-3 text-[#3A241C]/20 hover:text-[#B71C1C] transition-colors"><Trash2 size={18} /></motion.button>
+                      <motion.button whileTap={{ scale: 0.8 }} onClick={() => { setItemToDelete({ ...cat, isCategory: true }); }} className="p-3 text-[#3A241C]/20 hover:text-[#B71C1C] transition-colors"><Trash2 size={18} /></motion.button>
                     </div>
                   </div>
                 ))}
@@ -438,9 +605,9 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                           <History size={20} className="text-[#3A241C]/20" />
                         </div>
                         <div>
-                          <p className="font-bold text-[#3A241C]">{v.note || "Manual update"}</p>
+                          <p className="font-bold text-[#3A241C]">{v.note?.replace(/ item:/g, ":").replace(/ category:/g, " Category:") || "Manual update"}</p>
                           <p className="text-[10px] font-medium text-[#3A241C]/40 uppercase tracking-widest">
-                            {new Date(v.createdAt).toLocaleString()} • {v.changedBy}
+                            {new Date(v.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric' })} • {new Date(v.createdAt).toLocaleString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase()}
                           </p>
                         </div>
                       </div>
@@ -467,13 +634,13 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                           className="border-t border-[#3A241C]/5 bg-[#F9F7F4]/30"
                         >
                           <div className="p-8 grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {snapshot?.categories?.map((cat: any) => (
+                            {Array.isArray(snapshot) && snapshot.map((cat: any) => (
                               <div key={cat.id} className="space-y-1">
                                 <p className="text-[9px] font-black uppercase tracking-widest text-[#E76F51]">{cat.name}</p>
-                                <p className="text-xs font-bold text-[#3A241C]/60">{cat.items.length} Items</p>
+                                <p className="text-xs font-bold text-[#3A241C]/60">{cat.items?.length || 0} Items</p>
                               </div>
                             ))}
-                            {(!snapshot || !snapshot.categories) && (
+                            {(!Array.isArray(snapshot) || snapshot.length === 0) && (
                               <p className="text-xs font-medium text-[#3A241C]/30 col-span-full">No snapshot data available for this version.</p>
                             )}
                           </div>
@@ -545,12 +712,12 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                   <h3 className="text-2xl font-black text-[#3A241C] tracking-tight">{editingItem.id === "NEW" ? "New Item" : "Edit Item"}</h3>
                   <p className="text-[10px] font-bold text-[#3A241C]/30 uppercase tracking-widest mt-1">Fill in the details below</p>
                 </div>
-                <button type="button" onClick={() => setEditingItem(null)} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#3A241C]/20 hover:text-[#3A241C] shadow-sm"><X size={24} /></button>
+                <button type="button" onClick={() => { setEditingItem(null); setSelectedFile(null); }} className="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#3A241C]/20 hover:text-[#3A241C] shadow-sm"><X size={24} /></button>
               </div>
 
               <div className="p-8 lg:p-10 overflow-y-auto space-y-8 flex-1">
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-6">
+                  <div className="col-span-1 space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Item Name</label>
                     <input 
                       required
@@ -568,46 +735,86 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                       className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Volume (ml)</label>
+                    <input 
+                      value={editingItem.volume || ""}
+                      onChange={e => setEditingItem({...editingItem, volume: e.target.value})}
+                      placeholder="e.g. 250 ml"
+                      className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-2 relative">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Category</label>
-                    <div className="relative">
-                      <button 
-                        type="button"
-                        onClick={() => setCatDropdownOpen(!catDropdownOpen)}
-                        className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51] flex items-center justify-between"
-                      >
-                        {categories.find(c => c.id === editingItem.categoryId)?.name || "Select Category"}
-                        <ChevronRight size={18} className={`transition-transform duration-300 ${catDropdownOpen ? "rotate-90" : ""}`} />
-                      </button>
-                      
-                      <CustomCategoryDropdown 
-                        isOpen={catDropdownOpen}
-                        categories={categories}
-                        selectedId={editingItem.categoryId}
-                        onSelect={(id) => {
-                          setEditingItem({...editingItem, categoryId: id});
-                          setCatDropdownOpen(false);
-                        }}
-                        onAddNew={() => {
-                          setCatDropdownOpen(false);
-                          setEditingCategory({ id: "NEW", name: "", sortOrder: categories.length });
-                        }}
-                      />
+                  <div className="flex flex-col space-y-4">
+                    <div className="space-y-2 relative">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Category</label>
+                      <div className="relative">
+                        <button 
+                          type="button"
+                          onClick={() => setCatDropdownOpen(!catDropdownOpen)}
+                          className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51] flex items-center justify-between"
+                        >
+                          {categories.find(c => c.id === editingItem.categoryId)?.name || "Select Category"}
+                          <ChevronRight size={18} className={`transition-transform duration-300 ${catDropdownOpen ? "rotate-90" : ""}`} />
+                        </button>
+                        
+                        <CustomCategoryDropdown 
+                          isOpen={catDropdownOpen}
+                          categories={categories}
+                          selectedId={editingItem.categoryId}
+                          onSelect={(id) => {
+                            setEditingItem({...editingItem, categoryId: id});
+                            setCatDropdownOpen(false);
+                          }}
+                          onAddNew={() => {
+                            setCatDropdownOpen(false);
+                            setEditingCategory({ id: "NEW", name: "", sortOrder: categories.length });
+                          }}
+                        />
+                      </div>
                     </div>
+                    
+                    {/* Image Preview Block inside left column */}
+                    {(selectedFile ? URL.createObjectURL(selectedFile) : editingItem.image) && (
+                      <div className="flex flex-col gap-2 p-4 bg-[#F9F7F4] rounded-2xl border border-[#3A241C]/5">
+                          <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-[#3A241C]/30 mb-1">Preview in Card</p>
+                          <div className="bg-white rounded-[2rem] p-3 border border-[#3A241C]/5 flex items-center gap-3">
+                            <div className="w-[84px] h-[84px] rounded-2xl bg-[#F9F7F4] flex-shrink-0 overflow-hidden relative border border-[#3A241C]/5">
+                              <Image src={(selectedFile ? URL.createObjectURL(selectedFile) : editingItem.image)!} alt="Card Preview" fill className="object-cover" />
+                            </div>
+                            <div className="flex-1 flex flex-col justify-between h-[84px] py-1 min-w-0">
+                              <div className="min-w-0">
+                                <h3 className="font-black text-[#3A241C] text-[11px] tracking-tight line-clamp-2 leading-tight">
+                                  {editingItem.name || "Item Name"}
+                                </h3>
+                                {(editingItem.descriptionEn || editingItem.descriptionHi || !editingItem.name) && (
+                                  <p className="text-[9px] text-[#3A241C]/50 leading-[1.3] mt-1 font-medium tracking-[0.02em] line-clamp-2">
+                                    {editingItem.descriptionEn || editingItem.descriptionHi || "Item description will appear here"}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="mt-auto">
+                                <span className="font-black text-xs text-[#E76F51] tracking-tight">
+                                  ₹{editingItem.price || "0"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Image URL</label>
-                    <div className="relative">
-                      <ImageIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-[#3A241C]/20" size={18} />
-                      <input 
-                        value={editingItem.image || ""}
-                        onChange={e => setEditingItem({...editingItem, image: e.target.value})}
-                        className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 pl-12 pr-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
-                      />
-                    </div>
+                  
+                  <div className="h-full">
+                    <ImageUpload 
+                      currentImage={editingItem.image || null}
+                      onFileSelect={setSelectedFile}
+                      onReset={() => {
+                        setSelectedFile(null);
+                        setEditingItem({ ...editingItem, image: null });
+                      }}
+                    />
                   </div>
                 </div>
 
@@ -617,19 +824,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                     <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Variants (e.g. Coke, Sprite)</label>
                     <button 
                       type="button" 
-                      onClick={() => {
-                        const vName = prompt("Variant Name?");
-                        if (vName) {
-                          const vPrice = prompt("Price for this variant?", editingItem.price.toString());
-                          const price = vPrice ? parseInt(vPrice) : editingItem.price;
-                          setEditingItem({
-                            ...editingItem,
-                            variants: [...(editingItem.variants || []), vName],
-                            variantPrices: { ...(editingItem.variantPrices || {}), [vName]: price },
-                            outOfStockVariants: editingItem.outOfStockVariants || []
-                          });
-                        }
-                      }}
+                      onClick={() => setVariantToEdit({ index: "NEW", name: "", price: editingItem.price, volume: "" })}
                       className="text-[10px] font-black text-[#E76F51] uppercase tracking-widest hover:underline"
                     >
                       + Add Variant
@@ -652,9 +847,12 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                               }}
                               className="w-4 h-4 accent-[#6A994E]"
                             />
-                            <div className="min-w-0">
+                            <div className="min-w-0" onClick={() => setVariantToEdit({ index: editingItem.variants.indexOf(v), name: v, price: (editingItem.variantPrices?.[v] as any)?.price || editingItem.variantPrices?.[v] || editingItem.price, volume: (editingItem.variantPrices?.[v] as any)?.volume || "" })}>
                               <p className={`text-xs font-bold ${isOOS ? "text-red-900 line-through" : "text-[#3A241C]"} truncate`}>{v}</p>
-                              <p className="text-[10px] font-black text-[#E76F51]">₹{editingItem.variantPrices?.[v] || editingItem.price}</p>
+                              <div className="flex items-center gap-2">
+                                <p className="text-[10px] font-black text-[#E76F51]">₹{(editingItem.variantPrices?.[v] as any)?.price || editingItem.variantPrices?.[v] || editingItem.price}</p>
+                                {(editingItem.variantPrices?.[v] as any)?.volume && <p className="text-[9px] font-bold text-[#3A241C]/40">{(editingItem.variantPrices?.[v] as any).volume}</p>}
+                              </div>
                             </div>
                           </div>
                           <button 
@@ -682,7 +880,14 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                     <textarea 
                       rows={2}
                       value={editingItem.descriptionEn || ""}
-                      onChange={e => setEditingItem({...editingItem, descriptionEn: e.target.value})}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const nextItem = { ...editingItem, descriptionEn: val };
+                        if ((!editingItem.descriptionHi || editingItem.descriptionHi === editingItem.descriptionEn) && editingItem.id === "NEW") {
+                          nextItem.descriptionHi = val;
+                        }
+                        setEditingItem(nextItem);
+                      }}
                       className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-medium outline-none focus:ring-2 focus:ring-[#E76F51] resize-none"
                     />
                   </div>
@@ -723,10 +928,14 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
               </div>
 
               <div className="p-8 lg:p-10 bg-[#F9F7F4]/50 border-t border-[#3A241C]/5 flex gap-4">
-                <button type="button" onClick={() => setEditingItem(null)} className="flex-1 py-4 bg-white border border-[#3A241C]/5 text-[#3A241C]/40 rounded-2xl font-bold text-sm hover:text-[#3A241C] transition-all">Discard</button>
-                <button type="submit" className="flex-1 py-4 bg-[#3A241C] text-white rounded-2xl font-bold text-sm shadow-xl shadow-[#3A241C]/20 flex items-center justify-center gap-2 hover:bg-[#E76F51] transition-all">
-                  <Save size={18} />
-                  Save Item
+                <button type="button" disabled={savingItem} onClick={() => { setEditingItem(null); setSelectedFile(null); }} className="flex-1 py-4 bg-white border border-[#3A241C]/5 text-[#3A241C]/40 rounded-2xl font-bold text-sm hover:text-[#3A241C] transition-all disabled:opacity-50">Discard</button>
+                <button 
+                  type="submit" 
+                  disabled={savingItem}
+                  className="flex-1 py-4 bg-[#3A241C] text-white rounded-2xl font-bold text-sm shadow-xl shadow-[#3A241C]/20 flex items-center justify-center gap-2 hover:bg-[#E76F51] transition-all disabled:opacity-50"
+                >
+                  {savingItem ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  {savingItem ? "Saving..." : "Save Item"}
                 </button>
               </div>
             </motion.form>
@@ -782,47 +991,179 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
           </div>
         )}
       </AnimatePresence>
-
+      
       {/* Category Editor Modal */}
       <AnimatePresence>
         {editingCategory && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setEditingCategory(null)} className="absolute inset-0 bg-[#3A241C]/80 backdrop-blur-xl" />
             <motion.form 
-              onSubmit={async (e) => {
-                e.preventDefault();
-                try {
-                  if (editingCategory.id === "NEW") await adminCreateCategory(editingCategory.name, editingCategory.sortOrder, secret);
-                  else await adminUpdateCategory(editingCategory.id, editingCategory, secret);
-                  setEditingCategory(null);
-                  loadData();
-                } catch(e) { showToast("Failed", "error"); }
-              }}
+              onSubmit={handleSaveCategory}
               initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-2xl"
+              className="relative bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-2xl flex flex-col"
             >
-              <h3 className="text-xl font-black text-[#3A241C] mb-6">{editingCategory.id === "NEW" ? "New Category" : "Edit Category"}</h3>
-              <div className="space-y-4 mb-8">
-                <input 
-                  required
-                  placeholder="Category Name"
-                  value={editingCategory.name}
-                  onChange={e => setEditingCategory({...editingCategory, name: e.target.value})}
-                  className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
-                />
-                <input 
-                  required type="number"
-                  placeholder="Sort Order"
-                  value={editingCategory.sortOrder}
-                  onChange={e => setEditingCategory({...editingCategory, sortOrder: parseInt(e.target.value)})}
-                  className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
-                />
+              <h3 className="text-2xl font-black text-[#3A241C] tracking-tight mb-8 font-hindi">{editingCategory.id === "NEW" ? "नई कैटेगरी" : "कैटेगरी संपादित करें"}</h3>
+              
+              <div className="space-y-6 mb-10">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Category Name</label>
+                  <input 
+                    required 
+                    value={editingCategory.name}
+                    onChange={e => setEditingCategory({...editingCategory, name: e.target.value})}
+                    className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-black outline-none focus:ring-2 focus:ring-[#E76F51]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Sort Order</label>
+                  <input 
+                    type="number"
+                    value={editingCategory.sortOrder}
+                    onChange={e => setEditingCategory({...editingCategory, sortOrder: parseInt(e.target.value)})}
+                    className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-black outline-none focus:ring-2 focus:ring-[#E76F51]"
+                  />
+                </div>
               </div>
-              <div className="flex gap-4">
-                <button type="button" onClick={() => setEditingCategory(null)} className="flex-1 py-4 bg-[#F9F7F4] text-[#3A241C]/40 rounded-2xl font-bold">Cancel</button>
-                <button type="submit" className="flex-1 py-4 bg-[#3A241C] text-white rounded-2xl font-bold shadow-lg">Save</button>
+
+              <div className="flex flex-col gap-3">
+                <button 
+                  type="submit" 
+                  disabled={savingCategory}
+                  className="w-full py-5 bg-[#3A241C] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-[#3A241C]/10 hover:bg-[#E76F51] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  {savingCategory ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  {savingCategory ? "इंतज़ार करें..." : "सेव करें / Save"}
+                </button>
+                <button type="button" disabled={savingCategory} onClick={() => setEditingCategory(null)} className="py-4 text-[#3A241C]/20 font-black text-[10px] uppercase tracking-widest hover:text-[#3A241C] transition-all">रद्द करें / Cancel</button>
               </div>
             </motion.form>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Variant Edit Modal */}
+      <AnimatePresence>
+        {variantToEdit && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setVariantToEdit(null)} className="absolute inset-0 bg-[#3A241C]/90 backdrop-blur-md" />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-sm rounded-[3rem] p-8 shadow-2xl"
+            >
+              <h3 className="text-xl font-black text-[#3A241C] mb-6">{variantToEdit.index === "NEW" ? "Add Variant" : "Edit Variant"}</h3>
+              <div className="space-y-4 mb-8">
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-2">Variant Name</label>
+                  <input 
+                    required placeholder="e.g. Sprite"
+                    value={variantToEdit.name}
+                    onChange={e => setVariantToEdit({...variantToEdit, name: e.target.value})}
+                    className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-2">Price (₹)</label>
+                    <input 
+                      required type="number" placeholder="20"
+                      value={variantToEdit.price}
+                      onChange={e => setVariantToEdit({...variantToEdit, price: parseInt(e.target.value)})}
+                      className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-2">Volume (e.g. 250 ml)</label>
+                    <input 
+                      placeholder="250 ml"
+                      value={variantToEdit.volume}
+                      onChange={e => setVariantToEdit({...variantToEdit, volume: e.target.value})}
+                      className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-bold outline-none focus:ring-2 focus:ring-[#E76F51]"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-4">
+                <button type="button" onClick={() => setVariantToEdit(null)} className="flex-1 py-4 bg-[#F9F7F4] text-[#3A241C]/40 rounded-2xl font-bold">Cancel</button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if (!variantToEdit.name) return;
+                    const nextItem = { ...editingItem };
+                    const vData = { price: variantToEdit.price, volume: variantToEdit.volume };
+                    
+                    if (variantToEdit.index === "NEW") {
+                      nextItem.variants = [...(nextItem.variants || []), variantToEdit.name];
+                      nextItem.variantPrices = { ...(nextItem.variantPrices || {}), [variantToEdit.name]: vData };
+                    } else {
+                      const oldName = nextItem.variants[variantToEdit.index];
+                      const newVariants = [...nextItem.variants];
+                      newVariants[variantToEdit.index] = variantToEdit.name;
+                      nextItem.variants = newVariants;
+                      
+                      const newPrices = { ...nextItem.variantPrices };
+                      delete newPrices[oldName];
+                      newPrices[variantToEdit.name] = vData;
+                      nextItem.variantPrices = newPrices;
+                    }
+                    setEditingItem(nextItem);
+                    setVariantToEdit(null);
+                  }}
+                  className="flex-1 py-4 bg-[#3A241C] text-white rounded-2xl font-bold shadow-lg"
+                >
+                  Confirm
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {itemToDelete && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setItemToDelete(null)} className="absolute inset-0 bg-[#3A241C]/90 backdrop-blur-md" />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="relative bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-2xl text-center"
+            >
+              <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} className="text-[#B71C1C]" />
+              </div>
+              <h3 className="text-2xl font-black text-[#3A241C] mb-2">Are you sure?</h3>
+              <p className="text-xs text-[#3A241C]/40 font-medium mb-8">
+                You are about to delete <span className="text-[#3A241C] font-black">"{itemToDelete.name}"</span>. 
+                This action cannot be undone.
+              </p>
+              
+              <div className="flex flex-col gap-3">
+                <button 
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    try {
+                      if (itemToDelete.isCategory) {
+                        await adminDeleteCategory(itemToDelete.id, secret);
+                        showToast("Category deleted");
+                        loadData(false);
+                      } else {
+                        await handleDeleteConfirm();
+                      }
+                      setItemToDelete(null);
+                    } catch (err) {
+                      showToast("Delete failed", "error");
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                  className="w-full py-5 bg-[#B71C1C] text-white rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-red-200 flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  {isDeleting ? <Loader2 size={18} className="animate-spin" /> : null}
+                  {isDeleting ? "Deleting..." : "Yes, Delete Permanently"}
+                </button>
+                <button disabled={isDeleting} onClick={() => setItemToDelete(null)} className="py-4 text-[#3A241C]/20 font-black text-[10px] uppercase tracking-widest hover:text-[#3A241C]">Cancel</button>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

@@ -69,7 +69,7 @@ const MenuItem = ({
 
       {item.outOfStock && (
         <div className="absolute inset-0 z-20 bg-[#3A241C]/20 backdrop-blur-[2px] flex items-center justify-center">
-          <span className="bg-[#3A241C] text-white px-4 py-2 rounded-full font-black text-[10px] lg:text-[12px] uppercase tracking-[0.2em] shadow-2xl">Out of Stock</span>
+          <span className="bg-[#3A241C] text-white px-4 py-2 rounded-full font-black text-[10px] lg:text-[12px] uppercase tracking-[0.2em] shadow-2xl">OUT OF STOCK</span>
         </div>
       )}
 
@@ -97,7 +97,10 @@ const MenuItem = ({
       <div className="flex-1 flex flex-col justify-between h-full py-1 min-w-0 z-20">
         <div className="min-w-0">
           <div className="flex justify-between items-start mb-1 gap-2">
-            <h3 className="font-black text-[#3A241C] text-sm lg:text-base group-hover:text-[#E76F51] transition-colors tracking-tight line-clamp-2 leading-tight flex-1">{item.name}</h3>
+            <h3 className="font-black text-[#3A241C] text-sm lg:text-base group-hover:text-[#E76F51] transition-colors tracking-tight line-clamp-2 leading-tight flex-1">
+              {item.name}
+              {(item as any).volume && <span className="text-[#3A241C]/40 text-[10px] lg:text-xs normal-case tracking-normal ml-1.5 font-bold">({(item as any).volume})</span>}
+            </h3>
             <button 
               onClick={(e) => {
                 e.stopPropagation();
@@ -123,10 +126,12 @@ const MenuItem = ({
             <span className="font-black text-lg text-[#E76F51] tracking-tighter">
               {item.priceLabel ? item.priceLabel : `₹${discountedPrice}`}
             </span>
-            {item.rating && (
+            {item.rating && item.ratingCount && !["Soft Drinks", "Mineral Water"].includes(item.name) && (
               <div className="flex items-center gap-1 bg-[#F9F7F4] px-1.5 py-0.5 rounded-md border border-[#3A241C]/5 ml-2">
                 <Star className="w-[10px] h-[10px] lg:w-3 lg:h-3 fill-[#E76F51] text-[#E76F51]" />
-                <span className="text-[9px] lg:text-[10px] font-black text-[#3A241C]/80">{item.rating}</span>
+                <span className="text-[9px] lg:text-[10px] font-black text-[#3A241C]/80">
+                  {item.rating}({item.ratingCount})
+                </span>
               </div>
             )}
           </div>

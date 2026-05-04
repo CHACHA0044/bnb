@@ -2,8 +2,45 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
+import multer from "multer";
+import sharp from "sharp";
+import path from "path";
+import fs from "fs/promises";
+import { existsSync, mkdirSync } from "fs";
 
 const router = Router();
+
+// Setup Multer for memory storage
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only .jpg, .png and .webp formats allowed!"));
+    }
+  },
+});
+
+const MENU_IMAGE_DIR = path.join(process.cwd(), "..", "public", "images", "menu");
+if (!existsSync(MENU_IMAGE_DIR)) {
+  mkdirSync(MENU_IMAGE_DIR, { recursive: true });
+}
+
+function slugify(text: string) {
+  return text
+    .toString()
+    .toLowerCase()
+    .replace(/\s+/g, '-')           // Replace spaces with -
+    .replace(/[^\w\-]+/g, '')       // Remove all non-word chars
+    .replace(/\-\-+/g, '-')         // Replace multiple - with single -
+    .replace(/^-+/, '')             // Trim - from start
+    .replace(/-+$/, '');            // Trim - from end
+}
 
 /* ─── In-Memory Menu Cache ─────────────────── */
 let menuCache: { categories: any[]; items: any[]; cachedAt: number } | null = null;
@@ -102,6 +139,8 @@ router.get("/", async (_req: Request, res: Response): Promise<void> => {
       variantPrices: item.variantPrices || undefined,
       tags: item.tags.length > 0 ? item.tags : undefined,
       outOfStock: item.outOfStock,
+      outOfStockVariants: item.outOfStockVariants || [],
+      volume: item.volume || null,
       discountPct: item.discountPct,
       discountFlat: item.discountFlat,
     }));
@@ -150,6 +189,48 @@ router.get("/admin/full", requireAdmin, async (_req: Request, res: Response): Pr
   }
 });
 
+/* ─── Image Upload ─────────────────────────── */
+
+/**
+ * POST /api/menu/admin/upload
+ * Handle image upload, optimize with sharp, and save to public.
+ */
+router.post("/admin/upload", requireAdmin, upload.single("image"), async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: "No image file provided" });
+      return;
+    }
+
+    const { itemName } = req.body;
+    if (!itemName) {
+      res.status(400).json({ error: "itemName is required to generate filename" });
+      return;
+    }
+
+    const timestamp = Date.now();
+    const filename = `${slugify(itemName)}-${timestamp}.webp`;
+    const filepath = path.join(MENU_IMAGE_DIR, filename);
+
+    // Process with sharp
+    await sharp(req.file.buffer)
+      .resize({ width: 1200, withoutEnlargement: true }) // Max 1200px width
+      .webp({ quality: 80 }) // Convert to WebP with good quality
+      .toFile(filepath);
+
+    console.log(`[MENU ADMIN] Image uploaded & optimized: ${filename}`);
+
+    res.json({ 
+      success: true, 
+      path: `/images/menu/${filename}`,
+      filename: filename
+    });
+  } catch (err: any) {
+    console.error("[MENU ADMIN] Upload error:", err);
+    res.status(500).json({ error: "Failed to process image", details: err.message });
+  }
+});
+
 /* ─── Item CRUD ────────────────────────────── */
 
 /**
@@ -165,7 +246,7 @@ router.post("/admin/items", requireAdmin, async (req: Request, res: Response): P
       return;
     }
 
-    await saveVersionSnapshot(`Create item: ${name}`);
+    await saveVersionSnapshot(`Create: ${name}`);
 
     const item = await prisma.menuItem.create({
       data: {
@@ -178,9 +259,10 @@ router.post("/admin/items", requireAdmin, async (req: Request, res: Response): P
         priceLabel: priceLabel || null,
         rating: rating ? parseFloat(rating) : null,
         ratingCount: ratingCount ? parseInt(ratingCount) : null,
-        variants: variants || [],
         variantPrices: variantPrices || undefined,
         tags: tags || [],
+        // @ts-ignore
+        volume: req.body.volume || null,
         // @ts-ignore: Bypassing stale Prisma types until db push succeeds
         outOfStockVariants: req.body.outOfStockVariants || [],
       },
@@ -204,7 +286,33 @@ router.put("/admin/items/:id", requireAdmin, async (req: Request, res: Response)
     const id = req.params.id as string;
     const data = req.body;
 
-    await saveVersionSnapshot(`Update item: ${id}`);
+    const existingItem = await prisma.menuItem.findUnique({ where: { id } });
+    const itemName = data.name || existingItem?.name || id;
+    
+    const changes: string[] = [];
+    if (existingItem) {
+      if (data.name !== undefined && data.name !== existingItem.name) changes.push("Changed name");
+      if (data.price !== undefined && parseInt(data.price) !== existingItem.price) changes.push("Changed price");
+      if (data.image !== undefined && data.image !== existingItem.image) changes.push("Changed image");
+      if (data.descriptionEn !== undefined && data.descriptionEn !== existingItem.descriptionEn) changes.push("Changed description");
+      if (data.discountPct !== undefined && data.discountPct !== null && parseInt(data.discountPct) !== existingItem.discountPct) changes.push("Applied discount");
+      if (data.discountPct === null && existingItem.discountPct !== null) changes.push("Removed discount");
+      if (data.outOfStock !== undefined && Boolean(data.outOfStock) !== existingItem.outOfStock) changes.push(data.outOfStock ? "Marked out of stock" : "Put in stock");
+      if (data.categoryId !== undefined && data.categoryId !== existingItem.categoryId) changes.push("Changed category");
+      if (data.variants !== undefined && JSON.stringify(data.variants) !== JSON.stringify(existingItem.variants)) changes.push("Changed variants");
+      if (data.variantPrices !== undefined && JSON.stringify(data.variantPrices) !== JSON.stringify(existingItem.variantPrices)) changes.push("Changed variant prices");
+      if (data.volume !== undefined && data.volume !== existingItem.volume) changes.push("Changed volume");
+    }
+    
+    let changeStr = "";
+    if (changes.length > 0) {
+      const uniqueChanges = Array.from(new Set(changes));
+      changeStr = ` (${uniqueChanges.slice(0, 3).join(", ")}${uniqueChanges.length > 3 ? "..." : ""})`;
+    } else if (existingItem) {
+      changeStr = " (Updated details)";
+    }
+
+    await saveVersionSnapshot(`Update: ${itemName}${changeStr}`);
 
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
@@ -225,6 +333,7 @@ router.put("/admin/items/:id", requireAdmin, async (req: Request, res: Response)
     if (data.discountFlat !== undefined) updateData.discountFlat = data.discountFlat ? parseInt(data.discountFlat) : null;
     if (data.outOfStockVariants !== undefined) updateData.outOfStockVariants = data.outOfStockVariants;
     if (data.sortOrder !== undefined) updateData.sortOrder = parseInt(data.sortOrder);
+    if (data.volume !== undefined) updateData.volume = data.volume || null;
 
     const item = await prisma.menuItem.update({
       where: { id: id as string },
@@ -251,7 +360,7 @@ router.delete("/admin/items/:id", requireAdmin, async (req: Request, res: Respon
     const item = await prisma.menuItem.findUnique({ where: { id: id as string } });
     if (!item) { res.status(404).json({ error: "Item not found" }); return; }
 
-    await saveVersionSnapshot(`Delete item: ${item.name}`);
+    await saveVersionSnapshot(`Delete: ${item.name}`);
 
     await prisma.menuItem.delete({ where: { id: id as string } });
 
@@ -375,7 +484,23 @@ router.put("/admin/categories/:id", requireAdmin, async (req: Request, res: Resp
     const id = req.params.id as string;
     const { name, sortOrder } = req.body;
 
-    await saveVersionSnapshot(`Update category: ${id}`);
+    const existingCat = await prisma.category.findUnique({ where: { id } });
+    const catName = name || existingCat?.name || id;
+    
+    const changes: string[] = [];
+    if (existingCat) {
+      if (name !== undefined && name !== existingCat.name) changes.push("Changed name");
+      if (sortOrder !== undefined && parseInt(sortOrder) !== existingCat.sortOrder) changes.push("Changed sort order");
+    }
+    
+    let changeStr = "";
+    if (changes.length > 0) {
+      changeStr = ` (${changes.join(", ")})`;
+    } else if (existingCat) {
+      changeStr = " (Updated details)";
+    }
+    
+    await saveVersionSnapshot(`Update Category: ${catName}${changeStr}`);
 
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -409,7 +534,13 @@ router.delete("/admin/categories/:id", requireAdmin, async (req: Request, res: R
       return;
     }
 
-    await saveVersionSnapshot(`Delete category: ${id}`);
+    const category = await prisma.category.findUnique({ where: { id: id as string } });
+    if (!category) {
+      res.status(404).json({ error: "Category not found" });
+      return;
+    }
+
+    await saveVersionSnapshot(`Delete Category: ${category.name}`);
     await prisma.category.delete({ where: { id: id as string } });
 
     console.log(`[MENU ADMIN] Deleted category: ${id}`);
