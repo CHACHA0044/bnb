@@ -67,11 +67,11 @@ export default function SignatureItems() {
           {SIGNATURE_ITEMS.map((item, idx) => (
             <motion.div 
               key={idx}
-              initial={{ opacity: 0, y: 40 }}
+              initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.7, delay: idx * 0.15, ease: [0.21, 0.47, 0.32, 0.98] }}
-              className="group relative bg-white rounded-[2.5rem] overflow-hidden shadow-[0_10px_40px_-15px_rgba(58,36,28,0.1)] hover:shadow-[0_40px_80px_-20px_rgba(58,36,28,0.15)] transition-all duration-700 border border-[var(--coffee)]/5 hover:translate-y-[-8px] reveal-on-scroll"
+              viewport={{ once: true, amount: 0.1 }}
+              transition={{ duration: 0.5, delay: idx * 0.1, ease: "easeOut" }}
+              className="group relative bg-white rounded-[2.5rem] overflow-hidden shadow-[0_10px_40px_-15px_rgba(58,36,28,0.1)] hover:shadow-[0_40px_80px_-20px_rgba(58,36,28,0.15)] transition-all duration-300 border border-[var(--coffee)]/5 hover:-translate-y-2"
             >
               <div className="relative h-80 overflow-hidden">
                 <Image

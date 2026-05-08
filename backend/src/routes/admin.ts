@@ -7,6 +7,8 @@ import { logOrderAnalytics } from "../lib/analytics";
 
 const router = Router();
 
+import { pendingOrders } from "./order";
+
 // All admin routes require auth
 router.use(requireAdmin);
 
@@ -35,6 +37,9 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
         toDate.setHours(23, 59, 59, 999);
         whereClause.createdAt.lte = toDate;
       }
+    } else {
+      // Default: Only show OPEN sessions for the live dashboard
+      whereClause.status = "OPEN";
     }
 
     const sessions = await prisma.session.findMany({
@@ -49,19 +54,28 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
       orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     });
 
-    res.json(sessions);
+    // Convert to plain objects to avoid Prisma internal circularities and allow modification
+    const sessionsJson = JSON.parse(JSON.stringify(sessions));
+
+    // Merge in-memory pending orders safely
+    try {
+      if (typeof pendingOrders !== 'undefined' && pendingOrders.values) {
+        sessionsJson.forEach((session: any) => {
+          const pendingForSession = Array.from(pendingOrders.values()).filter((po: any) => po.sessionId === session.id);
+          if (pendingForSession.length > 0) {
+            session.orders = session.orders || [];
+            session.orders.unshift(...pendingForSession);
+          }
+        });
+      }
+    } catch (mergeErr) {
+      console.error("[ADMIN] Pending orders merge error:", mergeErr);
+    }
+
+    res.json(sessionsJson);
   } catch (err: any) {
-    console.error("[ADMIN] Sessions fetch error:", {
-      message: err.message,
-      code: err.code,
-      meta: err.meta,
-      stack: err.stack?.split("\n").slice(0, 3).join("\n")
-    });
-    res.status(500).json({ 
-      error: "Failed to fetch sessions",
-      details: err.message,
-      isDbError: err.message?.includes("Can't reach database")
-    });
+    console.error("[ADMIN] Sessions fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch sessions", details: err.message });
   }
 });
 
@@ -106,15 +120,17 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
       return;
     }
 
-    const total = sessionData.orders.reduce((acc, o) => 
-      acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0), 0
-    );
+    const total = sessionData.orders
+      .filter(o => o.status !== "CANCELLED")
+      .reduce((acc, o) => 
+        acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0) + ((o as any).packingCharges || 0), 0
+      );
     const paid = sessionData.payments
       .filter(p => p.status === "CONFIRMED")
       .reduce((acc, p) => acc + p.amount, 0);
     
-    if (total - paid > 0) {
-      res.status(400).json({ error: "Cannot close session with outstanding balance. Collect payment first." });
+    if (total - paid > 0.01) {
+      res.status(400).json({ error: `Cannot close session with outstanding balance (₹${(total - paid).toFixed(2)}). Collect payment first.` });
       return;
     }
 
@@ -164,6 +180,7 @@ router.post("/sessions/:sessionId/order", async (req: Request, res: Response): P
     const order = await prisma.order.create({
       data: {
         sessionId: sessionId as string,
+        status: "PLACED",
         isTakeaway: Boolean(req.body.isTakeaway),
         items: {
           create: items.map((item: { name: string; price: number; quantity?: number; type?: string }) => ({
@@ -230,6 +247,7 @@ router.post("/orders/new", async (req: Request, res: Response): Promise<void> =>
     const order = await prisma.order.create({
       data: {
         sessionId: session.id,
+        status: "PLACED",
         isTakeaway: Boolean(isTakeaway),
         items: {
           create: items.map((item: any) => ({
@@ -239,7 +257,7 @@ router.post("/orders/new", async (req: Request, res: Response): Promise<void> =>
             type: item.type || (isTakeaway ? "TAKEAWAY" : "DINE_IN"),
           })),
         },
-      },
+      } as any,
       include: { items: true },
     });
 

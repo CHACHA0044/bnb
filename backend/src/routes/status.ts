@@ -16,35 +16,23 @@ function emitStatusUpdate() {
  */
 router.get("/", async (req: Request, res: Response) => {
   try {
-    // Attempt to fetch using prisma (with fallback for schema mismatches)
-    // @ts-ignore
-    let status = await prisma.restaurantStatus.findUnique({
-      where: { id: "CURRENT" }
+    // Optimized: Use upsert to ensure the record exists without race conditions
+    let status = await (prisma as any).restaurantStatus.upsert({
+      where: { id: "CURRENT" },
+      update: {}, // No updates needed, just ensure it exists
+      create: { id: "CURRENT", isOpen: true, closingAt: null }
     }).catch(async () => {
-        // Fallback: Try a raw query if the model is not yet in the generated client
+        // Fallback: Raw check if Prisma model is not yet generated correctly
         try {
             const raw = await prisma.$queryRaw`SELECT * FROM "RestaurantStatus" WHERE id = 'CURRENT' LIMIT 1`;
-            return Array.isArray(raw) && raw.length > 0 ? raw[0] : null;
-        } catch {
-            return null;
-        }
-    });
-
-    if (!status) {
-      try {
-        // @ts-ignore
-        status = await prisma.restaurantStatus.create({
-            data: { id: "CURRENT", isOpen: true }
-        }).catch(async () => {
-            // Fallback: Raw insert
+            if (Array.isArray(raw) && raw.length > 0) return raw[0];
+            
             await prisma.$executeRaw`INSERT INTO "RestaurantStatus" (id, "isOpen", "updatedAt") VALUES ('CURRENT', true, NOW()) ON CONFLICT DO NOTHING`;
             return { id: "CURRENT", isOpen: true, closingAt: null };
-        });
-      } catch {
-          // Absolute fallback
-          status = { id: "CURRENT", isOpen: true, closingAt: null };
-      }
-    }
+        } catch {
+            return { id: "CURRENT", isOpen: true, closingAt: null };
+        }
+    });
 
     res.json(status);
   } catch (err) {

@@ -33,7 +33,7 @@ export default function Home() {
         <section className="py-20 md:py-32 relative overflow-hidden group">
           <div className="absolute inset-0">
             <Image 
-              src="/images/menu/plain-benne-dosa.webp" 
+              src="/images/benne-dosa.webp" 
               alt="Dosa Background" 
               fill 
               className="object-cover brightness-[0.3] transition-transform duration-[3s] group-hover:scale-110"

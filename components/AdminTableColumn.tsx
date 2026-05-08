@@ -5,7 +5,7 @@ import {
   Clock, CheckCircle2, Coffee, 
   CreditCard, Banknote, RotateCcw,
   QrCode, Download, Plus, Bell, X,
-  Square, CheckSquare, PackageCheck, Check, Shield, Copy, Package
+  Square, CheckSquare, PackageCheck, Check, Shield, Copy, Package, MessageSquare, XCircle
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { 
@@ -24,6 +24,7 @@ interface AdminTableColumnProps {
   onCloseSession: (sessionId: string) => Promise<void>;
   onToggleItemServed: (itemId: string, isServed: boolean) => Promise<void>;
   onToggleOrderItems: (orderId: string, isServed: boolean) => Promise<void>;
+  onDeleteOrder: (orderId: string) => Promise<void>;
   onDeletePayment: (paymentId: string) => Promise<void>;
   onToggleReminder: (sessionId: string, reminder: boolean) => Promise<void>;
   isTakeaway?: boolean;
@@ -50,6 +51,7 @@ export default function AdminTableColumn({
   onCloseSession,
   onToggleItemServed,
   onToggleOrderItems,
+  onDeleteOrder,
   onDeletePayment,
   onToggleReminder,
   isTakeaway = false,
@@ -85,9 +87,11 @@ export default function AdminTableColumn({
   const getSessionStats = () => {
     if (!session) return { total: 0, paid: 0, balance: 0, paymentMode: "NONE" };
     
-    const total = session.orders.reduce((acc, o) => 
-      acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0), 0
-    );
+    const total = session.orders
+      .filter(o => o.status !== "CANCELLED")
+      .reduce((acc, o) => 
+        acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
+      );
     const paid = session.payments
       .filter(p => p.status === "CONFIRMED")
       .reduce((acc, p) => acc + p.amount, 0);
@@ -131,9 +135,11 @@ export default function AdminTableColumn({
 
   const { total, paid, balance, paymentMode } = getSessionStats();
 
-  const allOrders = [...(session?.orders || [])].sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const allOrders = [...(session?.orders || [])]
+    .filter(o => o.status !== "CANCELLED")
+    .sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
   const downloadQR = () => {
     const svg = document.getElementById(`qr-${tableId}`);
@@ -361,12 +367,13 @@ export default function AdminTableColumn({
                 </div>
               ) : (
                 allOrders.map(order => {
-                  const status = order.status as "UNCONFIRMED" | "PLACED" | "PREPARING" | "SERVED";
+                  const status = order.status as "UNCONFIRMED" | "PLACED" | "PREPARING" | "SERVED" | "CANCELLED";
                   const statusConfig = {
                     UNCONFIRMED: { color: "bg-blue-600", label: "New Order", icon: <Bell size={12} className="animate-bounce" /> },
                     PLACED: { color: "bg-[#B71C1C]", label: "Placed", icon: <Clock size={12} /> },
                     PREPARING: { color: "bg-[#F4A261]", label: "Preparing", icon: <Clock size={12} className="animate-spin-slow" /> },
                     SERVED: { color: "bg-[#6A994E]", label: "Served", icon: <CheckCircle2 size={12} /> },
+                    CANCELLED: { color: "bg-gray-400", label: "Cancelled", icon: <XCircle size={12} /> }
                   };
                   const config = statusConfig[status] || statusConfig.PLACED;
                   const allServed = order.items.every(i => i.isServed);
@@ -384,8 +391,8 @@ export default function AdminTableColumn({
                       <div className={`absolute left-0 top-6 bottom-6 w-1 rounded-r-full ${allServed ? "bg-[#6A994E]" : config.color}`} />
                       
                       <div className="flex justify-between items-start mb-3 ml-2">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-3">
                             {status !== "UNCONFIRMED" && (
                               <motion.button 
                                 whileTap={{ scale: 0.8 }}
@@ -398,31 +405,33 @@ export default function AdminTableColumn({
                                     ? "bg-[#6A994E] border-[#6A994E] text-white" 
                                     : "bg-white border-gray-200 text-transparent hover:border-[#3A241C]/20"
                                 }`}
-                                title={allServed ? "Deselect All" : "Select All"}
                               >
                                 <CheckSquare size={14} className={allServed ? "opacity-100" : "opacity-0"} />
                               </motion.button>
                             )}
-                            <div className="relative">
-                              <select
-                                value={status}
-                                onChange={(e) => onUpdateStatus(order.id, e.target.value)}
-                                className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full text-white cursor-pointer outline-none appearance-none border-none transition-colors ${
-                                  allServed ? "bg-[#6A994E]" : config.color
-                                }`}
-                              >
-                                {status === "UNCONFIRMED" && <option value="UNCONFIRMED">New Order</option>}
-                                <option value="PLACED">Placed</option>
-                                <option value="PREPARING">Preparing</option>
-                                <option value="SERVED">Served</option>
-                              </select>
+                            <div className="flex flex-col gap-1">
+                              <div className="relative">
+                                <select
+                                  value={status}
+                                  onChange={(e) => onUpdateStatus(order.id, e.target.value)}
+                                  className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full text-white cursor-pointer outline-none appearance-none border-none transition-colors ${
+                                    allServed ? "bg-[#6A994E]" : config.color
+                                  }`}
+                                >
+                                  {status === "UNCONFIRMED" && <option value="UNCONFIRMED">New Order</option>}
+                                  <option value="PLACED">Placed</option>
+                                  <option value="PREPARING">Preparing</option>
+                                  <option value="SERVED">Served</option>
+                                  <option value="CANCELLED">Cancelled</option>
+                                </select>
+                              </div>
+                              <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
+                                {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
                             </div>
-                            <span className="text-[10px] font-bold text-gray-400">
-                              {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
                           </div>
                           {order.isTakeaway && (
-                            <span className="text-[8px] font-black uppercase tracking-widest bg-[#E76F51]/10 text-[#E76F51] px-2 py-0.5 rounded-full w-fit mt-1">
+                            <span className="text-[8px] font-black uppercase tracking-widest bg-[#E76F51]/10 text-[#E76F51] px-2 py-0.5 rounded-full w-fit">
                               Takeaway
                             </span>
                           )}
@@ -430,13 +439,22 @@ export default function AdminTableColumn({
                           {/* Quick Action Button Set */}
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {status === "UNCONFIRMED" ? (
-                              <motion.button
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => onUpdateStatus(order.id, "PLACED")}
-                                className="px-3 py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-1"
-                              >
-                                <CheckCircle2 size={14} /> Confirm
-                              </motion.button>
+                              <div className="flex items-center gap-1.5">
+                                <motion.button
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => onUpdateStatus(order.id, "PLACED")}
+                                  className="px-3 py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-1"
+                                >
+                                  <CheckCircle2 size={14} /> Confirm
+                                </motion.button>
+                                <motion.button
+                                  whileTap={{ scale: 0.95 }}
+                                  onClick={() => onUpdateStatus(order.id, "CANCELLED")}
+                                  className="px-3 py-2 bg-[#B71C1C] text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-red-700 transition-all flex items-center gap-1"
+                                >
+                                  <X size={14} /> Reject
+                                </motion.button>
+                              </div>
                             ) : status !== "SERVED" ? (
                               <>
                                 <motion.button
@@ -477,6 +495,22 @@ export default function AdminTableColumn({
                             )}
                           </div>
                       </div>
+
+                      {/* Instructions Display */}
+                      {order.instructions && order.instructions.trim() && (
+                        <div className="mx-2 mb-4 p-4 bg-[#E76F51]/10 border-2 border-[#E76F51]/30 rounded-2xl flex items-start gap-3 shadow-sm ring-1 ring-[#E76F51]/10">
+                          <div className="w-8 h-8 rounded-xl bg-[#E76F51] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[#E76F51]/20">
+                            <MessageSquare size={16} className="text-white" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-[#E76F51]">Cooking Instructions</span>
+                              <div className="h-px flex-1 bg-[#E76F51]/20 min-w-[20px]" />
+                            </div>
+                            <p className="text-[11px] font-black text-[#3A241C] leading-relaxed italic">"{order.instructions}"</p>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Items List */}
                       <div className="space-y-2 mt-4 ml-2">

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, MessageSquare } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CartItem from "./CartItem";
 import OrderSummary from "./OrderSummary";
@@ -36,6 +36,16 @@ interface CartContentProps {
   ratings: Record<string, number>;
   ratedItems: Set<string>;
   isTakeaway: boolean;
+  instructionsRef: React.MutableRefObject<string>;
+  deletedOrders: any[];
+  isProcessingOrder: boolean;
+  paymentSuccess: boolean;
+  sessionClosed: boolean;
+  showReviewPrompt: boolean;
+  setShowReviewPrompt: (val: boolean) => void;
+  onAnimationComplete: () => void;
+  autoScrollToHistory?: boolean;
+  onScrollComplete?: () => void;
 }
 
 const CartContent = ({
@@ -65,8 +75,51 @@ const CartContent = ({
   handleRateItem,
   ratings,
   ratedItems,
-  isTakeaway
+  isTakeaway,
+  instructionsRef,
+  deletedOrders,
+  isProcessingOrder,
+  paymentSuccess,
+  sessionClosed,
+  showReviewPrompt,
+  setShowReviewPrompt,
+  onAnimationComplete,
+  autoScrollToHistory,
+  onScrollComplete
 }: CartContentProps) => {
+  const [localInstructions, setLocalInstructions] = React.useState(instructionsRef.current);
+
+  // Sync parent clear to local
+  React.useEffect(() => {
+    if (instructionsRef.current === "" && localInstructions !== "") {
+      setLocalInstructions("");
+    }
+  }, [instructionsRef.current]);
+
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (autoScrollToHistory) {
+      const timer = setTimeout(() => {
+        const historyEl = document.getElementById('order-history-section');
+        if (historyEl && scrollContainerRef.current) {
+          // Direct scroll calculation for better reliability on mobile drawers
+          const container = scrollContainerRef.current;
+          const rect = historyEl.getBoundingClientRect();
+          const containerRect = container.getBoundingClientRect();
+          const targetOffset = container.scrollTop + (rect.top - containerRect.top) - 20;
+          
+          container.scrollTo({
+            top: targetOffset,
+            behavior: 'smooth'
+          });
+          onScrollComplete?.();
+        }
+      }, 800); // More generous timeout for mobile drawer animations
+      return () => clearTimeout(timer);
+    }
+  }, [autoScrollToHistory, onScrollComplete]);
+
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
 
   const groupedCart = cart.reduce((acc: any, item: any) => {
@@ -83,9 +136,11 @@ const CartContent = ({
     return 0;
   });
 
-  const sessionTotal = session?.orders.reduce(
-    (sum: number, o: any) => sum + o.items.reduce((s: number, i: any) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
-  ) || 0;
+  const sessionTotal = session?.orders
+    .filter((o: any) => o.status !== "CANCELLED")
+    .reduce(
+      (sum: number, o: any) => sum + o.items.reduce((s: number, i: any) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
+    ) || 0;
   const paidTotal = session?.payments
     .filter((p: any) => p.status === "CONFIRMED")
     .reduce((s: number, p: any) => s + p.amount, 0) || 0;
@@ -106,6 +161,12 @@ const CartContent = ({
         ratings={ratings}
         ratedItems={ratedItems}
         isTakeaway={isTakeaway}
+        isProcessingOrder={isProcessingOrder}
+        deletedOrders={deletedOrders}
+        paymentSuccess={paymentSuccess}
+        sessionClosed={sessionClosed}
+        showReviewPrompt={showReviewPrompt}
+        setShowReviewPrompt={setShowReviewPrompt}
       />
     );
   }
@@ -131,12 +192,12 @@ const CartContent = ({
 
       {/* SCROLLABLE AREA - Hardware Accelerated */}
       <div 
-        className="flex-1 overflow-y-auto custom-scrollbar flex flex-col min-h-0 touch-auto px-6 lg:px-10 pt-4 pb-32 lg:pb-10 transform-gpu"
-        style={{ willChange: "transform" }}
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto custom-scrollbar flex flex-col min-h-0 touch-auto px-6 lg:px-10 pt-4 pb-32 lg:pb-10"
       >
         
         {/* Bill Summary Row */}
-        {session && session.orders.length > 0 && (
+        {session && sessionTotal > 0 && (
           <div className="w-full mb-8 space-y-4">
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-[#F9F7F4] p-4 rounded-2xl border border-[#3A241C]/5 flex flex-col justify-center">
@@ -200,6 +261,71 @@ const CartContent = ({
           )}
         </div>
 
+        {/* INSTRUCTIONS PILL */}
+        <AnimatePresence>
+          {cart.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="mt-4 mb-1 px-2"
+            >
+              <div className="relative group">
+                <div className={`flex items-start gap-3 bg-white p-3 lg:p-3.5 rounded-[1.8rem] border border-[#3A241C]/5 shadow-sm transition-all duration-300 ${localInstructions ? 'rounded-[1.2rem] bg-[#F9F7F4]/20' : ''}`}>
+                  <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-xl bg-[#3A241C]/5 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <MessageSquare size={13} className={`transition-colors ${localInstructions ? 'text-[#E76F51]' : 'text-[#3A241C]/20'}`} />
+                  </div>
+                  
+                  <div className="flex-1 relative pt-1.5 lg:pt-2">
+                    {!localInstructions && (
+                      <div className="absolute inset-0 flex flex-col justify-center pointer-events-none select-none">
+                        <span className="text-[9px] lg:text-[10px] font-black uppercase tracking-[0.2em] text-[#3A241C]/50 leading-none">
+                          Cooking Instructions
+                        </span>
+                        <span className="text-[6px] lg:text-[7px] font-bold text-[#3A241C]/40 uppercase tracking-widest leading-none mt-1">
+                          We will try to implement them as best as possible
+                        </span>
+                      </div>
+                    )}
+                    <textarea 
+                      value={localInstructions}
+                      onChange={(e) => {
+                        const val = e.target.value.slice(0, 100);
+                        setLocalInstructions(val);
+                        instructionsRef.current = val;
+                      }}
+                      maxLength={100}
+                      rows={1}
+                      spellCheck={false}
+                      onInput={(e: any) => {
+                        e.target.style.height = 'auto';
+                        e.target.style.height = e.target.scrollHeight + 'px';
+                      }}
+                      style={{ 
+                        border: 'none', 
+                        outline: 'none', 
+                        boxShadow: 'none',
+                        WebkitAppearance: 'none'
+                      }}
+                      className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:ring-transparent text-xs lg:text-sm font-semibold text-[#3A241C] resize-none overflow-hidden min-h-[20px] p-0 placeholder:text-transparent appearance-none shadow-none"
+                    />
+                  </div>
+                </div>
+                
+                {localInstructions.length >= 100 && (
+                  <motion.p 
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-[7px] font-black text-[#E76F51] uppercase tracking-widest mt-2 ml-14"
+                  >
+                    Limit of 100 characters reached
+                  </motion.p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* TOTALS BOX */}
         <AnimatePresence>
           {cart.length > 0 && (
@@ -212,12 +338,19 @@ const CartContent = ({
               lockedBy={lockedBy}
               clientId={clientId}
               onPlaceOrder={onPlaceOrder}
+              onAnimationComplete={onAnimationComplete}
             />
           )}
         </AnimatePresence>
 
         {/* ORDER HISTORY */}
-        <OrderHistory orders={session?.orders} isTakeawayMode={isTakeaway} />
+        <OrderHistory 
+          orders={session?.orders} 
+          isTakeawayMode={isTakeaway} 
+          onRateItem={handleRateItem}
+          ratings={ratings}
+          ratedItems={ratedItems}
+        />
       </div>
     </div>
   );

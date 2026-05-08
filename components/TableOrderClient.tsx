@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
-import { Loader2, Package, MapPin, ShieldAlert, Lock, CheckCircle2, ChevronDown } from "lucide-react";
+import { Loader2, Package, MapPin, ShieldAlert, Lock, CheckCircle2, ChevronDown, Coffee, Bell, X, Star } from "lucide-react";
 import dynamic from "next/dynamic";
 
 import { 
   fetchSession, placeOrder, createPayment, fetchMenu, 
-  fetchRestaurantStatus, verifyLocation,
+  fetchRestaurantStatus, verifyLocation, dismissReviewRequest,
   type SessionData, type OrderData, type PaymentData,
   type RestaurantStatusData
 } from "@/lib/api";
@@ -64,6 +64,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [ordering, setOrdering] = useState(false);
   const [showCartMobile, setShowCartMobile] = useState(false);
+  const [pendingHistoryScroll, setPendingHistoryScroll] = useState(false);
+  const [deletedOrders, setDeletedOrders] = useState<any[]>([]);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [sessionClosed, setSessionClosed] = useState(false);
+  
+  // Global Notification States
+  const [showCancellation, setShowCancellation] = useState(false);
+  const notifiedCancelledIds = useRef(new Set<string>());
   
   // Multiplayer Cart State (Local-first now)
   const [clientId, setClientId] = useState<string>("");
@@ -74,6 +82,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   // UI States
   const [lang, setLang] = useState<"EN" | "HI">("EN");
   const [toast, setToast] = useState<string | null>(null);
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const instructionsRef = useRef("");
+  const [isProcessingOrder, setIsProcessingOrder] = useState(false);
 
   const dragControls = useDragControls();
   const [variantModalItem, setVariantModalItem] = useState<OrderMenuItem | null>(null);
@@ -88,9 +101,22 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   // Rating
   const [ratings, setRatings] = useState<{ [itemName: string]: number }>({});
   const [ratedItems, setRatedItems] = useState<Set<string>>(new Set());
+  const [showReviewPrompt, setShowReviewPrompt] = useState(false);
 
   // Socket
   const { socket, joinSession, on, connected } = useSocket();
+  const [showConfirmed, setShowConfirmed] = useState(false);
+
+  useEffect(() => {
+    setShowReviewPrompt(!!session?.reviewRequested);
+  }, [session?.reviewRequested]);
+
+  useEffect(() => {
+    if (session) {
+      console.log(`[STATE] Session ${session.id} - paymentReminder: ${session.paymentReminder}, reviewRequested: ${session.reviewRequested}`);
+    }
+    console.log(`[STATE] showReviewPrompt: ${showReviewPrompt}`);
+  }, [session, showReviewPrompt]);
 
   /* ─── Geolocation Verification ─────────── */
   const tryVerifyLocation = useCallback(async (sid?: string) => {
@@ -114,15 +140,73 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     );
   }, []);
 
-  /* ─── Client Identity ──────────────────── */
   useEffect(() => {
+    setIsMounted(true);
     let cid = localStorage.getItem("bnb_client_id");
     if (!cid) {
       cid = "user_" + Math.random().toString(36).substr(2, 9);
       localStorage.setItem("bnb_client_id", cid);
     }
     setClientId(cid);
-  }, []);
+
+    const key = `bnb_last_welcome_${mode}`;
+    const lastWelcome = localStorage.getItem(key);
+    const now = Date.now();
+    const shouldShow = !lastWelcome || (now - parseInt(lastWelcome || "0")) > 1000 * 60 * 60 * 3;
+
+    if (shouldShow) {
+      setShowWelcome(true);
+      localStorage.setItem(key, now.toString());
+    } else {
+      setWelcomeDismissed(true);
+    }
+  }, [mode]);
+
+  // Hydrate from cache for instant load
+  useEffect(() => {
+    const cachedMenu = localStorage.getItem("bnb_cached_menu");
+    const sessionKey = isTakeawayMode ? "bnb_cached_session_takeaway" : `bnb_cached_session_${tableId}`;
+    const cachedSession = localStorage.getItem(sessionKey);
+
+    if (cachedMenu) {
+      try {
+        const { items, categories: cats } = JSON.parse(cachedMenu);
+        if (items && cats) {
+          setMenuItems(items);
+          setCategories(cats);
+          setMenuLoading(false);
+          if (cats.length > 0) setActiveCategory(cats[0]);
+        }
+      } catch (e) { console.error("Menu cache parse error", e); }
+    }
+
+    if (cachedSession) {
+      try {
+        const data = JSON.parse(cachedSession);
+        if (data) {
+          setSession(data);
+          setLoading(false);
+        }
+      } catch (e) { console.error("Session cache parse error", e); }
+    }
+  }, [tableId, isTakeawayMode]);
+
+  // PERSIST CART
+  useEffect(() => {
+    const cachedCart = localStorage.getItem(`bnb_cart_${tableId}`);
+    if (cachedCart) {
+      try {
+        const parsed = JSON.parse(cachedCart);
+        if (Array.isArray(parsed)) setCart(parsed);
+      } catch (e) { console.error("Cart hydration error", e); }
+    }
+  }, [tableId]);
+
+  useEffect(() => {
+    if (cart.length > 0 || isMounted) {
+      localStorage.setItem(`bnb_cart_${tableId}`, JSON.stringify(cart));
+    }
+  }, [cart, tableId, isMounted]);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -153,9 +237,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       ]);
 
       setSession(sessionData);
+      const sessionKey = isTakeawayMode ? "bnb_cached_session_takeaway" : `bnb_cached_session_${tableId}`;
+      localStorage.setItem(sessionKey, JSON.stringify(sessionData));
+
       if (sessionData?.status === "CLOSED") {
         if (isTakeawayMode) localStorage.removeItem("bnb_takeaway_session_id");
-        setError("This session has been closed. Please ask staff.");
+        localStorage.removeItem(sessionKey);
+        setSessionClosed(true);
+        setOrderPlaced(true); // Show the thank you screen
       }
     } catch (err) {
       if (isTakeawayMode) localStorage.removeItem("bnb_takeaway_session_id");
@@ -171,6 +260,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       const data = await fetchMenu();
       setMenuItems(data.items);
       setCategories(data.categories);
+      localStorage.setItem("bnb_cached_menu", JSON.stringify(data));
       if (data.categories.length > 0 && !activeCategory) {
         setActiveCategory(data.categories[0]);
       }
@@ -224,16 +314,98 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     joinSession(session.id);
     const unsubs = [
       on("order_placed", () => loadSession()),
-      on("order_updated", () => loadSession()),
-      on("payment_confirmed", () => loadSession()),
-      on("session_updated", () => loadSession()),
-      on("takeaway_ready", (data: any) => {
-        showToast(data.message);
+      on("order_updated", (data: any) => {
+        setIsProcessingOrder(false);
+        if (data.order) {
+          setSession(prev => {
+            if (!prev) return null;
+            const updatedOrders = prev.orders.map(o => 
+              o.id === data.order.id || o.id === data.tempOrderId ? { ...o, ...data.order } : o
+            );
+            return { ...prev, orders: updatedOrders };
+          });
+        }
+        loadSession();
+        // Show confirmation toast when admin confirms
+        if (data.order && data.order.status === "PLACED") {
+          showToast("Order confirmed by staff!");
+        }
+      }),
+      on("order_deleted", (data: any) => {
+        setIsProcessingOrder(false);
+        if (data.orderId) {
+          setSession(prev => {
+            if (!prev) return null;
+            return { ...prev, orders: prev.orders.filter(o => o.id !== data.orderId) };
+          });
+        }
+        
+        // Track deleted order for notification
+        if (data.order) {
+          setDeletedOrders(prev => [...prev, data.order]);
+          setTimeout(() => {
+            setDeletedOrders(prev => prev.filter(o => o.id !== data.order.id));
+          }, 90000);
+        }
+
+        loadSession();
+      }),
+      on("payment_confirmed", (data: any) => {
+        if (data.payment) {
+          setSession(prev => {
+            if (!prev) return null;
+            const exists = prev.payments.some(p => p.id === data.payment.id);
+            if (exists) {
+              return {
+                ...prev,
+                payments: prev.payments.map(p => p.id === data.payment.id ? data.payment : p)
+              };
+            }
+            return { ...prev, payments: [data.payment, ...prev.payments] };
+          });
+        }
+        loadSession();
+        setPaymentSuccess(true);
+        setOrderPlaced(true);
+        setTimeout(() => setPaymentSuccess(false), 90000);
+      }),
+      on("review_requested", () => {
+        console.log("Review request received!");
+        setShowReviewPrompt(true);
+      }),
+      on("session_updated", (data: any) => {
+        console.log("[SOCKET] session_updated received:", data);
         loadSession();
       }),
     ];
     return () => unsubs.forEach((u) => u());
   }, [session?.id, joinSession, on, loadSession, loadStatus, showToast]);
+
+  // Auto-reset orderPlaced if session becomes empty AND no active notifications
+  useEffect(() => {
+    if (orderPlaced && !isProcessingOrder && session && session.orders.length === 0 && deletedOrders.length === 0 && !paymentSuccess) {
+      setOrderPlaced(false);
+    }
+  }, [session, isProcessingOrder, orderPlaced, deletedOrders.length, paymentSuccess]);
+
+  // Global Notification Tracking
+  const cancelledOrders = useMemo(() => [
+    ...(session?.orders ?? []).filter((o: any) => o.status === "CANCELLED"),
+    ...deletedOrders
+  ], [session, deletedOrders]);
+
+  useEffect(() => {
+    const currentIds = cancelledOrders.map((o: any) => o.id);
+    const newIds = currentIds.filter(id => !notifiedCancelledIds.current.has(id));
+
+    if (newIds.length > 0) {
+      setShowCancellation(true);
+      newIds.forEach(id => notifiedCancelledIds.current.add(id));
+      const timer = setTimeout(() => setShowCancellation(false), 60000); // Hide after 1 min
+      return () => clearTimeout(timer);
+    }
+  }, [cancelledOrders]);
+
 
   // Countdown timer logic
   useEffect(() => {
@@ -269,7 +441,12 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
     const unsubs = [
       on("cart_sync", (sharedCart: any) => {
-        setCart(sharedCart.items);
+        // Smart merge: keep MY items local, sync OTHER users' items from server
+        setCart(prev => {
+          const myItems = prev.filter(item => item.addedBy === clientId);
+          const otherItems = (sharedCart.items || []).filter((item: any) => item.addedBy !== clientId);
+          return [...myItems, ...otherItems];
+        });
         setCartLocked(sharedCart.isLocked);
         setLockedBy(sharedCart.lockedBy);
         setCartUsers(sharedCart.users);
@@ -277,7 +454,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       on("cart_toast", (msg: any) => {
         setToast(msg);
         setTimeout(() => setToast(null), 3000);
-      })
+      }),
+      on("order_updated", () => loadSession()),
+      on("session_updated", () => loadSession()),
+      on("order_placed", () => loadSession()),
     ];
     return () => unsubs.forEach(u => u());
   }, [clientId, connected, socket, tableId, on]);
@@ -375,6 +555,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     }
     if (cartLocked) return showToast("Cart is locked for checkout!");
     
+    // Clear notifications when adding new items
+    setOrderPlaced(false);
+    setDeletedOrders([]);
+    setPaymentSuccess(false);
+    
     if (item.variants && !variant) {
       setVariantModalItem(item);
       const initial: { [key: string]: number } = {};
@@ -449,12 +634,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     syncCart((prev) => prev.map(c => ({ ...c, forPacking: isTakeaway })));
   }, [isTakeawayMode, cartLocked, syncCart]);
 
-  // Auto-close mobile cart drawer when empty
-  useEffect(() => {
-    if (cart.length === 0 && !orderPlaced && showCartMobile) {
-      setShowCartMobile(false);
-    }
-  }, [cart.length, orderPlaced, showCartMobile]);
+  // Mobile cart drawer persistence handled by state (manual close only)
 
   /* ─── Calculations ─────────────────────── */
   const packingCharges = useMemo(() => {
@@ -480,7 +660,8 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (cartLocked && lockedBy !== clientId) return showToast("Someone else is placing the order!");
     
     setOrdering(true);
-    if (socket && clientId) socket.emit("cart_lock", { tableId, clientId });
+    setIsProcessingOrder(true);
+    // Don't hide mobile cart yet — let the animation play first
     
     try {
       const itemsToKitchen = cart.map((c) => ({ 
@@ -489,20 +670,23 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         quantity: c.quantity 
       }));
 
-      const response = await placeOrder(session?.id || "", itemsToKitchen, isTakeawayGlobal, tableId, packingCharges);
+      const response = await placeOrder(session?.id || "", itemsToKitchen, isTakeawayGlobal, tableId, packingCharges, instructionsRef.current);
       
       if (isTakeawayMode && response.order.sessionId) {
         localStorage.setItem("bnb_takeaway_session_id", response.order.sessionId);
       }
       
-      if (socket) socket.emit("cart_unlock", { tableId });
-      
-      syncCart([]);
+      // Backend route already emits to admin — no client emission needed
+      instructionsRef.current = "";
       setSession(response.session);
-      setOrderPlaced(true);
-      setShowCartMobile(false);
+      setIsProcessingOrder(false);
+      setOrderPlaced(true); // Ensure success screen shows immediately
+      setShowConfirmed(true);
+      setTimeout(() => setShowConfirmed(false), 8000); // 8 seconds for visibility
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to place order");
+      setIsProcessingOrder(false);
+      setOrderPlaced(false);
       if (socket) socket.emit("cart_unlock", { tableId });
     } finally {
       setOrdering(false);
@@ -510,9 +694,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cart, cartLocked, lockedBy, clientId, socket, tableId, session?.id, isTakeawayGlobal, packingCharges, isTakeawayMode, syncCart, showToast]);
 
   /* ─── Payment Actions ──────────────────── */
-  const sessionTotal = useMemo(() => session?.orders.reduce(
-    (sum, o) => sum + o.items.reduce((s, i) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
-  ) || 0, [session]);
+  const sessionTotal = useMemo(() => session?.orders
+    .filter(o => o.status !== "CANCELLED")
+    .reduce(
+      (sum, o) => sum + o.items.reduce((s, i) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
+    ) || 0, [session]);
 
   const paidTotal = useMemo(() => session?.payments
     .filter((p) => p.status === "CONFIRMED")
@@ -556,23 +742,152 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (socket) socket.emit("table_close_request", { tableId, sessionId: session.id });
   }, [session, remaining, socket, tableId, showToast]);
 
-  const handleRateItem = useCallback(async (itemName: string, rating: number) => {
+  const handleRateItem = useCallback(async (itemName: string, rating: number, orderId?: string) => {
     try {
       const { submitRating } = await import("@/lib/api");
       const menuItem = menuItems.find(m => m.name === itemName);
       if (menuItem) await submitRating(menuItem.id, rating);
-      setRatings(prev => ({ ...prev, [itemName]: rating }));
-      setRatedItems(prev => new Set(prev).add(itemName));
-      showToast("Thank you for your rating!");
+      
+      const ratingKey = orderId ? `${orderId}-${itemName}` : itemName;
+      setRatings(prev => ({ ...prev, [ratingKey]: rating }));
+      
+      setRatedItems(prev => {
+        const next = new Set(prev).add(ratingKey);
+        
+        // Count total rateable items in the current session
+        if (session?.orders) {
+          const rateableItemsKeys = new Set<string>();
+          session.orders.forEach(o => {
+            if (o.status === 'SERVED') {
+              o.items.forEach((it: any) => {
+                const n = it.name.toLowerCase();
+                const isExcluded = n.includes("water") || n.includes("soft drink") || 
+                                 n.includes("coke") || n.includes("pepsi") || 
+                                 n.includes("sprite") || n.includes("thums up");
+                if (!isExcluded) {
+                  rateableItemsKeys.add(`${o.id}-${it.name}`);
+                }
+              });
+            }
+          });
+
+          // Only show toast when all items that CAN be rated HAVE been rated
+          let allRated = true;
+          rateableItemsKeys.forEach(key => {
+            if (!next.has(key)) allRated = false;
+          });
+
+          if (allRated && rateableItemsKeys.size > 0) {
+            showToast("Thank you for your rating!");
+          }
+        }
+        
+        return next;
+      });
     } catch (err) {
       showToast("Failed to submit rating");
     }
-  }, [menuItems, showToast]);
+  }, [menuItems, showToast, session]);
 
+  // Logic: Show premium welcome screen for all initial loading states
+  if (!isMounted || loading || (showWelcome && !welcomeDismissed)) {
+    return (
+      <AnimatePresence>
+        <motion.div 
+          key="welcome-loader"
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0, scale: 1.05, filter: "blur(20px)" }}
+          transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+          className="fixed inset-0 z-[1000] bg-[#F9F7F4] flex flex-col items-center justify-center p-8 overflow-hidden"
+        >
+          {/* Animated Background Elements */}
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.2, 1],
+              opacity: [0.3, 0.5, 0.3],
+              rotate: [0, 90, 0]
+            }}
+            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+            className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-[var(--benne-primary)]/5 rounded-full blur-[100px]"
+          />
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.3, 1],
+              opacity: [0.2, 0.4, 0.2],
+              rotate: [0, -90, 0]
+            }}
+            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+            className="absolute bottom-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-[#3A241C]/5 rounded-full blur-[100px]"
+          />
+
+          <div className="relative z-10 flex flex-col items-center text-center max-w-sm">
+            {/* Logo Animation */}
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0, rotate: -10 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              transition={{ duration: 0.8, ease: "backOut" }}
+              className="w-24 h-24 bg-[#3A241C] rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl relative"
+            >
+              <Coffee size={40} className="text-white" />
+              <motion.div 
+                animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="absolute inset-0 border-4 border-[#3A241C] rounded-[2.5rem]"
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ delay: 0.3, duration: 0.8 }}
+            >
+              <h1 className="font-[var(--font-playfair)] text-4xl font-bold text-[#3A241C] mb-4 italic">
+                {showWelcome ? "Welcome to  Benne n Beans" : "Brewing things back up"}
+              </h1>
+              
+              <div className="h-px w-12 bg-[var(--benne-primary)]/30 mx-auto mb-6" />
+              
+              <p className="text-[#3A241C]/40 text-xs font-black uppercase tracking-[0.25em] leading-loose mb-12 h-10 flex items-center justify-center">
+                {showWelcome 
+                  ? (isTakeawayMode ? "Take the legacy of flavor home." : "Dine-in with the soul of Karnataka.")
+                  : "Bringing back your delicious session..."
+                }
+              </p>
+
+              <div className="flex flex-col items-center gap-4">
+                {/* Progress Indicator */}
+                <div className="relative w-48 h-1 bg-[#3A241C]/5 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ x: "-100%" }}
+                    animate={{ x: (loading || menuLoading) ? "-20%" : "0%" }}
+                    transition={{ duration: 2, ease: "easeInOut" }}
+                    onAnimationComplete={() => {
+                      if (!loading && !menuLoading) {
+                        setWelcomeDismissed(true);
+                      }
+                    }}
+                    className="absolute inset-0 bg-[var(--benne-primary)]"
+                  />
+                </div>
+                <span className="text-[10px] font-black text-[#3A241C]/20 uppercase tracking-[0.2em] animate-pulse">
+                  {(loading || menuLoading) ? "Getting things ready..." : "Ready to serve"}
+                </span>
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
+
+  // If welcome is already seen but data is still loading
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F9F7F4]">
-        <Loader2 className="animate-spin text-[#E76F51]" size={40} />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="animate-spin text-[var(--benne-primary)]" size={32} />
+          <span className="text-[10px] font-black text-[#3A241C]/20 uppercase tracking-widest">Restoring Session...</span>
+        </div>
       </div>
     );
   }
@@ -590,13 +905,137 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     payingUPI, payingCash,
     clientId, cartLocked, lockedBy,
     handleRateItem, ratings, ratedItems,
-    isTakeaway: isTakeawayMode
+    isTakeaway: isTakeawayMode,
+    instructionsRef,
+    isProcessingOrder,
+    deletedOrders,
+    paymentSuccess,
+    sessionClosed,
+    showReviewPrompt,
+    setShowReviewPrompt,
+    onAnimationComplete: () => {
+      setOrderPlaced(true);
+      setCart([]);
+      localStorage.removeItem(`bnb_cart_${tableId}`);
+    },
+    autoScrollToHistory: pendingHistoryScroll,
+    onScrollComplete: () => setPendingHistoryScroll(false)
   };
 
   const menuTransition: any = { duration: 0.3, ease: [0.22, 1, 0.36, 1] };
 
   return (
     <div className="h-screen h-[100dvh] bg-[#F9F7F4] flex flex-col overflow-hidden relative">
+      {/* GLOBAL NOTIFICATIONS */}
+      <div className="fixed top-24 left-6 right-6 z-[150] space-y-4 pointer-events-none">
+        <AnimatePresence mode="popLayout">
+          {session?.paymentReminder && (
+            <motion.div 
+              key="payment-reminder"
+              initial={{ y: -20, opacity: 0, scale: 0.9 }} 
+              animate={{ y: 0, opacity: 1, scale: 1 }} 
+              exit={{ y: -20, opacity: 0, scale: 0.9 }}
+              className="mx-auto w-fit max-w-[90vw] bg-[#B71C1C] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-[0_20px_50px_rgba(183,28,28,0.3)] border border-white/10 pointer-events-auto"
+            >
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0 backdrop-blur-md">
+                <Bell size={18} className="animate-bounce" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest leading-tight">
+                  Please settle your bill at the counter or via UPI!
+                </p>
+              </div>
+            </motion.div>
+          )}
+
+          {showReviewPrompt && (
+            <motion.div 
+              key="review-prompt"
+              initial={{ y: -20, opacity: 0, scale: 0.9 }} 
+              animate={{ y: 0, opacity: 1, scale: 1 }} 
+              exit={{ y: -20, opacity: 0, scale: 0.9 }}
+              onClick={async () => {
+                setShowReviewPrompt(false);
+                if (session) dismissReviewRequest(session.id);
+                setPendingHistoryScroll(true);
+                setShowCartMobile(true);
+              }}
+              className="mx-auto w-fit max-w-[90vw] bg-[#E76F51] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-[0_20px_50px_rgba(231,111,81,0.3)] border border-white/10 pointer-events-auto cursor-pointer group"
+            >
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0 group-hover:scale-110 transition-transform">
+                <Star size={18} className="fill-white animate-bounce" />
+              </div>
+              <div className="flex-1 text-left pr-2">
+                <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest leading-tight">Rate Your Meal! Tap to open history & share feedback.</p>
+              </div>
+              <button 
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setShowReviewPrompt(false);
+                  if (session) dismissReviewRequest(session.id);
+                }}
+                className="w-7 h-7 lg:w-8 lg:h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0"
+              >
+                <X size={16} />
+              </button>
+            </motion.div>
+          )}
+
+          {showConfirmed && (
+            <motion.div 
+              key="order-confirmed"
+              initial={{ y: -20, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -20, opacity: 0, scale: 0.9 }} className="mx-auto w-fit max-w-[90vw] bg-[#3A241C] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto">
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#6A994E] rounded-xl flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 size={18} className="text-white" />
+              </div>
+              <div className="flex-1 text-left pr-2">
+                <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest mb-0.5 leading-tight">Order Placed!</p>
+                <p className="text-[8px] lg:text-[9px] font-bold text-white/80 leading-tight">Your request is being processed by our staff.</p>
+              </div>
+              <button onClick={() => setShowConfirmed(false)} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0">
+                <X size={16} />
+              </button>
+            </motion.div>
+          )}
+
+          {showCancellation && (
+            <motion.div 
+              key="order-cancelled"
+              initial={{ y: -20, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -20, opacity: 0, scale: 0.9 }} className="mx-auto w-fit max-w-[90vw] bg-[#B71C1C] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto">
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
+                <ShieldAlert size={18} className="animate-pulse" />
+              </div>
+              <div className="flex-1 text-left pr-2">
+                <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest mb-0.5 leading-tight">Order Cancelled</p>
+                <p className="text-[8px] lg:text-[9px] font-bold text-white/80 leading-tight">Your order could not be accepted. Added items are removed.</p>
+              </div>
+              <button onClick={() => setShowCancellation(false)} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0">
+                <X size={16} />
+              </button>
+            </motion.div>
+          )}
+
+          {(() => {
+            const hasReadyTakeaway = (session?.orders ?? []).some((o: any) => 
+              o.items.some((i: any) => i.name.toLowerCase().includes("(to-go)") && i.isServed)
+            );
+            if (!hasReadyTakeaway) return null;
+            return (
+              <motion.div 
+                key="takeaway-ready"
+                initial={{ y: -20, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -20, opacity: 0, scale: 0.9 }} className="mx-auto w-fit max-w-[90vw] bg-[#6A994E] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto">
+                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
+                  <Package size={18} className="animate-bounce" />
+                </div>
+                <div className="flex-1 text-left pr-2">
+                  <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest mb-0.5 leading-tight">Takeaway Ready!</p>
+                  <p className="text-[8px] lg:text-[9px] font-bold text-white/80 leading-tight">Please collect your items from the counter.</p>
+                </div>
+              </motion.div>
+            );
+          })()}
+        </AnimatePresence>
+      </div>
       {/* REMOTE ORDERS LOCKOUT */}
       {locationVerified === false && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-[200] bg-[#3A241C]/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center">
@@ -629,6 +1068,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         onCloseTable={handleCloseTable}
         onToggleGlobalTakeaway={handleGlobalTakeawayToggle}
       />
+
 
       <div className="flex flex-1 overflow-hidden relative">
         <main ref={menuContainerRef as any} id="menu-container" className="flex-1 relative border-r border-[#3A241C]/5 overflow-y-auto w-full scroll-smooth transform-gpu translate-z-0">
@@ -670,7 +1110,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
         {/* Mobile Cart UI - Synchronized and Butter Smooth */}
         <AnimatePresence initial={false}>
-          {!showCartMobile && (cartCount > 0 || orderPlaced) && (
+          {!showCartMobile && (cartCount > 0 || orderPlaced || remaining > 0 || session?.paymentReminder) && (
             <motion.div 
               key="cart-trigger"
               initial={{ y: 150, opacity: 0 }} 
@@ -691,11 +1131,22 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                 className="w-full h-16 bg-[#3A241C] text-white rounded-[2.5rem] flex items-center justify-between px-8 shadow-[0_20px_50px_rgba(58,36,28,0.3)] border border-white/5 overflow-hidden relative touch-none select-none"
               >
                 <div className="flex items-center gap-4">
-                  <div className={`w-8 h-8 rounded-full ${orderPlaced ? 'bg-[#6A994E]' : 'bg-[#E76F51]'} flex items-center justify-center text-[11px] font-black`}>{orderPlaced ? <Package size={14} /> : cartCount}</div>
-                  <span className="font-black text-[11px] uppercase tracking-widest">{orderPlaced ? "View Order" : "Cart Items"}</span>
+                  <div className={`w-8 h-8 rounded-full ${orderPlaced || remaining > 0 ? 'bg-[#6A994E]' : 'bg-[#E76F51]'} flex items-center justify-center text-[11px] font-black`}>
+                    {orderPlaced || remaining > 0 ? <Package size={14} /> : cartCount}
+                  </div>
+                  <span className="font-black text-[11px] uppercase tracking-widest">
+                    {orderPlaced || remaining > 0 ? "View Status & Bill" : "Cart Items"}
+                  </span>
                 </div>
                 <span className="font-black text-sm tracking-tight">
-                  {orderPlaced ? (remaining > 0 ? `Pay ₹${remaining}` : "View Status") : (
+                  {orderPlaced ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold opacity-60 uppercase">
+                        {(session?.orders ?? []).some(o => o.items.some(i => !i.isServed) && o.status !== "CANCELLED") ? "Preparing" : "Served"}
+                      </span>
+                      {remaining > 0 ? `₹${remaining}` : ""}
+                    </div>
+                  ) : (
                     <span className="flex items-center gap-0.5">
                       <AnimatedAmount value={cartTotal} />
                     </span>
@@ -762,6 +1213,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         <AnimatePresence>
           {toast && (
             <motion.div 
+              key="premium-toast"
               initial={{ opacity: 0, y: -40, scale: 0.9 }} 
               animate={{ opacity: 1, y: 0, scale: 1 }} 
               exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}

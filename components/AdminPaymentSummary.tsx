@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CreditCard, Banknote, Bell, X, Check, Plus, Loader2 } from "lucide-react";
+import { CreditCard, Banknote, Bell, X, Check, Plus, Loader2, Star } from "lucide-react";
 import { SessionData } from "@/lib/api";
 
 interface AdminPaymentSummaryProps {
@@ -12,6 +12,7 @@ interface AdminPaymentSummaryProps {
   onDeletePayment: (paymentId: string) => Promise<void>;
   onToggleReminder: (sessionId: string, reminder: boolean) => Promise<void>;
   onRecordPayment: (sessionId: string, method: "CASH" | "UPI", amount: number) => Promise<void>;
+  onSendReviewRequest?: (sessionId: string, requested: boolean) => void;
   isTakeaway?: boolean;
 }
 
@@ -22,6 +23,7 @@ export default function AdminPaymentSummary({
   onDeletePayment,
   onToggleReminder,
   onRecordPayment,
+  onSendReviewRequest,
   isTakeaway = false,
 }: AdminPaymentSummaryProps) {
   const [recordAmount, setRecordAmount] = useState<string>("");
@@ -40,9 +42,11 @@ export default function AdminPaymentSummary({
     );
   }
 
-  const total = session.orders.reduce((acc, o) => 
-    acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
-  );
+  const total = session.orders
+    .filter(o => o.status !== "CANCELLED")
+    .reduce((acc, o) => 
+      acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
+    );
   const paid = session.payments
     .filter(p => p.status === "CONFIRMED")
     .reduce((acc, p) => acc + p.amount, 0);
@@ -74,29 +78,53 @@ export default function AdminPaymentSummary({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <p className="text-[10px] font-black text-[#3A241C] uppercase tracking-[0.2em]">
-              {isTakeaway ? `TW#${session.sessionNumber}` : `${tableId}#${session.sessionNumber}`}
+              {session ? (isTakeaway ? `TW#${session.sessionNumber}` : `${tableId}#${session.sessionNumber}`) : `${tableId} (Idle)`}
             </p>
-            <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full ${
-              paymentMode === "MIXED" ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-600"
-            }`}>
-              {paymentMode}
-            </span>
+            {session && (
+              <span className={`text-[7px] font-black px-1.5 py-0.5 rounded-full ${
+                paymentMode === "MIXED" ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-600"
+              }`}>
+                {paymentMode}
+              </span>
+            )}
           </div>
           <p className="text-[8px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Payment History</p>
         </div>
-        <motion.button 
-          whileTap={{ scale: 0.9 }}
-          whileHover={{ scale: 1.1 }}
-          onClick={() => onToggleReminder(session.id, !session.paymentReminder)}
-          className={`p-2 rounded-xl transition-all ${
-            session.paymentReminder 
-              ? "bg-[#E76F51] text-white shadow-lg shadow-[#E76F51]/20" 
-              : "bg-[#F9F7F4] text-[#3A241C]/20 hover:bg-[#3A241C]/5"
-          }`}
-          title={session.paymentReminder ? "Reminder Sent" : "Send Payment Reminder"}
-        >
-          <Bell size={16} className={session.paymentReminder ? "animate-bounce" : ""} />
-        </motion.button>
+        <div className="flex items-center gap-2">
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.1 }}
+            onClick={() => onToggleReminder(session.id, !session.paymentReminder)}
+            className={`p-2 rounded-xl transition-all border cursor-pointer relative z-10 ${
+              session.paymentReminder 
+                ? "bg-[#E76F51] text-white border-[#E76F51] shadow-lg shadow-[#E76F51]/20" 
+                : "bg-[#E76F51]/5 text-[#E76F51] border-[#E76F51]/10 hover:bg-[#E76F51]/10"
+            }`}
+            title={session.paymentReminder ? "Reminder Sent" : "Send Payment Reminder"}
+          >
+            <Bell size={16} className={session.paymentReminder ? "animate-bounce" : ""} />
+          </motion.button>
+
+          <motion.button 
+            whileTap={{ scale: 0.9 }}
+            whileHover={{ scale: 1.1 }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (session) {
+                onSendReviewRequest?.(session.id, !session.reviewRequested);
+              }
+            }}
+            className={`p-2 rounded-xl transition-all border cursor-pointer relative z-10 ${
+              session.reviewRequested 
+                ? "bg-[#E76F51] text-white border-[#E76F51] shadow-lg shadow-[#E76F51]/20" 
+                : "bg-[#E76F51]/5 text-[#E76F51] border-[#E76F51]/10 hover:bg-[#E76F51]/10"
+            }`}
+            title={session.reviewRequested ? "Review Requested" : "Request Review"}
+          >
+            <Star size={16} className={session.reviewRequested ? "animate-bounce" : ""} />
+          </motion.button>
+        </div>
       </div>
 
       {/* Bill Summary in Payment Box */}
@@ -105,48 +133,58 @@ export default function AdminPaymentSummary({
           <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Total Bill</p>
           <p className="text-sm font-black text-[#3A241C]">₹{total}</p>
         </div>
-        <div className="p-3 bg-[#F9F7F4] rounded-2xl border border-[#3A241C]/5">
+        <motion.button 
+          whileTap={{ scale: 0.95 }}
+          onClick={() => balance > 0 && setRecordAmount(balance.toString())}
+          className={`p-3 rounded-2xl border border-[#3A241C]/5 transition-all text-left ${balance > 0 ? "bg-orange-50/50 hover:bg-orange-100/50 cursor-pointer" : "bg-[#F9F7F4]"}`}
+        >
           <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mb-1">Balance</p>
           <p className={`text-sm font-black ${balance > 0 ? "text-[#E76F51]" : "text-[#6A994E]"}`}>₹{balance}</p>
-        </div>
+        </motion.button>
       </div>
 
       {/* Manual Recording */}
       {balance > 0 && (
         <div className="flex flex-col gap-2 mb-4">
-          <div className="flex gap-2 p-1 bg-[#F9F7F4] rounded-2xl border border-[#3A241C]/5">
-            <div className="flex bg-white rounded-xl p-1 gap-1 border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-[8px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Record Payment</p>
+            <div className="flex bg-[#F9F7F4] rounded-xl p-1 gap-1 border border-[#3A241C]/5">
               <motion.button 
                 whileTap={{ scale: 0.85 }}
                 onClick={() => setRecordMethod("CASH")}
-                className={`p-1.5 rounded-lg transition-all ${recordMethod === "CASH" ? "bg-[#3A241C] text-white shadow-md" : "text-gray-400 hover:text-[#3A241C]"}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${recordMethod === "CASH" ? "bg-[#3A241C] text-white shadow-md" : "text-gray-400 hover:text-[#3A241C]"}`}
               >
                 <Banknote size={14} />
+                <span className="text-[9px] font-black uppercase">Cash</span>
               </motion.button>
               <motion.button 
                 whileTap={{ scale: 0.85 }}
                 onClick={() => setRecordMethod("UPI")}
-                className={`p-1.5 rounded-lg transition-all ${recordMethod === "UPI" ? "bg-[#3A241C] text-white shadow-md" : "text-gray-400 hover:text-[#3A241C]"}`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${recordMethod === "UPI" ? "bg-purple-600 text-white shadow-md" : "text-gray-400 hover:text-[#3A241C]"}`}
               >
                 <CreditCard size={14} />
+                <span className="text-[9px] font-black uppercase">UPI</span>
               </motion.button>
             </div>
+          </div>
+          
+          <div className="flex gap-2 p-1 bg-[#F9F7F4] rounded-2xl border border-[#3A241C]/5">
             <input 
               type="number" 
-              placeholder={recordMethod === "CASH" ? "Cash" : "UPI Amt"}
+              placeholder={recordMethod === "CASH" ? "Enter Cash Amount" : "Enter UPI Amount"}
               value={recordAmount}
               onChange={(e) => setRecordAmount(e.target.value)}
-              className="flex-1 bg-white border border-gray-100 rounded-xl px-2.5 py-2 text-[10px] font-black outline-none focus:border-[#E76F51] transition-all min-w-0"
+              className="flex-1 bg-white border border-gray-100 rounded-xl px-4 py-3 text-[12px] font-black outline-none focus:border-[#E76F51] transition-all min-w-0"
             />
             <motion.button 
               whileTap={{ scale: 0.95 }}
               onClick={handleRecord}
-              disabled={isRecording}
-              className={`flex-shrink-0 px-3 text-white rounded-xl font-black text-[9px] uppercase tracking-widest transition-all flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
-                recordMethod === "UPI" ? "bg-purple-600 hover:bg-purple-700" : "bg-[#3A241C] hover:bg-[#6A994E]"
+              disabled={isRecording || !recordAmount}
+              className={`flex-shrink-0 w-14 text-white rounded-xl font-black text-[14px] transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed ${
+                recordMethod === "UPI" ? "bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-900/20" : "bg-[#3A241C] hover:bg-[#6A994E] shadow-lg shadow-black/20"
               }`}
             >
-              {isRecording ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+              {isRecording ? <Loader2 size={18} className="animate-spin" /> : <Plus size={20} />}
             </motion.button>
           </div>
         </div>

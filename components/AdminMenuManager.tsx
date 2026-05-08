@@ -4,10 +4,10 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Plus, Search, Edit2, Trash2, Check, X, 
-  ChevronRight, UtensilsCrossed, Settings2, 
+  ChevronRight, ChevronLeft, UtensilsCrossed, Settings2, 
   Tag, Image as ImageIcon, AlertCircle, Save,
   ArrowLeft, History, RotateCcw, Eye, EyeOff, Loader2,
-  Upload, X as XIcon, CloudUpload, ImageIcon as ImageIconLucide
+  Upload, X as XIcon, CloudUpload, ImageIcon as ImageIconLucide, Star
 } from "lucide-react";
 import { useSocket } from "@/lib/socket-client";
 import { 
@@ -191,6 +191,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
   const [variantToEdit, setVariantToEdit] = useState<{ index: number | "NEW", name: string, price: number, volume: string } | null>(null);
   const [itemToDelete, setItemToDelete] = useState<any | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isQuickNavOpen, setIsQuickNavOpen] = useState(false);
 
   const loadData = useCallback(async (isInitial = true) => {
     if (isInitial) setLoading(true);
@@ -268,6 +269,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
     try {
       const updates = Object.entries(pendingStock).map(([id, outOfStock]) => ({ id, outOfStock }));
       await adminBulkUpdateStock(updates, secret);
+      setPendingStock({}); // Clear immediately so Save Bar hides
       
       const count = updates.length;
       showToast(`Successfully updated stock for ${count} item${count > 1 ? "s" : ""}`);
@@ -398,7 +400,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
               />
             </div>
           )}
-          <div className="flex min-w-max">
+          <div className="flex min-w-max items-center">
             {[
               { id: "ITEMS", label: "Menu Items", icon: UtensilsCrossed },
               { id: "CATEGORIES", label: "Categories", icon: Settings2 },
@@ -414,6 +416,8 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                 {tab.label}
               </motion.button>
             ))}
+
+
           </div>
         </div>
 
@@ -450,12 +454,73 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
           />
         </div>
       ) : (
-        <motion.div 
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="flex-1 overflow-y-auto pr-2 md:pr-12 custom-scrollbar pb-16 px-1 md:px-2"
-        >
+        <>
+          {/* Floating Category Quick Nav (Fixed on Right) */}
+          <AnimatePresence>
+            {categories.length > 0 && (
+              <motion.div 
+                initial={{ x: 200, opacity: 0 }}
+                animate={{ 
+                  x: isQuickNavOpen ? 0 : 200, 
+                  opacity: 1 
+                }}
+                transition={{ type: "spring", damping: 28, stiffness: 220 }}
+                className="fixed right-0 top-1/2 -translate-y-1/2 z-[100] hidden xl:flex items-center"
+              >
+                <div className="bg-white/90 backdrop-blur-xl rounded-l-[3rem] border border-[#3A241C]/5 shadow-[0_20px_70px_-10px_rgba(58,36,28,0.15)] flex items-center p-2 border-r-0">
+                  {/* Integrated Toggle Button */}
+                  <button
+                    onClick={() => setIsQuickNavOpen(!isQuickNavOpen)}
+                    className="w-10 h-10 rounded-full bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/40 hover:bg-[#E76F51] hover:text-white transition-all duration-300 mr-2 shrink-0"
+                  >
+                    <motion.div
+                      animate={{ rotate: isQuickNavOpen ? 0 : 180 }}
+                      transition={{ duration: 0.4, ease: "anticipate" }}
+                    >
+                      <ChevronRight size={20} />
+                    </motion.div>
+                  </button>
+
+                  <div className={`w-48 transition-opacity duration-300 ${isQuickNavOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+                    <div className="px-3 pb-3 border-b border-[#3A241C]/5 mb-2">
+                      <h4 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/30">Quick Navigation</h4>
+                    </div>
+                    <div className="flex flex-col gap-1 max-h-[60vh] overflow-y-auto no-scrollbar pr-1">
+                      {categories.map(cat => (
+                        <motion.button
+                          key={`fixed-nav-${cat.id}`}
+                          whileHover={{ x: -4, color: "#E76F51" }}
+                          whileTap={{ scale: 0.95 }}
+                          onClick={() => {
+                            if (activeTab !== "ITEMS") {
+                              setActiveTab("ITEMS");
+                              setTimeout(() => {
+                                const el = document.getElementById(`category-${cat.id}`);
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }, 100);
+                            } else {
+                              const el = document.getElementById(`category-${cat.id}`);
+                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }
+                          }}
+                          className="w-full text-right px-3 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 hover:bg-[#E76F51]/5 transition-all truncate"
+                        >
+                          {cat.name}
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <motion.div 
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="flex-1 pr-2 md:pr-12 pb-16 px-1 md:px-2"
+          >
           {activeTab === "ITEMS" && (
             <div className="space-y-6">
               {categories.map(cat => {
@@ -466,7 +531,8 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                   <motion.div 
                     variants={itemVariants} 
                     key={cat.id}
-                    className="mb-6"
+                    className="mb-6 pt-2"
+                    id={`category-${cat.id}`}
                   >
                     <div className="flex items-center justify-between mb-8 group">
                       <div className="flex items-center gap-4">
@@ -505,49 +571,53 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                             layout
                             whileHover={{ y: -4 }}
                             key={item.id}
-                            className={`bg-white p-5 rounded-[2rem] border transition-all duration-300 flex flex-col gap-4 ${currentStatus ? "border-[#3A241C]/20 bg-[#F9F7F4]/30" : "border-[#3A241C]/5 shadow-sm"} ${isPending ? "ring-2 ring-[#E76F51]/50 border-[#E76F51]/30" : ""}`}
+                            className={`bg-white p-4 rounded-[1.5rem] border transition-all duration-300 flex flex-col gap-2 ${currentStatus ? "border-[#3A241C]/20 bg-[#F9F7F4]/30" : "border-[#3A241C]/5 shadow-sm"} ${isPending ? "ring-2 ring-[#E76F51]/50 border-[#E76F51]/30" : ""}`}
                           >
-                            <div className="flex gap-4">
-                              <div className="w-20 h-20 bg-[#F9F7F4] rounded-2xl flex-shrink-0 relative overflow-hidden border border-[#3A241C]/5">
+                            <div className="flex gap-3 items-center">
+                              <div className="w-16 h-16 bg-[#F9F7F4] rounded-xl flex-shrink-0 relative overflow-hidden border border-[#3A241C]/5">
                                 {item.image ? (
                                   <Image src={item.image} alt={item.name} fill className={`object-cover ${currentStatus ? "grayscale opacity-50" : ""}`} />
                                 ) : (
-                                  <UtensilsCrossed size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[#3A241C]/10" />
+                                  <UtensilsCrossed size={20} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[#3A241C]/10" />
                                 )}
                                 {isPending && (
                                   <div className="absolute top-1 right-1">
-                                    <div className="w-3 h-3 bg-[#E76F51] rounded-full shadow-sm animate-pulse" />
+                                    <div className="w-2 h-2 bg-[#E76F51] rounded-full shadow-sm animate-pulse" />
                                   </div>
                                 )}
                               </div>
-                              <div className="flex-1">
-                                <div className="flex justify-between items-start mb-1">
-                                  <h4 className={`font-bold text-[#3A241C] text-sm leading-tight ${currentStatus ? "opacity-40" : ""}`}>{item.name}</h4>
-                                  <div className="flex items-center gap-1">
-                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setEditingItem({ ...item, variants: item.variants || [], variantPrices: item.variantPrices || {}, outOfStockVariants: item.outOfStockVariants || [] })} className="p-2 text-[#3A241C]/20 hover:text-[#E76F51] transition-colors"><Edit2 size={14} /></motion.button>
-                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setItemToDelete(item)} className="p-2 text-[#3A241C]/20 hover:text-[#B71C1C] transition-colors"><Trash2 size={14} /></motion.button>
+                              <div className="flex-1 min-w-0 flex flex-col justify-center py-0.5">
+                                <div className="flex justify-between items-start mb-0.5">
+                                  <h4 className={`font-bold text-[#3A241C] text-[13px] leading-tight truncate pr-2 ${currentStatus ? "opacity-40" : ""}`} title={item.name}>{item.name}</h4>
+                                  <div className="flex items-center shrink-0 -mt-1 -mr-1">
+                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setEditingItem({ ...item, variants: item.variants || [], variantPrices: item.variantPrices || {}, outOfStockVariants: item.outOfStockVariants || [] })} className="p-1.5 text-[#3A241C]/20 hover:text-[#E76F51] transition-colors"><Edit2 size={13} /></motion.button>
+                                    <motion.button whileTap={{ scale: 0.8 }} onClick={() => setItemToDelete(item)} className="p-1.5 text-[#3A241C]/20 hover:text-[#B71C1C] transition-colors"><Trash2 size={13} /></motion.button>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <span className={`font-black text-[#E76F51] ${currentStatus ? "opacity-40" : ""}`}>₹{item.price}</span>
-                                  {item.discountPct && <span className="text-[9px] font-black bg-[#6A994E] text-white px-1.5 py-0.5 rounded-md">-{item.discountPct}%</span>}
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className={`font-black text-[#E76F51] text-xs ${currentStatus ? "opacity-40" : ""}`}>₹{item.price}</span>
+                                  {item.discountPct && <span className="text-[8px] font-black bg-[#6A994E] text-white px-1 py-0.5 rounded-sm">-{item.discountPct}%</span>}
+                                </div>
+                                <div className="flex gap-2">
+                                  <motion.button 
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => handleToggleStock(item)}
+                                    className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all w-max ${currentStatus ? "bg-[#3A241C] text-white" : "bg-[#F9F7F4] text-[#3A241C]/40 hover:bg-[#3A241C]/5 hover:text-[#3A241C]"} ${isPending ? "ring-2 ring-[#E76F51]/50 ring-inset" : "border border-transparent"}`}
+                                  >
+                                    {currentStatus ? <Eye size={10} /> : <EyeOff size={10} />}
+                                    {currentStatus ? "In Stock" : "Out of Stock"}
+                                  </motion.button>
+                                  <motion.button 
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={() => alert('Featured functionality coming soon!')}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all w-max bg-[#F9F7F4] text-[#3A241C]/40 hover:bg-yellow-50 hover:text-yellow-600 border border-transparent"
+                                  >
+                                    <Star size={10} />
+                                    Featured
+                                  </motion.button>
                                 </div>
                               </div>
                             </div>
-
-                            <div className="flex gap-2 mt-auto">
-                              <motion.button 
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => handleToggleStock(item)}
-                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentStatus ? "bg-[#3A241C] text-white" : "bg-[#F9F7F4] text-[#3A241C]/40 hover:bg-[#3A241C]/5 hover:text-[#3A241C]"} ${isPending ? "border border-[#E76F51]/30" : ""}`}
-                              >
-                                {currentStatus ? <Eye size={14} /> : <EyeOff size={14} />}
-                                {currentStatus ? "Mark: Put In Stock" : "Mark: Out of Stock"}
-                              </motion.button>
-                            </div>
-                            {isPending && (
-                              <div className="text-[8px] font-black text-[#E76F51] uppercase tracking-widest text-center">Pending Save</div>
-                            )}
                           </motion.div>
                         );
                       })}
@@ -653,16 +723,17 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
             </div>
           )}
         </motion.div>
+        </>
       )}
 
       {/* Floating Save Bar */}
       <AnimatePresence>
-        {pendingCount > 0 && (
+        {pendingCount > 0 && !toast && (
           <motion.div 
             initial={{ y: 100, x: "-50%", opacity: 0 }} 
             animate={{ y: 0, x: "-50%", opacity: 1 }} 
             exit={{ y: 100, x: "-50%", opacity: 0 }}
-            className="fixed bottom-6 md:bottom-10 left-1/2 z-[100] w-[95%] max-w-lg bg-[#3A241C] text-white p-3 md:p-4 rounded-[2rem] md:rounded-[2.5rem] shadow-2xl flex items-center justify-between border border-white/10"
+            className="fixed bottom-6 md:bottom-10 left-1/2 z-[110] w-[95%] max-w-lg bg-[#3A241C] text-white p-3 md:p-4 rounded-2xl md:rounded-3xl shadow-2xl flex items-center justify-between border border-white/10"
           >
             <div className="flex items-center gap-3 md:gap-4 ml-2 md:ml-4">
               <div className="w-8 h-8 md:w-10 md:h-10 bg-[#E76F51] rounded-xl md:rounded-2xl flex items-center justify-center flex-shrink-0">

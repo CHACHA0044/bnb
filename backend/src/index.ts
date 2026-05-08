@@ -124,3 +124,4 @@ server.listen(PORT, () => {
   console.log(`🔗 CORS: ${FRONTEND_URL}`);
   console.log(`📍 Geo: ${process.env.RESTAURANT_LAT || '26.834906'}, ${process.env.RESTAURANT_LNG || '80.884822'}\n`);
 });
+ 

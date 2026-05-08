@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
+import { pendingOrders } from "./order";
 
 const router = Router();
 const VALID_TABLES = ["T1", "T2", "T3", "TAKEAWAY"];
@@ -30,6 +31,13 @@ router.get("/:tableId", async (req: Request, res: Response): Promise<void> => {
         payments: { orderBy: { createdAt: "desc" } },
       },
     });
+
+    if (session) {
+      const pendingForSession = Array.from(pendingOrders.values()).filter(po => po.sessionId === session.id);
+      if (pendingForSession.length > 0) {
+        session.orders.unshift(...pendingForSession);
+      }
+    }
 
     res.json(session);
   } catch (err) {
@@ -61,6 +69,64 @@ router.patch("/session/:sessionId/reminder", requireAdmin, async (req: Request, 
   } catch (err) {
     console.error("[TABLE] Reminder toggle error:", err);
     res.status(500).json({ error: "Failed to toggle reminder" });
+  }
+});
+
+/**
+ * PATCH /api/table/session/:sessionId/review-request
+ * Toggle review request for a session
+ */
+router.patch("/session/:sessionId/review-request", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { sessionId } = req.params as { sessionId: string };
+    const { requested } = req.body as { requested: boolean };
+
+    const session = await prisma.session.update({
+      where: { id: sessionId },
+      // @ts-ignore
+      data: { reviewRequested: requested }
+    });
+
+    try {
+      const io = getIO();
+      if (requested) {
+        io.to(`session:${sessionId}`).emit("review_requested", {
+          message: "We'd love to hear your feedback! Please rate the items you've enjoyed."
+        });
+      }
+      io.to("admin").emit("session_updated", { sessionId, reviewRequested: requested });
+    } catch { /* skip */ }
+
+    res.json(session);
+  } catch (err) {
+    console.error("[TABLE] Review request toggle error:", err);
+    res.status(500).json({ error: "Failed to toggle review request" });
+  }
+});
+
+/**
+ * PATCH /api/table/session/:sessionId/review-dismiss
+ * Dismiss review request (User-facing)
+ */
+router.patch("/session/:sessionId/review-dismiss", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { sessionId } = req.params as { sessionId: string };
+
+    const session = await prisma.session.update({
+      where: { id: sessionId },
+      // @ts-ignore
+      data: { reviewRequested: false }
+    });
+
+    try {
+      const io = getIO();
+      io.to("admin").emit("session_updated", { sessionId, reviewRequested: false });
+    } catch { /* skip */ }
+
+    res.json(session);
+  } catch (err) {
+    console.error("[TABLE] Review dismiss error:", err);
+    res.status(500).json({ error: "Failed to dismiss review" });
   }
 });
 

@@ -30,6 +30,7 @@ interface OrderSummaryProps {
   lockedBy: string | null;
   clientId: string;
   onPlaceOrder: () => void;
+  onAnimationComplete: () => void;
 }
 
 const OrderSummary = ({
@@ -40,9 +41,22 @@ const OrderSummary = ({
   cartLocked,
   lockedBy,
   clientId,
-  onPlaceOrder
+  onPlaceOrder,
+  onAnimationComplete
 }: OrderSummaryProps) => {
   const isSomeoneElsePlacing = cartLocked && lockedBy !== clientId;
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const handleStartAnimation = () => {
+    if (ordering || isSomeoneElsePlacing || isAnimating) return;
+    setIsAnimating(true);
+    onPlaceOrder(); // Start API call in background
+    
+    // Animation duration matches the 0.7s clipPath + arrow sweep
+    setTimeout(() => {
+      onAnimationComplete();
+    }, 750);
+  };
 
   return (
     <motion.div 
@@ -77,18 +91,41 @@ const OrderSummary = ({
         </div>
       </div>
       <button 
-        onClick={onPlaceOrder} 
-        disabled={ordering || isSomeoneElsePlacing} 
-        className="w-full py-4 lg:py-5 bg-gradient-to-r from-[#E76F51] to-orange-500 text-white rounded-xl lg:rounded-[1.75rem] font-black text-[10px] lg:text-[11px] uppercase tracking-[0.4em] shadow-[0_10px_30px_-10px_rgba(231,111,81,0.5)] active:scale-95 transition-all flex items-center justify-center gap-2 lg:gap-3 group relative z-10 disabled:opacity-50 disabled:grayscale"
+        onClick={handleStartAnimation} 
+        disabled={ordering || isSomeoneElsePlacing || isAnimating} 
+        className={`w-full h-14 lg:h-16 bg-gradient-to-r from-[#E76F51] to-orange-500 text-white rounded-xl lg:rounded-[1.75rem] shadow-[0_10px_30px_-10px_rgba(231,111,81,0.5)] active:scale-95 transition-all flex items-center justify-center group relative z-10 overflow-hidden ${ordering || isSomeoneElsePlacing ? 'opacity-50' : ''}`}
       >
-        {ordering ? (
-          <Loader2 className="animate-spin lg:w-[18px]" size={16} />
-        ) : isSomeoneElsePlacing ? (
-          <Loader2 className="animate-spin lg:w-[18px]" size={16} />
+        {isAnimating ? (
+          <>
+            {/* Arrow sweeping left to right */}
+            <motion.div
+              initial={{ left: "15%" }}
+              animate={{ left: "85%" }}
+              transition={{ duration: 0.6, ease: "easeInOut" }}
+              className="absolute z-20 flex items-center justify-center"
+              style={{ top: "50%", transform: "translateY(-50%)" }}
+            >
+              <ChevronRight size={20} className="text-white drop-shadow-md" />
+            </motion.div>
+            
+            {/* Text that clips away as arrow passes */}
+            <motion.span 
+              initial={{ clipPath: "inset(0 0 0 0%)" }}
+              animate={{ clipPath: "inset(0 0 0 100%)" }}
+              transition={{ duration: 0.6, ease: "easeInOut" }}
+              className="font-black text-[10px] lg:text-[11px] uppercase tracking-[0.4em] pointer-events-none"
+            >
+              Place Order
+            </motion.span>
+          </>
+        ) : ordering || isSomeoneElsePlacing ? (
+          <Loader2 className="animate-spin" size={16} />
         ) : (
-          <ChevronRight className="lg:w-[18px] group-hover:translate-x-1 transition-transform" size={16} />
+          <div className="flex items-center justify-center gap-2 lg:gap-3">
+            <ChevronRight className="lg:w-[18px] group-hover:translate-x-1 transition-transform" size={16} />
+            <span className="font-black text-[10px] lg:text-[11px] uppercase tracking-[0.4em]">Place Order</span>
+          </div>
         )}
-        {ordering ? "Processing..." : isSomeoneElsePlacing ? "Someone Placing..." : "Place Order"}
       </button>
     </motion.div>
   );

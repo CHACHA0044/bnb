@@ -114,10 +114,48 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const liveSessions = sessions.filter(s => s.status === "OPEN");
   const totalDue = liveSessions.reduce((acc, s) => {
-    const total = s.orders.reduce((sum, o) => sum + o.items.reduce((a, i) => a + i.price * i.quantity, 0), 0);
-    const paid = s.payments.filter(p => p.status === "CONFIRMED").reduce((a, p) => a + p.amount, 0);
-    return acc + (total - paid);
+    const total = (s.orders || [])
+      .filter(o => o.status !== "CANCELLED")
+      .reduce((sum, o) => 
+        sum + (o.items || []).reduce((a, i) => a + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
+      );
+    const paid = (s.payments || [])
+      .filter(p => p.status === "CONFIRMED")
+      .reduce((a, p) => a + p.amount, 0);
+    return acc + Math.max(0, total - paid);
   }, 0);
+
+  useEffect(() => {
+    const handleAdminUpdate = (e: any) => {
+      const { type, sessionId, amount, method, paymentId } = e.detail;
+      
+      setSessions(prev => prev.map(s => {
+        if (type === 'PAYMENT_RECORDED' && s.id === sessionId) {
+          return {
+            ...s,
+            payments: [{ 
+              id: `temp-${Date.now()}`, 
+              sessionId, 
+              amount: Number(amount), 
+              method, 
+              status: 'CONFIRMED', 
+              createdAt: new Date().toISOString() 
+            }, ...s.payments]
+          };
+        }
+        if (type === 'PAYMENT_CONFIRMED') {
+          return {
+            ...s,
+            payments: s.payments.map(p => p.id === paymentId ? { ...p, status: 'CONFIRMED' } : p)
+          };
+        }
+        return s;
+      }));
+    };
+
+    window.addEventListener('bnb_admin_update' as any, handleAdminUpdate);
+    return () => window.removeEventListener('bnb_admin_update' as any, handleAdminUpdate);
+  }, []);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -318,7 +356,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           paddingLeft: isSidebarOpen && !isMobile ? "300px" : isMobile ? "16px" : "32px",
         }}
         transition={{ type: "spring", damping: 30, stiffness: 200 }}
-        className="flex-1 pr-4 lg:pr-8 pb-20 lg:pb-32 min-h-screen w-full bg-[#F9F7F4] scroll-smooth relative overflow-x-hidden"
+        className="flex-1 pr-4 lg:pr-8 pb-8 lg:pb-12 min-h-screen w-full bg-[#F9F7F4] scroll-smooth relative overflow-x-hidden"
       >
         {/* Toggle Sidebar Button (Sticky Header) */}
         <div className="sticky top-0 z-50 pt-6 lg:pt-10 bg-[#F9F7F4]/95 backdrop-blur-md pb-6 flex items-center gap-6 justify-between pr-4 lg:pr-0">

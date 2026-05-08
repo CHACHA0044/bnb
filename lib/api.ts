@@ -43,6 +43,7 @@ export interface SessionData {
   tableId: string;
   status: string;
   paymentReminder: boolean;
+  reviewRequested: boolean;
   locationVerified: boolean;
   deviceFingerprint?: string;
   createdAt: string;
@@ -58,6 +59,7 @@ export interface OrderData {
   isTakeaway: boolean;
   packingCharges: number;
   createdAt: string;
+  instructions?: string;
   items: OrderItemData[];
 }
 
@@ -87,10 +89,10 @@ export function fetchSession(tableId: string, sessionId?: string) {
 }
 
 /** Place an order */
-export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false, tableId?: string, packingCharges: number = 0) {
+export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false, tableId?: string, packingCharges: number = 0, instructions?: string) {
   return apiFetch<{ order: OrderData, session: SessionData }>("/api/order", {
     method: "POST",
-    body: JSON.stringify({ sessionId, items, isTakeaway, tableId, packingCharges }),
+    body: JSON.stringify({ sessionId, items, isTakeaway, tableId, packingCharges, instructions }),
   });
 }
 
@@ -124,6 +126,14 @@ export function adminCloseSession(sessionId: string, secret: string) {
   });
 }
 
+/** Admin: Delete an order */
+export function adminDeleteOrder(orderId: string, secret: string) {
+  return apiFetch<{ success: boolean }>(`/api/order/${orderId}`, {
+    method: "DELETE",
+    adminSecret: secret,
+  });
+}
+
 /** Admin: Confirm a payment */
 export function adminConfirmPayment(paymentId: string, secret: string) {
   return apiFetch<PaymentData>(`/api/payment/${paymentId}/confirm`, {
@@ -144,6 +154,19 @@ export function adminToggleReminder(sessionId: string, reminder: boolean, secret
     method: "PATCH",
     body: JSON.stringify({ reminder }),
     adminSecret: secret,
+  });
+}
+
+export function adminToggleReviewRequest(sessionId: string, requested: boolean, secret: string) {
+  return apiFetch(`/api/table/session/${sessionId}/review-request`, {
+    method: "PATCH",
+    body: JSON.stringify({ requested }),
+    adminSecret: secret,
+  });
+}
+export function dismissReviewRequest(sessionId: string) {
+  return apiFetch(`/api/table/session/${sessionId}/review-dismiss`, {
+    method: "PATCH",
   });
 }
 

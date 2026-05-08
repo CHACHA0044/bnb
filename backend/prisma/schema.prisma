@@ -15,6 +15,7 @@ model Session {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   paymentReminder   Boolean   @default(false)
+  reviewRequested   Boolean   @default(false)
   sessionNumber     Int       @default(0)
   deviceFingerprint String?
   locationVerified  Boolean   @default(false)
@@ -26,6 +27,7 @@ model Order {
   id             String      @id @default(uuid())
   sessionId      String
   status         String      @default("UNCONFIRMED")
+  instructions   String?
   createdAt      DateTime    @default(now())
   isTakeaway     Boolean     @default(false)
   packingCharges Int         @default(0)

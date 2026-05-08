@@ -67,26 +67,31 @@ export default function StaticMenu() {
 
 
   useEffect(() => {
+    if (loading) return;
+
     const observerOptions = {
       root: null,
-      rootMargin: '-10% 0px -80% 0px',
+      rootMargin: '-15% 0px -85% 0px',
       threshold: 0
     };
 
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
-          setActiveCategory(entry.target.id.replace('section-', ''));
+          const categoryName = entry.target.id.replace('section-', '');
+          setActiveCategory(categoryName);
         }
       });
     }, observerOptions);
 
-    Object.values(sectionRefs.current).forEach((section) => {
-      if (section) observer.observe(section);
+    // Observe all section elements
+    categories.forEach((cat) => {
+      const el = document.getElementById(`section-${cat}`);
+      if (el) observer.observe(el);
     });
 
     return () => observer.disconnect();
-  }, []);
+  }, [categories, loading]);
 
   const scrollToSection = (id: string) => {
     const el = document.getElementById(`section-${id}`);
@@ -120,20 +125,39 @@ export default function StaticMenu() {
                 <button
                   key={cat}
                   onClick={() => scrollToSection(cat)}
-                  className={`w-full flex items-center justify-between px-6 py-4 rounded-2xl text-sm font-bold transition-all duration-300 ${
+                  className={`relative w-full flex items-center justify-between px-6 py-4 rounded-2xl text-sm font-bold transition-all duration-300 group ${
                     activeCategory === cat
-                      ? "bg-white text-[var(--benne-primary)] shadow-[0_10px_30px_rgba(58,36,28,0.08)] border border-[var(--coffee)]/5"
-                      : "text-[var(--coffee)]/50 hover:text-[var(--coffee)] hover:bg-white/50"
+                      ? "text-[var(--benne-primary)] shadow-[0_10px_30px_rgba(58,36,28,0.08)] border border-[var(--coffee)]/15"
+                      : "text-[var(--coffee)]/40 hover:text-[var(--coffee)] hover:bg-white/50 border border-transparent"
                   }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl grayscale-[0.5] group-hover:grayscale-0">
+                  {activeCategory === cat && (
+                    <motion.div 
+                      layoutId="active-pill"
+                      className="absolute inset-0 bg-white rounded-2xl -z-10"
+                      transition={{ type: "spring", stiffness: 400, damping: 35 }}
+                    />
+                  )}
+                  <div className="flex items-center gap-3 relative z-10">
+                    <span className={`text-xl transition-all duration-300 ${activeCategory === cat ? "grayscale-0 scale-110" : "grayscale-[0.8] opacity-50 group-hover:grayscale-0 group-hover:opacity-100 group-hover:scale-110"}`}>
                       {cat === "Beverages" ? "☕" : cat === "Idli" ? "🍚" : cat === "Uttapam" ? "🫓" : "🥞"}
                     </span>
-                    {cat}
+                    <span className="relative">
+                      {cat}
+                      {activeCategory === cat && (
+                        <motion.span 
+                          layoutId="active-dot"
+                          className="absolute -right-3 top-1/2 -translate-y-1/2 w-1 h-1 bg-[var(--benne-primary)] rounded-full"
+                        />
+                      )}
+                    </span>
                   </div>
                   {activeCategory === cat && (
-                    <motion.div layoutId="active-indicator">
+                    <motion.div 
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="relative z-10"
+                    >
                       <ChevronRight size={16} />
                     </motion.div>
                   )}
@@ -143,7 +167,7 @@ export default function StaticMenu() {
           </aside>
 
           {/* Mobile Category Bar - Hidden as requested */}
-          <div className="hidden lg:hidden sticky top-[72px] z-[50] bg-[var(--cream)]/90 backdrop-blur-xl border-b border-[var(--coffee)]/5 -mx-6 px-6 py-4 overflow-x-auto scrollbar-hide flex gap-3">
+          <div className="hidden lg:hidden sticky top-[72px] z-[50] bg-[var(--cream)]/90 backdrop-blur-xl border-b border-[var(--coffee)]/15 -mx-6 px-6 py-4 overflow-x-auto scrollbar-hide flex gap-3">
             {categories.map((cat) => (
               <button
                 key={cat}
@@ -151,7 +175,7 @@ export default function StaticMenu() {
                 className={`px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.15em] whitespace-nowrap transition-all duration-300 border ${
                   activeCategory === cat
                     ? "bg-[var(--benne-primary)] text-white border-[var(--benne-primary)] shadow-lg"
-                    : "bg-white text-[var(--coffee)]/60 border-[var(--coffee)]/10"
+                    : "bg-white text-[var(--coffee)]/60 border-[var(--coffee)]/15"
                 }`}
               >
                 <span className="mr-1.5">
@@ -189,7 +213,7 @@ export default function StaticMenu() {
                     ref={(el) => { sectionRefs.current[cat] = el; }}
                     className="scroll-mt-32"
                   >
-                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b border-[var(--coffee)]/5 pb-8">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b border-[var(--coffee)]/15 pb-8">
                       <div className="max-w-2xl">
                         <div className="flex items-center gap-3 text-[var(--benne-primary)] font-black text-[10px] uppercase tracking-[0.25em] mb-3">
                           <span className="w-8 h-[1.5px] bg-[var(--benne-primary)]" />
@@ -217,20 +241,19 @@ export default function StaticMenu() {
                       {items.map((item, idx) => (
                         <motion.div
                           key={item.id}
-                          initial={{ opacity: 0, y: 20 }}
+                          initial={{ opacity: 0, y: 15 }}
                           whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true }}
-                          transition={{ delay: idx * 0.05 }}
-                          className={`bg-white rounded-[2.5rem] p-4 lg:p-5 border border-[var(--coffee)]/5 shadow-[0_10px_40px_-15px_rgba(58,36,28,0.05)] hover:shadow-[0_30px_60px_-15px_rgba(58,36,28,0.1)] transition-all duration-500 group flex items-center gap-4 h-[160px] lg:h-[180px] overflow-hidden relative ${item.outOfStock ? "grayscale opacity-60" : ""}`}
+                          viewport={{ once: true, margin: "-40px" }}
+                          transition={{ 
+                            duration: 0.4,
+                            delay: idx % 2 * 0.1, 
+                            ease: "easeOut"
+                          }}
+                          className="bg-white rounded-[2.5rem] p-4 lg:p-5 border border-[var(--coffee)]/15 shadow-[0_10px_40px_-15px_rgba(58,36,28,0.05)] hover:shadow-[0_30px_60px_-15px_rgba(58,36,28,0.1)] transition-all duration-500 group flex items-center gap-4 h-[160px] lg:h-[180px] overflow-hidden relative"
                         >
-                          {item.outOfStock && (
-                            <div className="absolute inset-0 z-20 bg-[#3A241C]/20 backdrop-blur-[2px] flex items-center justify-center">
-                              <span className="bg-[#3A241C] text-white px-4 py-2 rounded-full font-black text-[10px] lg:text-[12px] uppercase tracking-[0.2em] shadow-2xl">Out of Stock</span>
-                            </div>
-                          )}
 
                           {/* Image Box */}
-                          <div className="w-24 h-24 lg:w-32 lg:h-32 rounded-3xl bg-[var(--cream)] flex-shrink-0 overflow-hidden relative border border-[var(--coffee)]/5">
+                          <div className="w-24 h-24 lg:w-32 lg:h-32 rounded-3xl bg-[var(--cream)] flex-shrink-0 overflow-hidden relative border border-[var(--coffee)]/15">
                             <Image 
                               src={item.image || "/images/hero.webp"} 
                               alt={item.name} 
@@ -277,9 +300,9 @@ export default function StaticMenu() {
               })
             )}
 
-            {/* Packing Charges & CTA */}
-            <div className="pt-8 md:pt-16 border-t border-[var(--coffee)]/5 text-center">
-              <div className="inline-flex items-center gap-4 bg-white px-6 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-3xl shadow-sm border border-[var(--coffee)]/5 mb-8 md:mb-12">
+            {/* Packing Charges & CTA 
+            <div className="pt-4 md:pt-8 border-t border-[var(--coffee)]/15 text-center">
+              <div className="inline-flex items-center gap-4 bg-white px-6 py-3 md:px-8 md:py-4 rounded-2xl md:rounded-3xl shadow-sm border border-[var(--coffee)]/15 mb-6 md:mb-10">
                 <MapPin size={16} className="text-[var(--benne-primary)]" />
                 <span className="text-[var(--coffee)]/40 text-[10px] md:text-xs font-black uppercase tracking-[0.2em]">
                   Packing Charges: ₹20 per box
@@ -297,7 +320,7 @@ export default function StaticMenu() {
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                 </a>
               </div>
-            </div>
+            </div>*/}
           </div>
         </div>
       </div>

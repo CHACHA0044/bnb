@@ -102,6 +102,13 @@ export function initSocketEvents(instance: SocketIOServer): void {
       console.log(`[WS] ${socket.id} joined admin`);
     });
 
+    socket.on("send_review_request", ({ sessionId }: { sessionId: string }) => {
+      io?.to(`session:${sessionId}`).emit("review_requested", {
+        message: "We'd love to hear your feedback! Please rate the items you've enjoyed."
+      });
+      console.log(`[WS] Review request sent to session:${sessionId}`);
+    });
+
     socket.on("disconnect", () => {
       console.log(`[WS] Client disconnected: ${socket.id}`);
     });

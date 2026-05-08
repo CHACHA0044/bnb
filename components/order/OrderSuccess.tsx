@@ -1,8 +1,8 @@
 "use client";
 
-import React, { memo } from "react";
-import { motion } from "framer-motion";
-import { Loader2, CheckCircle2, Plus, Bell, Package, CreditCard, Banknote, Star } from "lucide-react";
+import React, { memo, useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Loader2, CheckCircle2, Plus, Bell, Package, CreditCard, Banknote, Star, ShieldAlert, XCircle, X } from "lucide-react";
 import Image from "next/image";
 
 interface OrderSuccessProps {
@@ -19,6 +19,12 @@ interface OrderSuccessProps {
   ratings: Record<string, number>;
   ratedItems: Set<string>;
   isTakeaway: boolean;
+  isProcessingOrder?: boolean;
+  deletedOrders?: any[];
+  paymentSuccess?: boolean;
+  sessionClosed?: boolean;
+  showReviewPrompt?: boolean;
+  setShowReviewPrompt?: (val: boolean) => void;
 }
 
 const OrderSuccess = ({
@@ -34,32 +40,120 @@ const OrderSuccess = ({
   onRateItem,
   ratings,
   ratedItems,
-  isTakeaway
+  isTakeaway,
+  isProcessingOrder,
+  deletedOrders = [],
+  paymentSuccess = false,
+  sessionClosed = false,
+  showReviewPrompt = false,
+  setShowReviewPrompt
 }: OrderSuccessProps) => {
+  const [showCancellation, setShowCancellation] = useState(false);
+  const notifiedCancelledIds = React.useRef<Set<string>>(new Set());
+
+  const cancelledOrders = [
+    ...(session?.orders ?? []).filter((o: any) => o.status === "CANCELLED"),
+    ...deletedOrders
+  ];
+
+  useEffect(() => {
+    const currentIds = cancelledOrders.map((o: any) => o.id);
+    const newIds = currentIds.filter(id => !notifiedCancelledIds.current.has(id));
+
+    if (newIds.length > 0) {
+      setShowCancellation(true);
+      newIds.forEach(id => notifiedCancelledIds.current.add(id));
+      const timer = setTimeout(() => setShowCancellation(false), 60000); // Hide after 1 min
+      return () => clearTimeout(timer);
+    }
+  }, [cancelledOrders.length]);
+
   const allOrderedItems = (session?.orders ?? []).flatMap((o: any) => o.items)
     .filter((i: any) => {
       const name = i.name.toLowerCase();
       return !name.includes("packing charges") && !name.includes("pseudo-packing-placeholder");
     });
   
-  const preparingItems = allOrderedItems.filter((i: any) => !i.isServed);
-  const servedItems = allOrderedItems.filter((i: any) => i.isServed);
+  const preparingItems = allOrderedItems.filter((i: any) => {
+    const order = (session?.orders ?? []).find((o: any) => o.items.some((oi: any) => oi.id === i.id));
+    return !i.isServed && order?.status !== "CANCELLED";
+  });
+  
+  const servedItems = allOrderedItems.filter((i: any) => {
+    const order = (session?.orders ?? []).find((o: any) => o.items.some((oi: any) => oi.id === i.id));
+    return i.isServed && order?.status !== "CANCELLED";
+  });
+
   
   const ratingEligibleItems = allOrderedItems.filter((i: any) => !i.name.toLowerCase().includes("soft drink"));
   const hasPendingPayment = (session?.payments ?? []).some((p: any) => p.status === "PENDING" || p.status === "UNPAID");
-  const hasUnconfirmed = (session?.orders ?? []).some((o: any) => o.status === "UNCONFIRMED");
+  const hasUnconfirmed = isProcessingOrder || (session?.orders ?? []).some((o: any) => o.status === "UNCONFIRMED");
+  const hasConfirmed = (session?.orders ?? []).some((o: any) => o.status !== "UNCONFIRMED" && o.status !== "CANCELLED");
+
+  const hasActiveOrders = preparingItems.length > 0 || servedItems.length > 0;
+  
+  // SESSION CLOSED SCREEN
+  if (sessionClosed) {
+    return (
+      <div className="p-8 lg:p-12 flex flex-col items-center text-center h-full justify-center bg-[#F9F7F4]">
+        <motion.div 
+          initial={{ scale: 0.5, opacity: 0 }} 
+          animate={{ scale: 1, opacity: 1 }}
+          className="w-24 h-24 rounded-full bg-[#3A241C] flex items-center justify-center mb-8 shadow-2xl"
+        >
+          <Package size={40} className="text-[#E76F51]" />
+        </motion.div>
+        <h2 className="text-3xl font-black text-[#3A241C] mb-4 uppercase tracking-tighter">Thank You!</h2>
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/40 mb-10 leading-loose">
+          Your session has been closed.<br/>We hope you enjoyed your meal!
+        </p>
+        <div className="w-full h-px bg-[#3A241C]/5 mb-10" />
+        <p className="text-[8px] font-black uppercase tracking-[0.4em] text-[#E76F51] animate-pulse">Visit Again Soon</p>
+      </div>
+    );
+  }
+
+  // PAYMENT SUCCESS SCREEN
+  if (paymentSuccess && !hasUnconfirmed) {
+    return (
+      <div className="p-8 lg:p-12 flex flex-col items-center text-center h-full justify-center">
+        <motion.div 
+          initial={{ scale: 0.5, opacity: 0 }} 
+          animate={{ scale: 1, opacity: 1 }}
+          className="w-24 h-24 rounded-full bg-[#6A994E]/10 flex items-center justify-center mb-8 border-2 border-[#6A994E]/20"
+        >
+          <CheckCircle2 size={48} className="text-[#6A994E]" />
+        </motion.div>
+        <h2 className="text-3xl font-black text-[#3A241C] mb-4 uppercase tracking-tighter">Payment Received</h2>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3A241C]/40 mb-8">
+          Admin has confirmed your payment.<br/>Thank you for your visit!
+        </p>
+        <motion.button
+          whileTap={{ scale: 0.95 }}
+          onClick={onAddMore}
+          className="px-8 py-4 bg-[#3A241C] text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl"
+        >
+          View Order History
+        </motion.button>
+      </div>
+    );
+  }
+
+  // If no orders at all and not processing, hide the screen
+  if (!allOrderedItems.length && !isProcessingOrder && !cancelledOrders.length) {
+    return null;
+  }
+
+  const isFullyCancelled = cancelledOrders.length > 0 && !hasActiveOrders && !hasUnconfirmed;
+
+  // We show "Processing" if there are ANY unconfirmed orders.
+  // We only show "Ordered!" when confirmed is true and unconfirmed is false.
+  const showProcessing = hasUnconfirmed;
+  const showOrdered = hasConfirmed && !hasUnconfirmed;
 
   return (
-    <div className="p-8 lg:p-10 flex flex-col items-center text-center h-full overflow-y-auto scrollbar-hide">
-      <div className="w-full space-y-3 mb-6">
-        {session?.paymentReminder && remaining > 0 && (
-          <motion.div initial={{ y: -10, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full bg-[#B71C1C] text-white p-4 rounded-2xl flex items-center gap-4 shadow-lg border border-white/10">
-            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
-              <Bell size={20} className="animate-bounce" />
-            </div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-left flex-1">Please settle your bill at the counter or via UPI!</p>
-          </motion.div>
-        )}
+    <div className="px-8 pb-8 pt-24 lg:p-10 flex flex-col items-center text-center h-full overflow-y-auto scrollbar-hide">
+      <div className="w-full space-y-3 mb-6 hidden lg:block">
 
         {(() => {
           const hasReadyTakeaway = (session?.orders ?? []).some((o: any) => 
@@ -80,22 +174,24 @@ const OrderSuccess = ({
         })()}
       </div>
 
-      <div className={`w-16 lg:w-20 h-16 lg:h-20 rounded-full ${hasUnconfirmed ? 'bg-[#F4A261]/10 text-[#F4A261] border-[#F4A261]/10' : 'bg-[#6A994E]/10 text-[#6A994E] border-[#6A994E]/10'} flex items-center justify-center mb-4 border`}>
-        {hasUnconfirmed ? <Loader2 size={32} className="animate-spin lg:w-10 lg:h-10" /> : <CheckCircle2 size={32} className="lg:w-10 lg:h-10" />}
+      <div className={`w-16 lg:w-20 h-16 lg:h-20 rounded-full ${isFullyCancelled ? 'bg-[#B71C1C]/10 text-[#B71C1C] border-[#B71C1C]/10' : showProcessing ? 'bg-[#F4A261]/10 text-[#F4A261] border-[#F4A261]/10' : 'bg-[#6A994E]/10 text-[#6A994E] border-[#6A994E]/10'} flex items-center justify-center mb-4 border`}>
+        {isFullyCancelled ? <XCircle size={32} className="lg:w-10 lg:h-10" /> : showProcessing ? <Loader2 size={32} className="animate-spin lg:w-10 lg:h-10" /> : <CheckCircle2 size={32} className="lg:w-10 lg:h-10" />}
       </div>
       <h2 className="font-black text-[#3A241C] text-2xl lg:text-3xl mb-1 tracking-tighter uppercase">
-        {hasUnconfirmed ? "Processing..." : "Ordered!"}
+        {isFullyCancelled ? "Cancelled" : showProcessing ? "Processing..." : "Ordered!"}
       </h2>
-      {hasUnconfirmed && (
+      {isFullyCancelled ? (
+        <p className="text-[10px] font-black uppercase tracking-widest text-[#B71C1C]/40 mb-4">Staff has rejected your request</p>
+      ) : showProcessing && (
         <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 mb-4 animate-pulse">Waiting for Admin Confirmation</p>
       )}
       
-      <button onClick={onAddMore} className="mt-4 px-8 py-3 bg-[#3A241C] text-white rounded-2xl font-black text-[9px] uppercase tracking-[0.3em] flex items-center gap-2 group transition-all hover:bg-[#E76F51] shadow-xl shadow-[#3A241C]/10">
+      <button onClick={onAddMore} className="mt-6 mb-6 px-8 py-3 bg-[#3A241C] text-white rounded-2xl font-black text-[9px] uppercase tracking-[0.3em] flex items-center gap-2 group transition-all hover:bg-[#E76F51] shadow-xl shadow-[#3A241C]/10">
         <Plus size={14} className="group-hover:rotate-180 transition-transform duration-500" />
         Add More Items
       </button>
 
-      {!hasUnconfirmed && remaining > 0 ? (
+      {!isFullyCancelled && !hasUnconfirmed && remaining > 0 ? (
         <div className="w-full space-y-4 lg:space-y-6 mt-6 mb-10">
           <div className="bg-[#F9F7F4] rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-8 shadow-inner border-2 border-[#E76F51]/20">
             <span className="text-[9px] lg:text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.4em]">Pending Bill</span>
@@ -126,7 +222,7 @@ const OrderSuccess = ({
             </motion.div>
           ) : null}
         </div>
-      ) : !hasUnconfirmed ? (
+      ) : (!isFullyCancelled && !hasUnconfirmed) ? (
         <div className="p-6 bg-[#6A994E]/10 rounded-2xl w-full text-[#6A994E] font-black text-[10px] uppercase tracking-[0.4em] border border-[#6A994E]/10 mt-6 mb-10">
           Transaction Settled
         </div>
@@ -158,6 +254,23 @@ const OrderSuccess = ({
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {cancelledOrders.length > 0 && (
+          <div className="bg-[#B71C1C]/5 rounded-[2rem] p-6 border border-[#B71C1C]/10">
+            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#B71C1C]/40 mb-4 text-left">Cancelled Items</p>
+            <div className="space-y-3">
+              {cancelledOrders.flatMap((o: any) => o.items || []).filter(Boolean).map((item: any, idx: number) => (
+                <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-[#B71C1C]/5 shadow-sm opacity-60">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-[#B71C1C]" />
+                    <span className="text-xs font-bold text-[#3A241C] line-through">{isTakeaway ? item.name.split('(')[0].trim() : item.name}</span>
+                  </div>
+                  <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-[#B71C1C]/10 text-[#B71C1C]">Rejected</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
