@@ -243,10 +243,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   const navItems = [
-    { id: "/admin", label: "Live Dashboard", icon: LayoutDashboard },
-    { id: "/admin/history", label: "Order History", icon: ShoppingBag },
-    { id: "/admin/menu", label: "Menu Manager", icon: Lock },
-    { id: "/admin/reports", label: "Business Reports", icon: BarChart3 },
+    { id: "/admin", label: "Dashboard", icon: LayoutDashboard },
+    { id: "/admin/menu", label: "Menu", icon: Lock },
+    { id: "/admin/history", label: "History", icon: ShoppingBag },
+    { id: "/admin/reports", label: "Reports", icon: BarChart3 },
     { id: "/admin/analytics", label: "Analytics", icon: PieChart },
   ];
 

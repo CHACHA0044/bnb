@@ -113,7 +113,10 @@ async function processLogsForReport(logs: any[]) {
  */
 export async function generateDailyReport(date: string): Promise<Buffer> {
   const logs = await prisma.analyticsLog.findMany({
-    where: { date },
+    where: { 
+      date,
+      orderStatus: { notIn: ["REJECTED", "CANCELLED"] }
+    },
     orderBy: { timestamp: "asc" }
   });
 
@@ -155,7 +158,10 @@ export async function generateDailyReport(date: string): Promise<Buffer> {
  */
 export async function generateRangeReport(from: string, to: string): Promise<Buffer> {
   const logs = await prisma.analyticsLog.findMany({
-    where: { date: { gte: from, lte: to } },
+    where: { 
+      date: { gte: from, lte: to },
+      orderStatus: { notIn: ["REJECTED", "CANCELLED"] }
+    },
     orderBy: { timestamp: "asc" }
   });
 
@@ -195,7 +201,10 @@ export async function generateRangeReport(from: string, to: string): Promise<Buf
  */
 export async function generateMonthlyCSV(month: string): Promise<string> {
   const logs = await prisma.analyticsLog.findMany({
-    where: { date: { startsWith: month } },
+    where: { 
+      date: { startsWith: month },
+      orderStatus: { notIn: ["REJECTED", "CANCELLED"] }
+    },
     orderBy: { timestamp: "asc" }
   });
 

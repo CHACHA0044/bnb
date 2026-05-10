@@ -79,6 +79,65 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
   }
 });
 
+router.get("/history/raw", async (req: Request, res: Response) => {
+  const records = await (prisma as any).orderHistoryRecord.findMany({ take: 10 });
+  res.json(records);
+});
+
+/**
+ * GET /api/admin/history
+
+ * Returns paginated order history from precomputed snapshots.
+ */
+router.get("/history", async (req: Request, res: Response): Promise<void> => {
+  console.log(`[ADMIN] Fetching history: page=${req.query.page}, limit=${req.query.limit}`);
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const skip = (page - 1) * limit;
+
+    const from = req.query.from as string;
+    const to = req.query.to as string;
+
+    const where: any = {};
+    if ((from && from.trim() !== "") || (to && to.trim() !== "")) {
+      where.createdAt = {};
+      if (from && from.trim() !== "") where.createdAt.gte = new Date(from);
+      if (to && to.trim() !== "") {
+        const endDate = new Date(to);
+        endDate.setHours(23, 59, 59, 999);
+        where.createdAt.lte = endDate;
+      }
+    }
+
+
+    const [history, total] = await Promise.all([
+      (prisma as any).orderHistoryRecord.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" }
+      }),
+      (prisma as any).orderHistoryRecord.count({ where })
+    ]);
+
+
+    res.json({
+      history,
+      pagination: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (err) {
+    console.error("[ADMIN] History fetch error:", err);
+    res.status(500).json({ error: "Failed to fetch history" });
+  }
+});
+
+
 /**
  * GET /api/admin/db-check
  * Debug endpoint to test DB connectivity directly.
@@ -139,7 +198,17 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
       data: { status: "CLOSED" }
     });
 
+    // Trigger history snapshots for all orders in the session
+    try {
+      const { createOrderHistorySnapshot } = require("../lib/orderHistory");
+      const orderIds = sessionData.orders.filter(o => o.status !== "CANCELLED").map(o => o.id);
+      for (const id of orderIds) {
+        createOrderHistorySnapshot(id).catch((e: any) => console.error(`[ADMIN] Snapshot fail for ${id}:`, e));
+      }
+    } catch (e) { console.error("[ADMIN] History trigger error:", e); }
+
     console.log(`[ADMIN] Session ${sessionId} → CLOSED`);
+
 
     try {
       const io = getIO();

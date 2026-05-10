@@ -48,6 +48,7 @@ export interface SessionData {
   deviceFingerprint?: string;
   createdAt: string;
   updatedAt: string;
+  feedback?: string;
   orders: OrderData[];
   payments: PaymentData[];
 }
@@ -60,6 +61,7 @@ export interface OrderData {
   packingCharges: number;
   createdAt: string;
   instructions?: string;
+  customerPhone?: string;
   items: OrderItemData[];
 }
 
@@ -89,10 +91,10 @@ export function fetchSession(tableId: string, sessionId?: string) {
 }
 
 /** Place an order */
-export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false, tableId?: string, packingCharges: number = 0, instructions?: string) {
+export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false, tableId?: string, packingCharges: number = 0, instructions?: string, customerPhone?: string) {
   return apiFetch<{ order: OrderData, session: SessionData }>("/api/order", {
     method: "POST",
-    body: JSON.stringify({ sessionId, items, isTakeaway, tableId, packingCharges, instructions }),
+    body: JSON.stringify({ sessionId, items, isTakeaway, tableId, packingCharges, instructions, customerPhone }),
   });
 }
 
@@ -337,12 +339,13 @@ export function adminToggleOrderItems(orderId: string, isServed: boolean, secret
 }
 
 /** Submit rating for a menu item */
-export function submitRating(itemId: string, rating: number) {
+export function submitRating(itemId: string, rating: number, sessionId?: string, orderId?: string) {
   return apiFetch("/api/menu/rate", {
     method: "POST",
-    body: JSON.stringify({ itemId, rating }),
+    body: JSON.stringify({ itemId, rating, sessionId, orderId }),
   });
 }
+
 
 export interface RestaurantStatusData {
   isOpen: boolean;
@@ -499,4 +502,29 @@ export function adminFetchAnalyticsData(from: string, to: string, secret: string
     empty?: boolean;
     message?: string;
   }>(`/api/admin/analytics?from=${from}&to=${to}`, { adminSecret: secret });
+}
+
+/** Admin: Fetch paginated order history snapshots */
+export function adminFetchHistory(secret: string, page: number = 1, limit: number = 50, from?: string, to?: string) {
+  let query = `?page=${page}&limit=${limit}`;
+  if (from) query += `&from=${from}`;
+  if (to) query += `&to=${to}`;
+  return apiFetch<{
+    history: any[];
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      pages: number;
+    };
+  }>(`/api/admin/history${query}`, { adminSecret: secret });
+}
+
+
+/** Submit general feedback for a session */
+export function submitFeedback(sessionId: string, feedback: string) {
+  return apiFetch<{ success: boolean }>("/api/menu/feedback", {
+    method: "POST",
+    body: JSON.stringify({ sessionId, feedback }),
+  });
 }

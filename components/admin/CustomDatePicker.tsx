@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, X } from "lucide-react";
 
 interface CustomDatePickerProps {
-  mode?: "single" | "range";
+  mode?: "single" | "range" | "compact";
   date?: string; // YYYY-MM-DD
   fromDate?: string;
   toDate?: string;
@@ -18,7 +18,7 @@ function QuickSelector({
   onChange 
 }: { 
   value: any; 
-  options: { label: string; value: any }[]; 
+  options: { label: string; value: any; disabled?: boolean }[]; 
   onChange: (v: any) => void;
 }) {
   const [showOptions, setShowOptions] = useState(false);
@@ -63,12 +63,19 @@ function QuickSelector({
             {options.map((opt) => (
               <button
                 key={opt.value}
+                disabled={opt.disabled}
                 onClick={(e) => {
                   e.stopPropagation();
                   onChange(opt.value);
                   setShowOptions(false);
                 }}
-                className={`w-full text-left px-5 py-2.5 text-[10px] font-black uppercase tracking-widest hover:bg-[#F9F7F4] hover:text-[#E76F51] transition-colors ${value === opt.value ? "text-[#E76F51] bg-[#E76F51]/5" : "text-[#3A241C]/60"}`}
+                className={`w-full text-left px-5 py-2.5 text-[10px] font-black uppercase tracking-widest transition-colors ${
+                  opt.disabled 
+                    ? "opacity-20 cursor-not-allowed grayscale" 
+                    : value === opt.value 
+                      ? "text-[#E76F51] bg-[#E76F51]/5" 
+                      : "text-[#3A241C]/60 hover:bg-[#F9F7F4] hover:text-[#E76F51]"
+                }`}
               >
                 {opt.label}
               </button>
@@ -106,7 +113,7 @@ export default function CustomDatePicker({
 
   useEffect(() => {
     if (mode === "single" && date) setSelectedDate(new Date(date));
-    if (mode === "range") {
+    if (mode === "range" || mode === "compact") {
       setRangeStart(fromDate ? new Date(fromDate) : null);
       setRangeEnd(toDate ? new Date(toDate) : null);
     }
@@ -152,7 +159,7 @@ export default function CustomDatePicker({
       setSelectedDate(clickedDate);
       if (onChange) onChange(toISODate(clickedDate));
       setIsOpen(false);
-    } else {
+    } else { // range or compact
       if (!rangeStart || (rangeStart && rangeEnd)) {
         setRangeStart(clickedDate);
         setRangeEnd(null);
@@ -200,7 +207,7 @@ export default function CustomDatePicker({
 
       if (mode === "single") {
         isSelected = isSameDay(dateObj, selectedDate);
-      } else {
+      } else { // range or compact
         isStart = isSameDay(dateObj, rangeStart);
         isEnd = isSameDay(dateObj, rangeEnd);
         isSelected = isStart || isEnd;
@@ -245,11 +252,14 @@ export default function CustomDatePicker({
       return selectedDate.toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' });
     } else {
       if (rangeStart && rangeEnd) {
+        if (mode === "compact") {
+          return `${rangeStart.toLocaleDateString("en-IN", { day: '2-digit', month: 'short' })} - ${rangeEnd.toLocaleDateString("en-IN", { day: '2-digit', month: 'short' })}`;
+        }
         return `${rangeStart.toLocaleDateString("en-IN", { day: '2-digit', month: 'short' })} - ${rangeEnd.toLocaleDateString("en-IN", { day: '2-digit', month: 'short', year: 'numeric' })}`;
       } else if (rangeStart) {
-        return `${rangeStart.toLocaleDateString("en-IN", { day: '2-digit', month: 'short' })} - Select End Date`;
+        return `${rangeStart.toLocaleDateString("en-IN", { day: '2-digit', month: 'short' })} - ...`;
       }
-      return "Select Date Range";
+      return mode === "compact" ? "Date Range" : "Select Date Range";
     }
   };
 
@@ -258,14 +268,16 @@ export default function CustomDatePicker({
       {/* Trigger Button */}
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-4 bg-white px-5 py-3 rounded-2xl border border-[#3A241C]/5 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+        className={`flex items-center bg-white border border-[#3A241C]/5 shadow-sm hover:shadow-md transition-all cursor-pointer group ${
+          mode === "compact" ? "gap-3 px-3 py-2 rounded-xl" : "gap-4 px-5 py-3 rounded-2xl"
+        }`}
       >
-        <div className="w-10 h-10 bg-[#E76F51]/10 rounded-xl flex items-center justify-center text-[#E76F51] group-hover:scale-105 transition-transform">
-          <CalendarIcon size={20} />
+        <div className={`${mode === "compact" ? "w-8 h-8 rounded-lg" : "w-10 h-10 rounded-xl"} bg-[#E76F51]/10 flex items-center justify-center text-[#E76F51] group-hover:scale-105 transition-transform`}>
+          <CalendarIcon size={mode === "compact" ? 16 : 20} />
         </div>
         <div>
-          <p className="text-[9px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-0.5">{label}</p>
-          <p className="font-black text-[#3A241C] text-sm whitespace-nowrap">{getDisplayText()}</p>
+          {mode !== "compact" && <p className="text-[9px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em] mb-0.5">{label}</p>}
+          <p className={`font-black text-[#3A241C] whitespace-nowrap ${mode === "compact" ? "text-[10px]" : "text-sm"}`}>{getDisplayText()}</p>
         </div>
       </div>
 
@@ -288,12 +300,20 @@ export default function CustomDatePicker({
               <div className="flex gap-2">
                 <QuickSelector 
                   value={currentMonth.getMonth()}
-                  options={["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => ({ label: m, value: i }))}
+                  options={["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m, i) => {
+                    const now = new Date();
+                    const isFuture = currentMonth.getFullYear() > now.getFullYear() || 
+                                   (currentMonth.getFullYear() === now.getFullYear() && i > now.getMonth());
+                    return { label: m, value: i, disabled: isFuture };
+                  })}
                   onChange={(val) => setCurrentMonth(new Date(currentMonth.getFullYear(), val, 1))}
                 />
                 <QuickSelector 
                   value={currentMonth.getFullYear()}
-                  options={Array.from({ length: new Date().getFullYear() - 2025 + 1 }, (_, i) => 2025 + i).map(y => ({ label: y.toString(), value: y }))}
+                  options={Array.from(
+                    { length: Math.max(0, new Date().getFullYear() - 2025 + 1) }, 
+                    (_, i) => 2025 + i
+                  ).map(y => ({ label: y.toString(), value: y }))}
                   onChange={(val) => setCurrentMonth(new Date(val, currentMonth.getMonth(), 1))}
                 />
               </div>

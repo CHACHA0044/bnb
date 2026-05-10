@@ -49,11 +49,10 @@ export default function Navbar() {
     <>
       {/* Navbar — CSS transitions only, no Framer Motion on scroll */}
       <nav
-        className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-500 ease-in-out transform-gpu ${
-          scrolled
+        className={`fixed top-0 left-0 right-0 z-[100] transition-all duration-500 ease-in-out transform-gpu ${scrolled
             ? "py-3 bg-white/85 backdrop-blur-2xl shadow-[0_20px_50px_rgba(58,36,28,0.12)] rounded-b-[3rem] border-b border-[var(--benne-primary)]/10"
             : "py-6 bg-transparent border-b border-transparent"
-        }`}
+          }`}
         style={{
           WebkitBackdropFilter: scrolled ? "blur(40px) saturate(180%)" : "none",
         }}

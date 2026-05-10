@@ -5,8 +5,8 @@ import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { Loader2, Package, MapPin, ShieldAlert, Lock, CheckCircle2, ChevronDown, Coffee, Bell, X, Star } from "lucide-react";
 import dynamic from "next/dynamic";
 
-import { 
-  fetchSession, placeOrder, createPayment, fetchMenu, 
+import {
+  fetchSession, placeOrder, createPayment, fetchMenu,
   fetchRestaurantStatus, verifyLocation, dismissReviewRequest,
   type SessionData, type OrderData, type PaymentData,
   type RestaurantStatusData
@@ -36,7 +36,7 @@ interface CartItem extends OrderMenuItem {
 /* ─── Component ────────────────────────────── */
 export default function TableOrderClient({ tableId, mode = "table" }: { tableId: string; mode?: "table" | "takeaway" }) {
   const isTakeawayMode = mode === "takeaway";
-  
+
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [menuLoading, setMenuLoading] = useState(true);
@@ -68,11 +68,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const [deletedOrders, setDeletedOrders] = useState<any[]>([]);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [sessionClosed, setSessionClosed] = useState(false);
-  
+
   // Global Notification States
   const [showCancellation, setShowCancellation] = useState(false);
   const notifiedCancelledIds = useRef(new Set<string>());
-  
+
   // Multiplayer Cart State (Local-first now)
   const [clientId, setClientId] = useState<string>("");
   const [cartLocked, setCartLocked] = useState(false);
@@ -106,6 +106,12 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   // Socket
   const { socket, joinSession, on, connected } = useSocket();
   const [showConfirmed, setShowConfirmed] = useState(false);
+  const [showAdminConfirmed, setShowAdminConfirmed] = useState(false);
+  const notifiedConfirmedIds = useRef(new Set<string>());
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   useEffect(() => {
     setShowReviewPrompt(!!session?.reviewRequested);
@@ -221,7 +227,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const loadSession = useCallback(async () => {
     try {
       let sidToFetch: string | undefined = undefined;
-      
+
       if (isTakeawayMode) {
         sidToFetch = localStorage.getItem("bnb_takeaway_session_id") || undefined;
         if (!sidToFetch) {
@@ -276,6 +282,24 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     loadSession();
   }, [loadMenuData, loadSession]);
 
+  /* ─── Search Filtering Logic ───────────── */
+  const filteredMenuItems = useMemo(() => {
+    if (!searchQuery.trim()) return menuItems;
+    const q = searchQuery.toLowerCase().trim();
+    return menuItems.filter(item =>
+      item.name.toLowerCase().includes(q) ||
+      item.category.toLowerCase().includes(q) ||
+      (item.descriptionEn && item.descriptionEn.toLowerCase().includes(q))
+    );
+  }, [menuItems, searchQuery]);
+
+  const filteredCategories = useMemo(() => {
+    if (!searchQuery.trim()) return categories;
+    // Only show categories that have items matching the search
+    const activeCats = new Set(filteredMenuItems.map(m => m.category));
+    return categories.filter(c => activeCats.has(c));
+  }, [categories, filteredMenuItems, searchQuery]);
+
   useEffect(() => {
     if (locationVerified === null) {
       tryVerifyLocation(session?.id);
@@ -319,7 +343,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         if (data.order) {
           setSession(prev => {
             if (!prev) return null;
-            const updatedOrders = prev.orders.map(o => 
+            const updatedOrders = prev.orders.map(o =>
               o.id === data.order.id || o.id === data.tempOrderId ? { ...o, ...data.order } : o
             );
             return { ...prev, orders: updatedOrders };
@@ -339,7 +363,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             return { ...prev, orders: prev.orders.filter(o => o.id !== data.orderId) };
           });
         }
-        
+
         // Track deleted order for notification
         if (data.order) {
           setDeletedOrders(prev => [...prev, data.order]);
@@ -387,6 +411,21 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       setOrderPlaced(false);
     }
   }, [session, isProcessingOrder, orderPlaced, deletedOrders.length, paymentSuccess]);
+
+  // Track Admin Confirmation for Notifications
+  useEffect(() => {
+    if (!session) return;
+    const confirmedOrders = session.orders.filter(o => o.status !== "UNCONFIRMED" && o.status !== "CANCELLED");
+    const newConfirmed = confirmedOrders.filter(o => !notifiedConfirmedIds.current.has(o.id));
+    
+    if (newConfirmed.length > 0) {
+      if (orderPlaced) {
+        setShowAdminConfirmed(true);
+        setTimeout(() => setShowAdminConfirmed(false), 8000);
+      }
+      newConfirmed.forEach(o => notifiedConfirmedIds.current.add(o.id));
+    }
+  }, [session?.orders, orderPlaced]);
 
   // Global Notification Tracking
   const cancelledOrders = useMemo(() => [
@@ -436,7 +475,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   /* ─── Multiplayer Sync ─────────────────── */
   useEffect(() => {
     if (!clientId || !connected || !socket) return;
-    
+
     socket.emit("join_table", { tableId, clientId });
 
     const unsubs = [
@@ -474,14 +513,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     const container = menuContainerRef.current;
     if (el && container) {
       // Precise offset calculation for sticky category bar
-      const offset = el.offsetTop - 110; 
+      const offset = el.offsetTop - 110;
       container.scrollTo({ top: offset, behavior: "smooth" });
     }
   }, []);
 
   useEffect(() => {
     if (categories.length === 0) return;
-    
+
     const timeout = setTimeout(() => {
       const rootEl = menuContainerRef.current;
       if (!rootEl) return;
@@ -492,10 +531,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           if (visible.length > 0) {
             const topMost = [...visible].sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
             const catId = topMost.target.id;
-            
+
             setActiveCategory((prev) => {
               if (prev === catId) return prev;
-              
+
               const btn = document.getElementById(`cat-btn-${catId}`);
               if (btn) {
                 const container = btn.parentElement;
@@ -504,6 +543,16 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                   container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
                 }
               }
+
+              const desktopBtn = document.getElementById(`desktop-cat-btn-${catId}`);
+              if (desktopBtn) {
+                const container = desktopBtn.parentElement;
+                if (container) {
+                  const scrollTarget = desktopBtn.offsetLeft - (container.offsetWidth / 2) + (desktopBtn.offsetWidth / 2);
+                  container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
+                }
+              }
+
               return catId;
             });
           }
@@ -529,17 +578,17 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   /* ─── Lazy Load Categories ─────────── */
   useEffect(() => {
     if (categories.length === 0) return;
-    
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting) {
           setVisibleCategoriesCount(prev => Math.min(prev + 3, categories.length));
         }
       },
-      { 
-        threshold: 0, 
-        rootMargin: '800px', 
-        root: menuContainerRef.current 
+      {
+        threshold: 0,
+        rootMargin: '800px',
+        root: menuContainerRef.current
       }
     );
 
@@ -554,12 +603,12 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       return showToast("Restaurant is closed for today!");
     }
     if (cartLocked) return showToast("Cart is locked for checkout!");
-    
+
     // Clear notifications when adding new items
     setOrderPlaced(false);
     setDeletedOrders([]);
     setPaymentSuccess(false);
-    
+
     if (item.variants && !variant) {
       setVariantModalItem(item);
       const initial: { [key: string]: number } = {};
@@ -605,10 +654,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     syncCart((prev) => {
       const idx = prev.findIndex(c => c.id === itemId && c.forPacking === currentPacking && c.variant === variant && c.addedBy === clientId);
       if (idx === -1) return prev;
-      
+
       const newCart = [...prev];
       const item = { ...newCart[idx], forPacking: !currentPacking };
-      
+
       const targetIdx = prev.findIndex(c => c.id === itemId && c.forPacking === !currentPacking && c.variant === variant && c.addedBy === clientId);
       if (targetIdx !== -1) {
         newCart[targetIdx].quantity += item.quantity;
@@ -652,37 +701,38 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const cartCount = useMemo(() => cart.reduce((sum, c) => sum + c.quantity, 0), [cart]);
 
   /* ─── Order Action ─────────────────────── */
-  const handlePlaceOrder = useCallback(async () => {
+  const handlePlaceOrder = useCallback(async (customerPhone?: string) => {
     if (!restaurantStatus.isOpen && !restaurantStatus.closingAt) {
       return showToast("Restaurant is closed for today!");
     }
     if (cart.length === 0) return;
     if (cartLocked && lockedBy !== clientId) return showToast("Someone else is placing the order!");
-    
+
     setOrdering(true);
     setIsProcessingOrder(true);
     // Don't hide mobile cart yet — let the animation play first
-    
+
     try {
-      const itemsToKitchen = cart.map((c) => ({ 
-        name: `${c.name}${c.variant ? ` (${c.variant})` : ""}${c.forPacking ? " (To-Go)" : ""}`, 
-        price: c.price, 
-        quantity: c.quantity 
+      const itemsToKitchen = cart.map((c) => ({
+        name: `${c.name}${c.variant ? ` (${c.variant})` : ""}${c.forPacking ? " (Packing)" : ""}`,
+        price: c.price,
+        quantity: c.quantity
       }));
 
-      const response = await placeOrder(session?.id || "", itemsToKitchen, isTakeawayGlobal, tableId, packingCharges, instructionsRef.current);
-      
+      const response = await placeOrder(session?.id || "", itemsToKitchen, isTakeawayGlobal, tableId, packingCharges, instructionsRef.current, customerPhone);
+
       if (isTakeawayMode && response.order.sessionId) {
         localStorage.setItem("bnb_takeaway_session_id", response.order.sessionId);
       }
-      
+
       // Backend route already emits to admin — no client emission needed
       instructionsRef.current = "";
       setSession(response.session);
       setIsProcessingOrder(false);
       setOrderPlaced(true); // Ensure success screen shows immediately
-      setShowConfirmed(true);
-      setTimeout(() => setShowConfirmed(false), 8000); // 8 seconds for visibility
+      setCart([]);
+      localStorage.removeItem(`bnb_cart_${tableId}`);
+      // Notification will now be triggered by 'order_confirmed' socket event instead of being shown immediately
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to place order");
       setIsProcessingOrder(false);
@@ -737,33 +787,33 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const handleCloseTable = useCallback(() => {
     if (!session) return;
     if (remaining > 0) return showToast("Please settle the payment first!");
-    
+
     showToast("Requesting table closure...");
     if (socket) socket.emit("table_close_request", { tableId, sessionId: session.id });
   }, [session, remaining, socket, tableId, showToast]);
 
   const handleRateItem = useCallback(async (itemName: string, rating: number, orderId?: string) => {
+    // ... logic omitted for brevity in target content matching, but I will replace the whole block
     try {
       const { submitRating } = await import("@/lib/api");
       const menuItem = menuItems.find(m => m.name === itemName);
-      if (menuItem) await submitRating(menuItem.id, rating);
-      
+      if (menuItem) await submitRating(menuItem.id, rating, session?.id, orderId);
+
       const ratingKey = orderId ? `${orderId}-${itemName}` : itemName;
       setRatings(prev => ({ ...prev, [ratingKey]: rating }));
-      
+
       setRatedItems(prev => {
         const next = new Set(prev).add(ratingKey);
-        
-        // Count total rateable items in the current session
+
         if (session?.orders) {
           const rateableItemsKeys = new Set<string>();
           session.orders.forEach(o => {
             if (o.status === 'SERVED') {
               o.items.forEach((it: any) => {
                 const n = it.name.toLowerCase();
-                const isExcluded = n.includes("water") || n.includes("soft drink") || 
-                                 n.includes("coke") || n.includes("pepsi") || 
-                                 n.includes("sprite") || n.includes("thums up");
+                const isExcluded = n.includes("water") || n.includes("soft drink") ||
+                  n.includes("coke") || n.includes("pepsi") ||
+                  n.includes("sprite") || n.includes("thums up");
                 if (!isExcluded) {
                   rateableItemsKeys.add(`${o.id}-${it.name}`);
                 }
@@ -771,7 +821,6 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             }
           });
 
-          // Only show toast when all items that CAN be rated HAVE been rated
           let allRated = true;
           rateableItemsKeys.forEach(key => {
             if (!next.has(key)) allRated = false;
@@ -781,7 +830,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             showToast("Thank you for your rating!");
           }
         }
-        
+
         return next;
       });
     } catch (err) {
@@ -789,11 +838,23 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     }
   }, [menuItems, showToast, session]);
 
+  const handleFeedbackSubmit = useCallback(async (feedback: string) => {
+    if (!session) return;
+    try {
+      const { submitFeedback } = await import("@/lib/api");
+      await submitFeedback(session.id, feedback);
+      // Local state update
+      setSession(prev => prev ? { ...prev, feedback } : null);
+    } catch (err) {
+      console.error("Failed to submit feedback:", err);
+    }
+  }, [session]);
+
   // Logic: Show premium welcome screen for all initial loading states
   if (!isMounted || loading || (showWelcome && !welcomeDismissed)) {
     return (
       <AnimatePresence>
-        <motion.div 
+        <motion.div
           key="welcome-loader"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0, scale: 1.05, filter: "blur(20px)" }}
@@ -801,8 +862,8 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           className="fixed inset-0 z-[1000] bg-[#F9F7F4] flex flex-col items-center justify-center p-8 overflow-hidden"
         >
           {/* Animated Background Elements */}
-          <motion.div 
-            animate={{ 
+          <motion.div
+            animate={{
               scale: [1, 1.2, 1],
               opacity: [0.3, 0.5, 0.3],
               rotate: [0, 90, 0]
@@ -810,8 +871,8 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
             className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-[var(--benne-primary)]/5 rounded-full blur-[100px]"
           />
-          <motion.div 
-            animate={{ 
+          <motion.div
+            animate={{
               scale: [1, 1.3, 1],
               opacity: [0.2, 0.4, 0.2],
               rotate: [0, -90, 0]
@@ -829,7 +890,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
               className="w-24 h-24 bg-[#3A241C] rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl relative"
             >
               <Coffee size={40} className="text-white" />
-              <motion.div 
+              <motion.div
                 animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
                 transition={{ duration: 2, repeat: Infinity }}
                 className="absolute inset-0 border-4 border-[#3A241C] rounded-[2.5rem]"
@@ -844,11 +905,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
               <h1 className="font-[var(--font-playfair)] text-4xl font-bold text-[#3A241C] mb-4 italic">
                 {showWelcome ? "Welcome to  Benne n Beans" : "Brewing things back up"}
               </h1>
-              
+
               <div className="h-px w-12 bg-[var(--benne-primary)]/30 mx-auto mb-6" />
-              
+
               <p className="text-[#3A241C]/40 text-xs font-black uppercase tracking-[0.25em] leading-loose mb-12 h-10 flex items-center justify-center">
-                {showWelcome 
+                {showWelcome
                   ? (isTakeawayMode ? "Take the legacy of flavor home." : "Dine-in with the soul of Karnataka.")
                   : "Bringing back your delicious session..."
                 }
@@ -857,7 +918,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
               <div className="flex flex-col items-center gap-4">
                 {/* Progress Indicator */}
                 <div className="relative w-48 h-1 bg-[#3A241C]/5 rounded-full overflow-hidden">
-                  <motion.div 
+                  <motion.div
                     initial={{ x: "-100%" }}
                     animate={{ x: (loading || menuLoading) ? "-20%" : "0%" }}
                     transition={{ duration: 2, ease: "easeInOut" }}
@@ -914,9 +975,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     showReviewPrompt,
     setShowReviewPrompt,
     onAnimationComplete: () => {
-      setOrderPlaced(true);
-      setCart([]);
-      localStorage.removeItem(`bnb_cart_${tableId}`);
+      // Animation complete logic moved to handlePlaceOrder
     },
     autoScrollToHistory: pendingHistoryScroll,
     onScrollComplete: () => setPendingHistoryScroll(false)
@@ -930,10 +989,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       <div className="fixed top-24 left-6 right-6 z-[150] space-y-4 pointer-events-none">
         <AnimatePresence mode="popLayout">
           {session?.paymentReminder && (
-            <motion.div 
+            <motion.div
               key="payment-reminder"
-              initial={{ y: -20, opacity: 0, scale: 0.9 }} 
-              animate={{ y: 0, opacity: 1, scale: 1 }} 
+              initial={{ y: -20, opacity: 0, scale: 0.9 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: -20, opacity: 0, scale: 0.9 }}
               className="mx-auto w-fit max-w-[90vw] bg-[#B71C1C] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-[0_20px_50px_rgba(183,28,28,0.3)] border border-white/10 pointer-events-auto"
             >
@@ -949,10 +1008,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           )}
 
           {showReviewPrompt && (
-            <motion.div 
+            <motion.div
               key="review-prompt"
-              initial={{ y: -20, opacity: 0, scale: 0.9 }} 
-              animate={{ y: 0, opacity: 1, scale: 1 }} 
+              initial={{ y: -20, opacity: 0, scale: 0.9 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
               exit={{ y: -20, opacity: 0, scale: 0.9 }}
               onClick={async () => {
                 setShowReviewPrompt(false);
@@ -968,7 +1027,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
               <div className="flex-1 text-left pr-2">
                 <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest leading-tight">Rate Your Meal! Tap to open history & share feedback.</p>
               </div>
-              <button 
+              <button
                 onClick={async (e) => {
                   e.stopPropagation();
                   setShowReviewPrompt(false);
@@ -981,8 +1040,25 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             </motion.div>
           )}
 
+          {showAdminConfirmed && (
+            <motion.div
+              key="admin-confirmed"
+              initial={{ y: -20, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -20, opacity: 0, scale: 0.9 }} className="mx-auto w-fit max-w-[90vw] bg-[#6A994E] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto">
+              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
+                <CheckCircle2 size={18} className="text-white" />
+              </div>
+              <div className="flex-1 text-left pr-2">
+                <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest mb-0.5 leading-tight">Order Confirmed!</p>
+                <p className="text-[8px] lg:text-[9px] font-bold text-white/80 leading-tight">Our kitchen has started preparing your delicious meal.</p>
+              </div>
+              <button onClick={() => setShowAdminConfirmed(false)} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0">
+                <X size={16} />
+              </button>
+            </motion.div>
+          )}
+
           {showConfirmed && (
-            <motion.div 
+            <motion.div
               key="order-confirmed"
               initial={{ y: -20, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -20, opacity: 0, scale: 0.9 }} className="mx-auto w-fit max-w-[90vw] bg-[#3A241C] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto">
               <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#6A994E] rounded-xl flex items-center justify-center flex-shrink-0">
@@ -999,7 +1075,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           )}
 
           {showCancellation && (
-            <motion.div 
+            <motion.div
               key="order-cancelled"
               initial={{ y: -20, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -20, opacity: 0, scale: 0.9 }} className="mx-auto w-fit max-w-[90vw] bg-[#B71C1C] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto">
               <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
@@ -1016,12 +1092,12 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           )}
 
           {(() => {
-            const hasReadyTakeaway = (session?.orders ?? []).some((o: any) => 
-              o.items.some((i: any) => i.name.toLowerCase().includes("(to-go)") && i.isServed)
+            const hasReadyTakeaway = (session?.orders ?? []).some((o: any) =>
+              o.items.some((i: any) => i.name.toLowerCase().includes("(packing)") && i.isServed)
             );
             if (!hasReadyTakeaway) return null;
             return (
-              <motion.div 
+              <motion.div
                 key="takeaway-ready"
                 initial={{ y: -20, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -20, opacity: 0, scale: 0.9 }} className="mx-auto w-fit max-w-[90vw] bg-[#6A994E] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto">
                 <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
@@ -1057,7 +1133,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         </div>
       )}
 
-      <MenuHeader 
+      <MenuHeader
         tableId={tableId}
         isTakeawayMode={isTakeawayMode}
         isTakeawayGlobal={isTakeawayGlobal}
@@ -1070,20 +1146,66 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       />
 
 
+
       <div className="flex flex-1 overflow-hidden relative">
         <main ref={menuContainerRef as any} id="menu-container" className="flex-1 relative border-r border-[#3A241C]/5 overflow-y-auto w-full scroll-smooth transform-gpu translate-z-0">
-          <CategoryBar 
-            categories={categories} 
-            activeCategory={activeCategory} 
-            onCategoryClick={scrollToCategory} 
-          />
+
+          {/* ── UNIFIED HEADER (Categories + Search) ────────────────────── */}
+          <div className="sticky top-0 z-50 bg-[#F9F7F4]/95 backdrop-blur-md px-4 lg:px-8 py-3 border-b border-[#3A241C]/5 flex items-center justify-start gap-2 lg:gap-4 w-full overflow-hidden">
+            {!searchQuery && (
+              <div
+                className="flex-none w-auto max-w-[calc(100%-120px)] lg:max-w-[calc(100%-360px)] overflow-x-auto scrollbar-hide"
+                style={{ maskImage: "linear-gradient(to right, black calc(100% - 30px), transparent 100%)", WebkitMaskImage: "linear-gradient(to right, black calc(100% - 30px), transparent 100%)" }}
+              >
+                <div className="flex gap-2 lg:gap-4 pr-2 lg:pr-4 pb-1 pt-1 w-max">
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      id={`desktop-cat-btn-${cat}`}
+                      onClick={() => scrollToCategory(cat)}
+                      className={`px-4 lg:px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.15em] border shadow-sm transition-colors duration-150 ease-out whitespace-nowrap flex-shrink-0 ${activeCategory === cat ? "bg-[#3A241C] text-white border-[#3A241C]" : "bg-white text-[#3A241C]/40 hover:bg-[#3A241C] hover:text-white border-[#3A241C]/5"}`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <motion.div
+              animate={{
+                scale: isSearchFocused ? 1.01 : 1,
+                boxShadow: isSearchFocused ? "0 10px 30px rgba(58,36,28,0.08)" : "0 4px 12px rgba(58,36,28,0.03)"
+              }}
+              className={`flex items-center gap-2 lg:gap-3 bg-white px-3 lg:px-4 h-10 lg:h-12 rounded-2xl border-2 transition-all duration-150 ease-out ${isSearchFocused ? "border-[#E76F51]" : "border-[#3A241C]/5"} flex-1 ${searchQuery ? "w-full" : "lg:flex-none lg:w-[340px]"} flex-shrink-0 min-w-[100px]`}
+            >
+              <motion.div animate={{ rotate: isSearchFocused ? 90 : 0, color: isSearchFocused ? "#E76F51" : "#3A241C4d" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="lg:w-[18px] lg:h-[18px]"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+              </motion.div>
+              <input
+                type="text"
+                placeholder="Search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                className="flex-1 w-full min-w-0 bg-transparent border-none focus:border-none focus:ring-0 focus:ring-transparent outline-none focus:outline-none focus-visible:outline-none shadow-none appearance-none text-[13px] lg:text-sm font-bold text-[#3A241C] placeholder:text-[#3A241C]/30"
+                style={{ outline: 'none', boxShadow: 'none' }}
+              />
+              <AnimatePresence>
+                {searchQuery && (
+                  <motion.button initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }} onClick={() => setSearchQuery("")} className="w-5 h-5 lg:w-6 lg:h-6 rounded-full bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/40 hover:bg-[#E76F51]/10 hover:text-[#E76F51] transition-colors"><X size={12} className="lg:w-[14px] lg:h-[14px]" /></motion.button>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          </div>
 
           <div className="p-4 lg:p-8 pb-32 lg:pb-16 space-y-12 lg:y-20">
-            {categories.slice(0, visibleCategoriesCount).map((cat) => (
-              <MenuSection 
+            {filteredCategories.slice(0, searchQuery ? categories.length : visibleCategoriesCount).map((cat) => (
+              <MenuSection
                 key={cat}
                 category={cat}
-                items={menuItems.filter(m => m.category === cat)}
+                items={filteredMenuItems.filter(m => m.category === cat)}
                 lang={lang}
                 onAdd={addToCart}
                 onToggleLang={() => setLang(l => l === "EN" ? "HI" : "EN")}
@@ -1091,11 +1213,25 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                 sectionRef={(el) => { categoryRefs.current[cat] = el; }}
               />
             ))}
-            
-            {visibleCategoriesCount < categories.length && (
+
+            {!searchQuery && visibleCategoriesCount < categories.length && (
               <div ref={loadMoreRef} className="h-40 flex items-center justify-center pb-20">
                 <Loader2 size={32} className="animate-spin text-[#E76F51]/20" />
               </div>
+            )}
+
+            {searchQuery && filteredMenuItems.length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="py-20 flex flex-col items-center justify-center text-center px-6"
+              >
+                <div className="w-16 h-16 bg-[#3A241C]/5 rounded-full flex items-center justify-center text-[#3A241C]/20 mb-4">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+                </div>
+                <h3 className="text-lg font-black text-[#3A241C] uppercase tracking-widest mb-2">No Matches Found</h3>
+                <p className="text-xs font-bold text-[#3A241C]/30 uppercase tracking-widest leading-loose">We couldn't find any dishes matching "{searchQuery}"</p>
+              </motion.div>
             )}
           </div>
         </main>
@@ -1104,30 +1240,30 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         <aside className="hidden lg:flex w-[550px] p-8 flex-col h-full pr-12 relative">
           <div className="absolute top-1/2 right-20 w-72 h-72 bg-[#E76F51]/10 rounded-full blur-[80px] pointer-events-none -translate-y-1/2" />
           <div className="flex-1 bg-white/90 backdrop-blur-3xl rounded-[3.5rem] shadow-[0_30px_100px_-20px_rgba(58,36,28,0.1)] border border-white/60 overflow-hidden flex flex-col ml-4 relative z-10 min-h-0">
-            <CartContent {...commonCartProps} />
+            <CartContent {...commonCartProps} onFeedbackSubmit={handleFeedbackSubmit} />
           </div>
         </aside>
 
         {/* Mobile Cart UI - Synchronized and Butter Smooth */}
         <AnimatePresence initial={false}>
           {!showCartMobile && (cartCount > 0 || orderPlaced || remaining > 0 || session?.paymentReminder) && (
-            <motion.div 
+            <motion.div
               key="cart-trigger"
-              initial={{ y: 150, opacity: 0 }} 
-              animate={{ y: 0, opacity: 1 }} 
-              exit={{ y: 150, opacity: 0 }} 
+              initial={{ y: 150, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 150, opacity: 0 }}
               transition={menuTransition}
               className="lg:hidden fixed bottom-8 left-6 right-6 z-[120] transform-gpu translate-z-0"
             >
-              <motion.button 
+              <motion.button
                 key={`cart-trigger-${cartCount}-${orderPlaced}`}
                 initial={{ scale: 1 }}
-                animate={{ 
+                animate={{
                   scale: [1, 1.05, 1],
                 }}
                 transition={{ duration: 0.4, ease: "easeOut" }}
                 whileTap={{ scale: 0.94 }}
-                onClick={() => setShowCartMobile(true)} 
+                onClick={() => setShowCartMobile(true)}
                 className="w-full h-16 bg-[#3A241C] text-white rounded-[2.5rem] flex items-center justify-between px-8 shadow-[0_20px_50px_rgba(58,36,28,0.3)] border border-white/5 overflow-hidden relative touch-none select-none"
               >
                 <div className="flex items-center gap-4">
@@ -1158,38 +1294,41 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
           {showCartMobile && (
             <div key="cart-drawer-container">
-              <motion.div 
-                initial={{ opacity: 0 }} 
-                animate={{ opacity: 1 }} 
-                exit={{ opacity: 0 }} 
-                onClick={() => setShowCartMobile(false)} 
-                className="lg:hidden fixed inset-0 z-[60] bg-[#3A241C]/40 backdrop-blur-sm transform-gpu translate-z-0" 
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowCartMobile(false)}
+                className="lg:hidden fixed inset-0 z-[60] bg-[#3A241C]/40 backdrop-blur-sm transform-gpu translate-z-0"
               />
-              <motion.div 
-                drag="y" dragListener={false} dragControls={dragControls} dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 0.15 }} 
+              <motion.div
+                drag="y" dragListener={false} dragControls={dragControls} dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 0.15 }}
                 onDragEnd={(e, info) => { if (info.offset.y > 100 || info.velocity.y > 500) setShowCartMobile(false) }}
-                initial={{ y: "100%" }} 
-                animate={{ y: 0 }} 
-                exit={{ y: "100%" }} 
+                initial={{ y: "100%" }}
+                animate={{ y: 0 }}
+                exit={{ y: "100%" }}
                 transition={menuTransition}
                 style={{ willChange: "transform" }}
-                className="lg:hidden fixed bottom-0 left-0 right-0 z-[110] bg-white rounded-t-[3rem] h-[92vh] flex flex-col shadow-2xl overflow-hidden transform-gpu translate-z-0"
+                className="lg:hidden fixed bottom-0 left-0 right-0 z-[110] bg-white rounded-t-[3rem] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden transform-gpu translate-z-0"
               >
                 <div onPointerDown={(e) => dragControls.start(e)} className="flex justify-center py-6 cursor-grab active:cursor-grabbing touch-none z-20"><div className="w-12 h-1.5 bg-[#3A241C]/10 rounded-full" /></div>
-                <div className="flex-1 relative flex flex-col min-h-0">
-                  <CartContent {...commonCartProps} />
-                  <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none flex justify-center z-50">
-                    <motion.button 
-                      whileTap={{ scale: 0.96 }}
-                      onClick={() => setShowCartMobile(false)} 
-                      className="pointer-events-auto w-full py-5 bg-white border-2 border-[#3A241C]/5 text-[#3A241C] rounded-[2rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-[0_10px_30px_rgba(58,36,28,0.05)] active:bg-[#F9F7F4] transition-all touch-none select-none"
-                    >
-                      <div className="w-6 h-6 rounded-full bg-[#3A241C]/5 flex items-center justify-center">
-                        <ChevronDown size={14} className="text-[#3A241C]/40" />
-                      </div>
-                      Continue Browsing
-                    </motion.button>
-                  </div>
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                  <CartContent 
+                    {...commonCartProps} 
+                    onFeedbackSubmit={handleFeedbackSubmit} 
+                    mobileFooter={
+                      <motion.button
+                        whileTap={{ scale: 0.96 }}
+                        onClick={() => setShowCartMobile(false)}
+                        className="pointer-events-auto w-full py-5 bg-white border-2 border-[#3A241C]/5 text-[#3A241C] rounded-[2rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-[0_10px_30px_rgba(58,36,28,0.05)] active:bg-[#F9F7F4] transition-all touch-none select-none"
+                      >
+                        <div className="w-6 h-6 rounded-full bg-[#3A241C]/5 flex items-center justify-center">
+                          <ChevronDown size={14} className="text-[#3A241C]/40" />
+                        </div>
+                        Continue Browsing
+                      </motion.button>
+                    }
+                  />
                 </div>
               </motion.div>
             </div>
@@ -1199,10 +1338,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         {/* Variant Modal */}
         <AnimatePresence>
           {variantModalItem && (
-            <VariantModal 
-              item={variantModalItem} 
-              tempVariants={tempVariants} 
-              onClose={() => setVariantModalItem(null)} 
+            <VariantModal
+              item={variantModalItem}
+              tempVariants={tempVariants}
+              onClose={() => setVariantModalItem(null)}
               onUpdateTempVariant={(v, d) => setTempVariants(p => ({ ...p, [v]: Math.max(0, (p[v] || 0) + d) }))}
               onConfirm={handleAddTempVariants}
             />
@@ -1212,10 +1351,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         {/* PREMIUM TOAST NOTIFICATION */}
         <AnimatePresence>
           {toast && (
-            <motion.div 
+            <motion.div
               key="premium-toast"
-              initial={{ opacity: 0, y: -40, scale: 0.9 }} 
-              animate={{ opacity: 1, y: 0, scale: 1 }} 
+              initial={{ opacity: 0, y: -40, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
               className="fixed top-24 lg:top-12 left-0 right-0 mx-auto w-fit z-[200] px-6 transform-gpu translate-z-0"
             >

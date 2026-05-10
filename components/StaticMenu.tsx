@@ -12,11 +12,11 @@ import { fetchMenu } from "@/lib/api";
 const SkeletonItem = () => (
   <div className="bg-white rounded-[2rem] p-3 lg:p-4 border border-[#3A241C]/5 flex items-center gap-3 lg:gap-4 h-[140px] lg:h-[164px] animate-pulse">
     <div className="w-[104px] h-[104px] lg:w-[124px] lg:h-[124px] rounded-2xl bg-[#F9F7F4] flex-shrink-0" />
-    <div className="flex-1 space-y-3">
-      <div className="h-4 bg-[#F9F7F4] rounded-full w-2/3" />
-      <div className="h-3 bg-[#F9F7F4] rounded-full w-1/2" />
-      <div className="h-2 bg-[#F9F7F4] rounded-full w-3/4" />
-      <div className="h-6 bg-[#F9F7F4] rounded-full w-1/4 mt-4" />
+    <div className="flex-1 space-y-2 min-w-0">
+      <div className="h-3.5 bg-[#F9F7F4] rounded-full w-3/4" />
+      <div className="h-3 bg-[#F9F7F4] rounded-full w-full" />
+      <div className="h-3 bg-[#F9F7F4] rounded-full w-2/3" />
+      <div className="h-5 bg-[#F9F7F4] rounded-full w-1/3 mt-3" />
     </div>
   </div>
 );
@@ -200,10 +200,10 @@ export default function StaticMenu() {
                 // Get category icon and description (hardcoded fallback for now or we could extend the API)
                 const catInfo = {
                   "Benne Bliss": { icon: "🧈", desc: "Our signature Davangere-style butter dosas, handcrafted on cast-iron tawas." },
-                  "Classic Dosas": { icon: "🥞", desc: "Traditional Bangalore-style dosas prepared with love." },
+                  "Classic Dosas": { icon: "🥞", desc: "Traditional Bangalore-style dosas prepared with love" },
                   "Idli": { icon: "🍚", desc: "Soft, steamed perfection served with coconut chutney and sambar." },
                   "Uttapam": { icon: "🫓", desc: "Thick, fluffy, and loaded with fresh toppings." },
-                  "Beverages": { icon: "☕", desc: "Authentic brews from the plantations of Chikkamagaluru." }
+                  "Beverages": { icon: "☕", desc: "Authentic brews from the plantations of Chikkamagaluru" }
                 }[cat] || { icon: "🥞", desc: "Delicious South Indian delicacies." };
 
                 return (
@@ -226,13 +226,13 @@ export default function StaticMenu() {
                           {catInfo.desc}
                         </p>
                       </div>
-                      <div className="relative w-full md:w-48 h-32 rounded-3xl overflow-hidden shadow-lg border-4 border-white shrink-0 group">
+                      <div className="hidden md:block relative w-48 h-32 rounded-3xl overflow-hidden shadow-lg border-4 border-white shrink-0 group">
                         <Image 
                           src={items[0]?.image || "/images/hero.webp"} 
                           alt={cat} 
                           fill 
                           className="object-cover transition-transform duration-700 group-hover:scale-110"
-                          sizes="(max-width: 768px) 100vw, 200px"
+                          sizes="200px"
                         />
                       </div>
                     </div>
@@ -241,25 +241,21 @@ export default function StaticMenu() {
                       {items.map((item, idx) => (
                         <motion.div
                           key={item.id}
-                          initial={{ opacity: 0, y: 15 }}
+                          initial={{ opacity: 0, y: 12 }}
                           whileInView={{ opacity: 1, y: 0 }}
-                          viewport={{ once: true, margin: "-40px" }}
-                          transition={{ 
-                            duration: 0.4,
-                            delay: idx % 2 * 0.1, 
-                            ease: "easeOut"
-                          }}
-                          className="bg-white rounded-[2.5rem] p-4 lg:p-5 border border-[var(--coffee)]/15 shadow-[0_10px_40px_-15px_rgba(58,36,28,0.05)] hover:shadow-[0_30px_60px_-15px_rgba(58,36,28,0.1)] transition-all duration-500 group flex items-center gap-4 h-[160px] lg:h-[180px] overflow-hidden relative"
+                          viewport={{ once: true, margin: "-30px" }}
+                          transition={{ duration: 0.35, delay: idx % 2 * 0.08, ease: "easeOut" }}
+                          className="bg-white rounded-[2rem] p-3 lg:p-4 border border-[var(--coffee)]/10 shadow-[0_2px_12px_-4px_rgba(58,36,28,0.07)] hover:shadow-[0_12px_32px_-8px_rgba(58,36,28,0.12)] transition-all duration-300 group flex items-center gap-3 lg:gap-4 h-[140px] lg:h-[164px] overflow-hidden relative"
                         >
-
-                          {/* Image Box */}
-                          <div className="w-24 h-24 lg:w-32 lg:h-32 rounded-3xl bg-[var(--cream)] flex-shrink-0 overflow-hidden relative border border-[var(--coffee)]/15">
-                            <Image 
-                              src={item.image || "/images/hero.webp"} 
-                              alt={item.name} 
-                              fill 
-                              className="object-cover transition-transform duration-500 group-hover:scale-110"
-                              sizes="150px"
+                          {/* Image Box — matches table page exactly */}
+                          <div className="w-[104px] h-[104px] lg:w-[124px] lg:h-[124px] rounded-2xl bg-[var(--cream)] flex-shrink-0 overflow-hidden relative border border-[var(--coffee)]/8 shadow-sm">
+                            <Image
+                              src={item.image || "/images/hero.webp"}
+                              alt={item.name}
+                              fill
+                              className="object-cover opacity-0 transition-opacity duration-300"
+                              onLoad={(e) => (e.target as HTMLImageElement).classList.remove('opacity-0')}
+                              sizes="(max-width: 768px) 110px, 130px"
                               loading="lazy"
                             />
                           </div>
@@ -267,27 +263,24 @@ export default function StaticMenu() {
                           {/* Content */}
                           <div className="flex-1 flex flex-col justify-between h-full py-1 min-w-0">
                             <div className="min-w-0">
-                              <div className="flex justify-between items-start mb-1.5 gap-2">
-                                <h3 className="font-bold text-[var(--coffee)] text-base lg:text-lg group-hover:text-[var(--benne-primary)] transition-colors tracking-tight line-clamp-1 flex-1">
+                              <div className="flex justify-between items-start mb-1 gap-2">
+                                <h3 className="font-black text-[var(--coffee)] text-sm lg:text-base group-hover:text-[var(--benne-primary)] transition-colors tracking-tight line-clamp-2 leading-tight flex-1">
                                   {item.name}
-                                  {(item as any).volume && <span className="text-[var(--coffee)]/40 text-[10px] lg:text-xs normal-case tracking-normal ml-1.5 font-bold">({(item as any).volume})</span>}
+                                  {(item as any).volume && <span className="text-[var(--coffee)]/40 text-[10px] normal-case tracking-normal ml-1 font-bold">({(item as any).volume})</span>}
                                 </h3>
                                 {item.rating && item.ratingCount && !["Soft Drinks", "Mineral Water"].includes(item.name) && (
-                                  <div className="flex items-center gap-1 bg-[var(--benne-primary)]/5 px-2 py-0.5 rounded-lg border border-[var(--benne-primary)]/10 flex-shrink-0">
-                                    <Star className="w-2.5 h-2.5 fill-[var(--benne-primary)] text-[var(--benne-primary)]" />
-                                    <span className="text-[10px] font-black text-[var(--benne-primary)]">
-                                      {item.rating}({item.ratingCount})
-                                    </span>
+                                  <div className="flex items-center gap-0.5 bg-[#F9F7F4] px-1.5 py-0.5 rounded-md border border-[var(--coffee)]/8 flex-shrink-0">
+                                    <Star className="w-[10px] h-[10px] fill-[var(--benne-primary)] text-[var(--benne-primary)]" />
+                                    <span className="text-[9px] font-black text-[var(--coffee)]/80">{item.rating}({item.ratingCount})</span>
                                   </div>
                                 )}
                               </div>
-                              <p className="text-[var(--coffee)]/50 text-[11px] lg:text-xs leading-relaxed font-medium line-clamp-2 antialiased">
+                              <p className="text-[10px] lg:text-[11px] text-[var(--coffee)]/50 leading-[1.5] font-medium tracking-[0.01em] antialiased line-clamp-2">
                                 {item.descriptionEn}
                               </p>
                             </div>
-                            
-                            <div className="mt-auto">
-                              <span className="font-black text-[var(--benne-primary)] text-xl lg:text-2xl tracking-tighter">
+                            <div className="mt-auto pt-1">
+                              <span className="font-black text-[var(--benne-primary)] text-lg lg:text-xl tracking-tighter">
                                 {item.priceLabel ? item.priceLabel : `₹${item.price}`}
                               </span>
                             </div>

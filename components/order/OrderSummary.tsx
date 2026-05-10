@@ -31,6 +31,7 @@ interface OrderSummaryProps {
   clientId: string;
   onPlaceOrder: () => void;
   onAnimationComplete: () => void;
+  isProceedOnly?: boolean;
 }
 
 const OrderSummary = ({
@@ -42,14 +43,26 @@ const OrderSummary = ({
   lockedBy,
   clientId,
   onPlaceOrder,
-  onAnimationComplete
+  onAnimationComplete,
+  isProceedOnly
 }: OrderSummaryProps) => {
   const isSomeoneElsePlacing = cartLocked && lockedBy !== clientId;
   const [isAnimating, setIsAnimating] = useState(false);
 
   const handleStartAnimation = () => {
     if (ordering || isSomeoneElsePlacing || isAnimating) return;
+    
     setIsAnimating(true);
+
+    if (isProceedOnly) {
+      // Play animation first for feel, then switch views
+      setTimeout(() => {
+        onPlaceOrder(); 
+        setIsAnimating(false);
+      }, 600);
+      return;
+    }
+
     onPlaceOrder(); // Start API call in background
     
     // Animation duration matches the 0.7s clipPath + arrow sweep
@@ -115,7 +128,7 @@ const OrderSummary = ({
               transition={{ duration: 0.6, ease: "easeInOut" }}
               className="font-black text-[10px] lg:text-[11px] uppercase tracking-[0.4em] pointer-events-none"
             >
-              Place Order
+              Proceed to Payment
             </motion.span>
           </>
         ) : ordering || isSomeoneElsePlacing ? (
@@ -123,7 +136,7 @@ const OrderSummary = ({
         ) : (
           <div className="flex items-center justify-center gap-2 lg:gap-3">
             <ChevronRight className="lg:w-[18px] group-hover:translate-x-1 transition-transform" size={16} />
-            <span className="font-black text-[10px] lg:text-[11px] uppercase tracking-[0.4em]">Place Order</span>
+            <span className="font-black text-[10px] lg:text-[11px] uppercase tracking-[0.4em]">Proceed to Payment</span>
           </div>
         )}
       </button>

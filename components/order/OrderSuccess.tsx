@@ -2,7 +2,7 @@
 
 import React, { memo, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, CheckCircle2, Plus, Bell, Package, CreditCard, Banknote, Star, ShieldAlert, XCircle, X } from "lucide-react";
+import { Loader2, CheckCircle2, Plus, Bell, Package, CreditCard, Banknote, Star, ShieldAlert, XCircle, X, MessageSquare } from "lucide-react";
 import Image from "next/image";
 
 interface OrderSuccessProps {
@@ -25,6 +25,7 @@ interface OrderSuccessProps {
   sessionClosed?: boolean;
   showReviewPrompt?: boolean;
   setShowReviewPrompt?: (val: boolean) => void;
+  onFeedbackSubmit?: (feedback: string) => void;
 }
 
 const OrderSuccess = ({
@@ -46,9 +47,17 @@ const OrderSuccess = ({
   paymentSuccess = false,
   sessionClosed = false,
   showReviewPrompt = false,
-  setShowReviewPrompt
+  setShowReviewPrompt,
+  onFeedbackSubmit
 }: OrderSuccessProps) => {
   const [showCancellation, setShowCancellation] = useState(false);
+  const [localFeedback, setLocalFeedback] = useState(session?.feedback || "");
+
+  useEffect(() => {
+    if (session?.feedback !== undefined && session.feedback !== localFeedback) {
+      setLocalFeedback(session.feedback || "");
+    }
+  }, [session?.feedback]);
   const notifiedCancelledIds = React.useRef<Set<string>>(new Set());
 
   const cancelledOrders = [
@@ -139,25 +148,28 @@ const OrderSuccess = ({
     );
   }
 
-  // If no orders at all and not processing, hide the screen
+  // If no orders at all and not processing, show a minimal loading state instead of null to prevent blank screens
   if (!allOrderedItems.length && !isProcessingOrder && !cancelledOrders.length) {
-    return null;
+    return (
+      <div className="p-8 flex flex-col items-center justify-center h-full text-center">
+        <Loader2 className="animate-spin text-[#E76F51] mb-4" size={32} />
+        <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Initializing Order View...</p>
+      </div>
+    );
   }
 
+  // If processing a new order (even if it's the first one), we SHOULD show the main UI
   const isFullyCancelled = cancelledOrders.length > 0 && !hasActiveOrders && !hasUnconfirmed;
-
-  // We show "Processing" if there are ANY unconfirmed orders.
-  // We only show "Ordered!" when confirmed is true and unconfirmed is false.
-  const showProcessing = hasUnconfirmed;
-  const showOrdered = hasConfirmed && !hasUnconfirmed;
+  const showProcessing = hasUnconfirmed || isProcessingOrder;
+  const showOrdered = hasConfirmed && !hasUnconfirmed && !isProcessingOrder;
 
   return (
-    <div className="px-8 pb-8 pt-24 lg:p-10 flex flex-col items-center text-center h-full overflow-y-auto scrollbar-hide">
+    <div className="px-8 pb-8 pt-12 lg:p-10 flex flex-col items-center text-center h-full overflow-y-auto scrollbar-hide">
       <div className="w-full space-y-3 mb-6 hidden lg:block">
 
         {(() => {
           const hasReadyTakeaway = (session?.orders ?? []).some((o: any) => 
-            o.items.some((i: any) => i.name.toLowerCase().includes("(to-go)") && i.isServed)
+            o.items.some((i: any) => i.name.toLowerCase().includes("(packing)") && i.isServed)
           );
           if (!hasReadyTakeaway) return null;
           return (
@@ -178,18 +190,38 @@ const OrderSuccess = ({
         {isFullyCancelled ? <XCircle size={32} className="lg:w-10 lg:h-10" /> : showProcessing ? <Loader2 size={32} className="animate-spin lg:w-10 lg:h-10" /> : <CheckCircle2 size={32} className="lg:w-10 lg:h-10" />}
       </div>
       <h2 className="font-black text-[#3A241C] text-2xl lg:text-3xl mb-1 tracking-tighter uppercase">
-        {isFullyCancelled ? "Cancelled" : showProcessing ? "Processing..." : "Ordered!"}
+        {isFullyCancelled ? "Cancelled" : showProcessing ? "Confirming Order..." : "Ordered!"}
       </h2>
       {isFullyCancelled ? (
         <p className="text-[10px] font-black uppercase tracking-widest text-[#B71C1C]/40 mb-4">Staff has rejected your request</p>
       ) : showProcessing && (
-        <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 mb-4 animate-pulse">Waiting for Admin Confirmation</p>
+        <div className="space-y-4 mb-6">
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 animate-pulse">Waiting for Admin Confirmation</p>
+          
+          {paymentMode === "UPI" && (
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }} 
+              className="bg-white rounded-[2rem] p-3 border-2 border-[#E76F51] shadow-2xl mx-auto max-w-[320px] w-full"
+            >
+              <div className="relative w-full aspect-square mx-auto mb-2 rounded-2xl overflow-hidden bg-white">
+                <Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-contain" priority />
+              </div>
+              <p className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3A241C]/30 mb-2">Scan to pay now</p>
+              <div className="flex items-center justify-center gap-2 text-[#6A994E] font-black text-[9px] uppercase tracking-widest pb-2">
+                <CheckCircle2 size={12} /> Pay and wait for confirmation
+              </div>
+            </motion.div>
+          )}
+        </div>
       )}
       
-      <button onClick={onAddMore} className="mt-6 mb-6 px-8 py-3 bg-[#3A241C] text-white rounded-2xl font-black text-[9px] uppercase tracking-[0.3em] flex items-center gap-2 group transition-all hover:bg-[#E76F51] shadow-xl shadow-[#3A241C]/10">
-        <Plus size={14} className="group-hover:rotate-180 transition-transform duration-500" />
-        Add More Items
-      </button>
+      {!showProcessing && (
+        <button onClick={onAddMore} className="mt-6 mb-6 px-8 py-3 bg-[#3A241C] text-white rounded-2xl font-black text-[9px] uppercase tracking-[0.3em] flex items-center gap-2 group transition-all hover:bg-[#E76F51] shadow-xl shadow-[#3A241C]/10">
+          <Plus size={14} className="group-hover:rotate-180 transition-transform duration-500" />
+          Add More Items
+        </button>
+      )}
 
       {!isFullyCancelled && !hasUnconfirmed && remaining > 0 ? (
         <div className="w-full space-y-4 lg:space-y-6 mt-6 mb-10">
@@ -249,7 +281,7 @@ const OrderSuccess = ({
                  {servedItems.map((item: any, idx: number) => (
                   <div key={idx} className="flex justify-between items-center bg-white p-3 rounded-xl border border-[#3A241C]/5 shadow-sm opacity-60">
                     <div className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-[#6A994E]" /><span className="text-xs font-bold text-[#3A241C]">{isTakeaway ? item.name.split('(')[0].trim() : item.name}</span></div>
-                    <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-[#6A994E]/10 text-[#6A994E]">{item.name.toLowerCase().includes("(to-go)") ? "Ready" : "Served"}</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md bg-[#6A994E]/10 text-[#6A994E]">{item.name.toLowerCase().includes("(packing)") ? "Ready" : "Served"}</span>
                   </div>
                 ))}
               </div>
@@ -288,15 +320,17 @@ const OrderSuccess = ({
                     <span className="font-bold text-[#3A241C] text-sm">{isTakeaway ? item.name.split('(')[0].trim() : item.name}</span>
                     {isRated && <span className="text-[9px] font-black text-[#6A994E] uppercase tracking-widest bg-[#6A994E]/10 px-2 py-0.5 rounded-md">Thanks!</span>}
                   </div>
-                  <div className="flex gap-1.5">
+                  <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map(star => (
-                      <div key={star} className="relative flex">
-                        <button disabled={isRated} onClick={() => onRateItem(item.name, star - 0.5)} className="w-5 h-10 flex items-center justify-end overflow-hidden">
-                          <Star size={22} className={`flex-shrink-0 -mr-[11px] ${currentRating >= star - 0.5 ? "fill-[#E76F51] text-[#E76F51]" : "text-[#3A241C]/10"}`} style={{ clipPath: 'inset(0 50% 0 0)' }} />
-                        </button>
-                        <button disabled={isRated} onClick={() => onRateItem(item.name, star)} className="w-5 h-10 flex items-center justify-start overflow-hidden">
-                          <Star size={22} className={`flex-shrink-0 -ml-[11px] ${currentRating >= star ? "fill-[#E76F51] text-[#E76F51]" : "text-[#3A241C]/10"}`} style={{ clipPath: 'inset(0 0 0 50%)' }} />
-                        </button>
+                      <div key={star} className="relative w-10 h-10 flex items-center justify-center">
+                        <Star size={22} className="text-[#3A241C]/10" />
+                        {currentRating >= star - 0.5 && (
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ clipPath: currentRating >= star ? 'none' : 'inset(0 50% 0 0)' }}>
+                            <Star size={22} className="fill-[#E76F51] text-[#E76F51]" />
+                          </div>
+                        )}
+                        <button disabled={isRated} onClick={() => onRateItem(item.name, star - 0.5)} className="absolute left-0 top-0 w-1/2 h-full z-10 opacity-0 cursor-pointer" />
+                        <button disabled={isRated} onClick={() => onRateItem(item.name, star)} className="absolute right-0 top-0 w-1/2 h-full z-10 opacity-0 cursor-pointer" />
                       </div>
                     ))}
                   </div>
@@ -306,7 +340,61 @@ const OrderSuccess = ({
           </div>
         </div>
       )}
-      <div className="h-20 flex-shrink-0" />
+
+      {/* GENERAL FEEDBACK SECTION */}
+      <div className="w-full mb-6 text-left">
+        <h3 className="font-black text-[#3A241C] text-lg tracking-tight mb-1">General Feedback</h3>
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3A241C]/50 mb-4">Tell us about your experience</p>
+        
+        <div className="relative group">
+          <div className={`flex items-start gap-4 bg-white p-4 lg:p-5 rounded-[2.2rem] border border-[#3A241C]/5 shadow-sm transition-all duration-300 ${localFeedback ? 'rounded-[1.5rem] bg-[#F9F7F4]/20' : ''}`}>
+            <div className="w-10 h-10 rounded-2xl bg-[#3A241C]/5 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <MessageSquare size={16} className={`transition-colors ${localFeedback ? 'text-[#E76F51]' : 'text-[#3A241C]/20'}`} />
+            </div>
+            
+            <div className="flex-1 relative pt-2">
+              {!localFeedback && (
+                <div className="absolute inset-0 flex flex-col justify-center pointer-events-none select-none">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3A241C]/50 leading-none">
+                    Your Comments
+                  </span>
+                  <span className="text-[7px] font-bold text-[#3A241C]/40 uppercase tracking-widest leading-none mt-1.5">
+                    Help us improve your next visit
+                  </span>
+                </div>
+              )}
+              <textarea 
+                value={localFeedback}
+                onChange={(e) => {
+                  const val = e.target.value.slice(0, 100);
+                  setLocalFeedback(val);
+                }}
+                onBlur={() => onFeedbackSubmit?.(localFeedback)}
+                maxLength={100}
+                rows={1}
+                spellCheck={false}
+                onInput={(e: any) => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+                className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus:ring-transparent text-[14px] font-bold text-[#3A241C] resize-none overflow-hidden min-h-[28px] p-0 placeholder:text-transparent appearance-none shadow-none"
+              />
+            </div>
+          </div>
+          
+          {localFeedback.length >= 100 && (
+            <motion.p 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              className="text-[8px] font-black text-[#E76F51] uppercase tracking-widest mt-2 ml-4"
+            >
+              Maximum limit reached
+            </motion.p>
+          )}
+        </div>
+      </div>
+      <div className="h-6 flex-shrink-0" />
     </div>
   );
 };

@@ -79,7 +79,7 @@ export default function AdminTableColumn({
 
   const handleToggleItem = async (item: any, isServed: boolean) => {
     await onToggleItemServed(item.id, isServed);
-    if (isServed && item.name.toLowerCase().includes("(to-go)")) {
+    if (isServed && item.name.toLowerCase().includes("(packing)")) {
       setShowPackedNote(true);
     }
   };
@@ -498,7 +498,7 @@ export default function AdminTableColumn({
 
                       {/* Instructions Display */}
                       {order.instructions && order.instructions.trim() && (
-                        <div className="mx-2 mb-4 p-4 bg-[#E76F51]/10 border-2 border-[#E76F51]/30 rounded-2xl flex items-start gap-3 shadow-sm ring-1 ring-[#E76F51]/10">
+                        <div className="mx-2 mb-2 p-4 bg-[#E76F51]/10 border-2 border-[#E76F51]/30 rounded-2xl flex items-start gap-3 shadow-sm ring-1 ring-[#E76F51]/10">
                           <div className="w-8 h-8 rounded-xl bg-[#E76F51] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[#E76F51]/20">
                             <MessageSquare size={16} className="text-white" />
                           </div>
@@ -508,6 +508,21 @@ export default function AdminTableColumn({
                               <div className="h-px flex-1 bg-[#E76F51]/20 min-w-[20px]" />
                             </div>
                             <p className="text-[11px] font-black text-[#3A241C] leading-relaxed italic">"{order.instructions}"</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {order.customerPhone && (
+                        <div className="mx-2 mb-4 p-4 bg-[#3A241C]/5 border-2 border-[#3A241C]/10 rounded-2xl flex items-start gap-3 shadow-sm">
+                          <div className="w-8 h-8 rounded-xl bg-[#3A241C] flex items-center justify-center flex-shrink-0 shadow-lg shadow-[#3A241C]/20">
+                            <Clock size={16} className="text-white" />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/60">Customer Phone</span>
+                              <div className="h-px flex-1 bg-[#3A241C]/10 min-w-[20px]" />
+                            </div>
+                            <p className="text-[11px] font-black text-[#3A241C] leading-relaxed">{order.customerPhone}</p>
                           </div>
                         </div>
                       )}

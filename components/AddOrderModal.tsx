@@ -32,6 +32,7 @@ export default function AddOrderModal({
   const [success, setSuccess] = useState(false);
   const [selectedTable, setSelectedTable] = useState(initialTableId || availableTables[0]);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+  const [deletingItems, setDeletingItems] = useState<Set<string>>(new Set());
 
   const { on } = useSocket();
 
@@ -108,7 +109,7 @@ export default function AddOrderModal({
     setLoading(true);
     try {
       const finalItems = cartItems.map(item => ({
-        name: `${item.name}${item.variant ? ` (${item.variant})` : ""}${item.forPacking ? " (To-Go)" : ""}`,
+        name: `${item.name}${item.variant ? ` (${item.variant})` : ""}${item.forPacking ? " (Packing)" : ""}`,
         price: item.price,
         quantity: item.quantity,
         type: item.forPacking ? "TAKEAWAY" : "DINE_IN"
@@ -212,28 +213,87 @@ export default function AddOrderModal({
                         setItemPacking(newPacking);
                       }} className="text-[10px] font-black text-[#E76F51] uppercase tracking-widest hover:underline">{cartItems.every(i => i.forPacking) ? "Unpack All" : "Pack All"}</button>
                   </div>
-                  {cartItems.map(item => (
-                    <motion.div key={item.cartKey} layout initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100 shadow-sm gap-3 group">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-black text-[#3A241C] truncate leading-tight">{item.name}</p>
+                  {cartItems.map(item => {
+                    const isDeleting = deletingItems.has(item.cartKey);
+                    
+                    let fullFormatted = item.name;
+                    let currentShort = fullFormatted.replace(/Benne Dosa/gi, 'B.D.');
+                    const targetLen = 22; // max chars for small screens
+                    if (currentShort.length > targetLen) {
+                      let words = currentShort.split(' ');
+                      for (let i = words.length - 1; i >= 1; i--) {
+                        const word = words[i];
+                        if (word.length > 2 && !word.includes('.')) {
+                          words[i] = word[0].toUpperCase() + '.';
+                          currentShort = words.join(' ');
+                          if (currentShort.length <= targetLen) break;
+                        }
+                      }
+                    }
+                    
+                    const fullText = item.name === "Soft Drinks" && item.variant ? item.variant : fullFormatted;
+                    const shortText = item.name === "Soft Drinks" && item.variant ? item.variant : currentShort;
+
+                    return (
+                    <motion.div 
+                      key={item.cartKey} 
+                      layout 
+                      initial={{ opacity: 0, scale: 0.95 }} 
+                      animate={{ 
+                        opacity: isDeleting ? 0 : 1, 
+                        scale: isDeleting ? 0.95 : 1,
+                        filter: isDeleting ? "blur(4px)" : "blur(0px)",
+                        backgroundColor: isDeleting ? "#FDECEA" : "#ffffff",
+                        borderColor: isDeleting ? "#B71C1C" : "rgba(58, 36, 28, 0.12)"
+                      }} 
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }} 
+                      className="flex items-center justify-between p-3 rounded-2xl border shadow-sm gap-3 group"
+                    >
+                      <AnimatePresence>
+                        {item.forPacking && (
+                          <motion.div 
+                            initial={{ x: "-100%" }}
+                            animate={{ x: 0 }}
+                            exit={{ x: "-100%" }}
+                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                            className="absolute left-0 top-0 bottom-0 w-6 bg-[#3A241C] flex items-center justify-center z-10 shadow-[2px_0_10px_rgba(0,0,0,0.1)] border-r border-[#3A241C]"
+                          >
+                            <span className="text-[#F9F7F4] text-[6px] font-black uppercase tracking-[0.3em] -rotate-90 whitespace-nowrap">Packing</span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      <motion.div layout="position" className={`flex-1 min-w-0 transition-all duration-300 ${item.forPacking ? 'ml-4' : 'ml-0'}`}>
+                        <p className="text-[11px] font-black text-[#3A241C] truncate leading-tight">
+                          <span className="hidden min-[400px]:inline">{fullText}</span>
+                          <span className="inline min-[400px]:hidden">{shortText}</span>
+                        </p>
                         {item.variant && <p className="text-[8px] font-bold text-[#E76F51] uppercase tracking-tighter mt-0.5">{item.variant}</p>}
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[9px] font-bold text-[#3A241C]/30">₹{item.price} × {item.quantity} =</span>
                           <span className="text-[10px] font-black text-[#E76F51]">₹{item.price * item.quantity}</span>
-                          {item.forPacking && <span className="text-[7px] font-black uppercase tracking-widest text-[#6A994E] bg-[#6A994E]/10 px-1.5 py-0.5 rounded-md">To-Go</span>}
                         </div>
-                      </div>
+                      </motion.div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button onClick={() => setItemPacking(prev => ({ ...prev, [item.cartKey]: !prev[item.cartKey] }))} className={`p-1.5 rounded-lg transition-all active:scale-75 shadow-sm border ${item.forPacking ? 'bg-[#3A241C] text-white border-[#3A241C]' : 'bg-white text-[#3A241C]/40 hover:text-[#3A241C] border-[#3A241C]/10'}`}><Package size={12} /></button>
-                        <div className="flex items-center bg-gray-50 rounded-lg overflow-hidden p-0.5 shadow-sm border border-gray-100">
-                          <button onClick={() => updateQty(item.id, -1, item.variant)} className="w-5 h-5 flex items-center justify-center text-[#3A241C]/60 hover:text-[#E76F51] active:scale-75 transition-all"><Minus size={10} /></button>
-                          <span className="w-4 text-center text-[9px] font-black">{item.quantity}</span>
-                          <button onClick={() => updateQty(item.id, 1, item.variant)} className="w-5 h-5 flex items-center justify-center text-[#3A241C]/60 hover:text-[#E76F51] active:scale-75 transition-all"><Plus size={10} /></button>
+                        <button onClick={() => setItemPacking(prev => ({ ...prev, [item.cartKey]: !prev[item.cartKey] }))} className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all active:scale-75 shadow-sm border ${item.forPacking ? 'bg-[#3A241C] text-white border-[#3A241C]' : 'bg-white text-[#3A241C]/40 hover:text-[#3A241C] border-[#3A241C]/10'}`}><Package size={14} /></button>
+                        <div className="h-8 flex items-center bg-gray-50 rounded-lg overflow-hidden shadow-sm border border-gray-100">
+                          <button onClick={() => updateQty(item.id, -1, item.variant)} className="w-7 h-full flex items-center justify-center text-[#3A241C]/60 hover:text-[#E76F51] active:scale-75 transition-all"><Minus size={12} /></button>
+                          <span className="w-5 text-center text-[10px] font-black">{item.quantity}</span>
+                          <button onClick={() => updateQty(item.id, 1, item.variant)} className="w-7 h-full flex items-center justify-center text-[#3A241C]/60 hover:text-[#E76F51] active:scale-75 transition-all"><Plus size={12} /></button>
                         </div>
-                        <button onClick={() => setCart(prev => { const next = { ...prev }; delete next[item.cartKey]; return next; })} className="p-1.5 rounded-lg text-[#B71C1C]/60 hover:text-[#B71C1C] hover:bg-[#FDECEA] active:scale-75 transition-all"><Trash2 size={12} /></button>
+                        <button onClick={() => {
+                          if (isDeleting) return;
+                          setDeletingItems(prev => new Set(prev).add(item.cartKey));
+                          setTimeout(() => {
+                            setCart(prev => { const next = { ...prev }; delete next[item.cartKey]; return next; });
+                            setDeletingItems(prev => { const next = new Set(prev); next.delete(item.cartKey); return next; });
+                          }, 350);
+                        }} className={`w-8 h-8 flex items-center justify-center rounded-lg text-[#B71C1C]/60 hover:text-[#B71C1C] hover:bg-[#FDECEA] active:scale-75 transition-all border shadow-sm ${isDeleting ? 'bg-[#FDECEA] border-[#B71C1C]' : 'bg-white border-[#3A241C]/10'}`}><Trash2 size={14} /></button>
                       </div>
                     </motion.div>
-                  ))}
+                    );
+                  })}
                 </>
               )}
             </AnimatePresence>

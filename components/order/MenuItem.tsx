@@ -6,6 +6,21 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Star, Check } from "lucide-react";
 import { type OrderMenuItem } from "@/lib/menu";
 
+// Per-phase transitions: exit is fast (on click), enter is a spring (returning after tick)
+const plusVariants = {
+  hidden: { opacity: 0, scale: 0 },
+  visible: {
+    opacity: 1,
+    scale: 1,
+    transition: { type: "spring" as const, stiffness: 500, damping: 22 },
+  },
+  exit: {
+    opacity: 0,
+    scale: 2,
+    transition: { duration: 0.07 },
+  },
+};
+
 interface MenuItemProps {
   item: OrderMenuItem;
   lang: "EN" | "HI";
@@ -15,20 +30,20 @@ interface MenuItemProps {
   priority?: boolean;
 }
 
-const MenuItem = ({ 
-  item, 
-  lang, 
-  onAdd, 
-  onToggleLang, 
+const MenuItem = ({
+  item,
+  lang,
+  onAdd,
+  onToggleLang,
   isRestaurantOpen,
-  priority = false 
+  priority = false
 }: MenuItemProps) => {
-  const discountedPrice = item.discountPct 
+  const discountedPrice = item.discountPct
     ? Math.round(item.price * (1 - item.discountPct / 100))
-    : item.discountFlat 
+    : item.discountFlat
       ? item.price - item.discountFlat
       : item.price;
-  
+
   const hasDiscount = item.discountPct || item.discountFlat;
   const isDisabled = item.outOfStock || !isRestaurantOpen;
 
@@ -37,10 +52,10 @@ const MenuItem = ({
   const handleAdd = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (isDisabled || isAnimating) return;
-    
+
     setIsAnimating(true);
     onAdd({ ...item, price: discountedPrice });
-    
+
     // Increased duration for a more premium, visible confirmation (800ms)
     setTimeout(() => {
       setIsAnimating(false);
@@ -48,17 +63,16 @@ const MenuItem = ({
   }, [isDisabled, isAnimating, onAdd, item, discountedPrice]);
 
   return (
-    <motion.div 
+    <motion.div
       onClick={handleAdd as any}
-      className={`bg-white rounded-[2rem] p-3 lg:p-4 border flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-500 ease-[var(--cubic-bezier)] ${
-        isAnimating 
-          ? "border-[#6A994E] shadow-[0_20px_50px_-15px_rgba(106,153,78,0.25)] ring-2 ring-[#6A994E]" 
-          : "border-[#3A241C]/5 shadow-[0_1px_2px_rgba(58,36,28,0.05)]"
-      } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-[0_25px_60px_-15px_rgba(58,36,28,0.12)] cursor-pointer"}`}
+      className={`bg-white rounded-[2rem] p-3 lg:p-4 border flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-500 ease-[var(--cubic-bezier)] ${isAnimating
+        ? "border-[#6A994E] shadow-[0_20px_50px_-15px_rgba(106,153,78,0.25)] ring-2 ring-[#6A994E]"
+        : "border-[#3A241C]/5 shadow-[0_1px_2px_rgba(58,36,28,0.05)]"
+        } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-[0_25px_60px_-15px_rgba(58,36,28,0.12)] cursor-pointer"}`}
     >
       <AnimatePresence>
         {isAnimating && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -81,18 +95,18 @@ const MenuItem = ({
           </div>
         )}
         {item.image && (
-          <Image 
-            src={item.image} 
-            alt={item.name} 
-            fill 
+          <Image
+            src={item.image}
+            alt={item.name}
+            fill
             priority={priority}
             sizes="(max-width: 768px) 110px, 130px"
-            className="object-cover opacity-0 transition-opacity duration-300" 
-            onLoad={(e) => (e.target as HTMLImageElement).classList.remove('opacity-0')} 
+            className="object-cover opacity-0 transition-opacity duration-300"
+            onLoad={(e) => (e.target as HTMLImageElement).classList.remove('opacity-0')}
           />
         )}
       </div>
-      
+
       {/* Content */}
       <div className="flex-1 flex flex-col justify-between h-full py-1 min-w-0 z-20">
         <div className="min-w-0">
@@ -101,7 +115,7 @@ const MenuItem = ({
               {item.name}
               {(item as any).volume && <span className="text-[#3A241C]/40 text-[10px] lg:text-xs normal-case tracking-normal ml-1.5 font-bold">({(item as any).volume})</span>}
             </h3>
-            <button 
+            <button
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleLang();
@@ -117,7 +131,7 @@ const MenuItem = ({
             </p>
           )}
         </div>
-        
+
         <div className="flex items-center justify-between mt-auto pt-1">
           <div className="flex items-center gap-2">
             {hasDiscount && (
@@ -135,19 +149,18 @@ const MenuItem = ({
               </div>
             )}
           </div>
-          
+
           {/* Add Button — Enhanced with AnimatePresence and Spring transitions */}
-          <motion.button 
+          <motion.button
             whileTap={{ scale: 0.85 }}
             onClick={handleAdd}
             disabled={isDisabled}
-            className={`w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shadow-lg transition-all duration-500 relative overflow-hidden ${
-              isAnimating 
-                ? "bg-[#6A994E] text-white" 
-                : isDisabled 
-                  ? "bg-gray-100 text-gray-300 cursor-not-allowed" 
-                  : "bg-[#E76F51] text-white lg:bg-[#F9F7F4] lg:text-[#3A241C] lg:hover:bg-[#E76F51] lg:hover:text-white"
-            }`}
+            className={`w-9 h-9 lg:w-11 lg:h-11 rounded-xl flex items-center justify-center shadow-lg transition-all duration-500 relative overflow-hidden ${isAnimating
+              ? "bg-[#6A994E] text-white"
+              : isDisabled
+                ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                : "bg-[#E76F51] text-white lg:bg-[#F9F7F4] lg:text-[#3A241C] lg:hover:bg-[#E76F51] lg:hover:text-white"
+              }`}
           >
             <AnimatePresence mode="wait">
               {isAnimating ? (
@@ -163,20 +176,20 @@ const MenuItem = ({
               ) : (
                 <motion.div
                   key="plus"
-                  initial={{ opacity: 0, scale: 0 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 2 }}
-                  transition={{ duration: 0.2 }}
+                  variants={plusVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
                 >
                   <Plus size={18} strokeWidth={4} className="lg:w-5 lg:h-5" />
                 </motion.div>
               )}
             </AnimatePresence>
-            
+
             {/* Rippling circle effect on add */}
             <AnimatePresence>
               {isAnimating && (
-                <motion.div 
+                <motion.div
                   initial={{ scale: 0, opacity: 1 }}
                   animate={{ scale: 4, opacity: 0 }}
                   exit={{ opacity: 0 }}

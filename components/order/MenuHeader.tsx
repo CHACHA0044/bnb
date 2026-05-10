@@ -69,20 +69,20 @@ const MenuHeader = ({
 
       <div className="flex-shrink-0 ml-2">
         {!isTakeawayMode ? (
-          <div className="flex items-center bg-black/20 rounded-xl lg:rounded-2xl p-1 gap-1 border border-white/5 shadow-inner h-9 lg:h-11">
+          <div className="flex items-center bg-black/20 rounded-xl lg:rounded-[1.25rem] p-1 gap-1 border border-white/5 shadow-inner h-11 lg:h-[52px]">
             <button 
               onClick={() => onToggleGlobalTakeaway(false)}
-              className={`flex items-center justify-center gap-1.5 h-full px-3 lg:px-5 rounded-lg lg:rounded-xl text-[8px] lg:text-[9px] font-black uppercase tracking-widest transition-all ${!isTakeawayGlobal ? "bg-[#E76F51] text-white shadow-md" : "text-white/40 hover:text-white"}`}
+              className={`flex items-center justify-center gap-1.5 h-full px-3 lg:px-5 rounded-lg lg:rounded-xl text-[8px] lg:text-[10px] font-black uppercase tracking-[0.2em] transition-all ${!isTakeawayGlobal ? "bg-[#E76F51] text-white shadow-md" : "text-white/40 hover:text-white"}`}
             >
               <Utensils size={12} className="lg:w-4 lg:h-4" /> 
-              <span className="hidden sm:inline">Dine-in</span>
+              <span>Dine-in</span>
             </button>
             <button 
               onClick={() => onToggleGlobalTakeaway(true)}
-              className={`flex items-center justify-center gap-1.5 h-full px-3 lg:px-5 rounded-lg lg:rounded-xl text-[8px] lg:text-[9px] font-black uppercase tracking-widest transition-all ${isTakeawayGlobal ? "bg-[#E76F51] text-white shadow-md" : "text-white/40 hover:text-white"}`}
+              className={`flex items-center justify-center gap-1.5 h-full px-3 lg:px-5 rounded-lg lg:rounded-xl text-[8px] lg:text-[10px] font-black uppercase tracking-[0.2em] transition-all ${isTakeawayGlobal ? "bg-[#E76F51] text-white shadow-md" : "text-white/40 hover:text-white"}`}
             >
               <Package size={12} className="lg:w-4 lg:h-4" /> 
-              <span className="hidden sm:inline">Takeaway</span>
+              <span>Takeaway</span>
             </button>
           </div>
         ) : (

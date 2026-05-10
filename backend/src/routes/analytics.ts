@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
+import { isWithinWorkingHours, updateDailySummary } from "../lib/summaries";
 
 const router = Router();
 
@@ -10,6 +11,7 @@ router.use(requireAdmin);
 /**
  * GET /api/admin/analytics
  * Returns comprehensive analytics payload for a given date range.
+ * Uses cached summaries during business hours to reduce DB load.
  */
 router.get("/", async (req: Request, res: Response): Promise<void> => {
   try {
@@ -21,6 +23,23 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    const isLiveRequested = req.query.live === "true";
+    const isSingleDay = fromDate === toDate;
+
+    // During working hours, use cached data if available (and not forcing live)
+    if (isSingleDay && isWithinWorkingHours() && !isLiveRequested) {
+      const summary = await (prisma as any).dailySummary.findUnique({
+        where: { date: fromDate }
+      });
+
+      if (summary) {
+        console.log(`[ANALYTICS] Serving cached summary for ${fromDate}`);
+        res.json(summary.data);
+        return;
+      }
+    }
+
+    // Otherwise, calculate live or if cache missing
     // Fetch all logs in range
     const logs = await prisma.analyticsLog.findMany({
       where: {
@@ -28,6 +47,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
           gte: fromDate,
           lte: toDate,
         },
+        orderStatus: { notIn: ["REJECTED", "CANCELLED"] } // Ensure rejected orders are excluded
       },
       orderBy: { timestamp: "asc" },
     });
@@ -36,6 +56,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       res.json({ empty: true, message: "No data found for this period" });
       return;
     }
+
 
     // 1. KPI Aggregation
     const totalRevenue = logs.reduce((sum, l) => sum + l.finalPrice, 0);
@@ -191,7 +212,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       });
     }
 
-    res.json({
+    const payload = {
       summary: {
         totalRevenue,
         totalOrders,
@@ -209,7 +230,15 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
       topItems,
       tablePerformance,
       insights,
-    });
+    };
+
+    // If outside working hours (Closing time), automatically cache the result
+    if (isSingleDay && !isWithinWorkingHours()) {
+      updateDailySummary(fromDate).catch(e => console.error("[ANALYTICS] Auto-cache error:", e));
+    }
+
+    res.json(payload);
+
 
   } catch (err) {
     console.error("[ANALYTICS] Error generating analytics:", err);

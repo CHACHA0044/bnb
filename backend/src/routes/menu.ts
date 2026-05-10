@@ -678,7 +678,7 @@ router.post("/admin/versions/:id/rollback", requireAdmin, async (req: Request, r
  */
 router.post("/rate", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { itemId, rating } = req.body as { itemId: string; rating: number };
+    const { itemId, rating, orderId, sessionId } = req.body as { itemId: string; rating: number; orderId?: string; sessionId?: string };
     
     if (!itemId || !rating || rating < 1 || rating > 5) {
       res.status(400).json({ error: "itemId and rating (1-5) required" });
@@ -704,6 +704,42 @@ router.post("/rate", async (req: Request, res: Response): Promise<void> => {
       }
     });
 
+    // Sync with OrderHistoryRecord if context provided
+    if (orderId || sessionId) {
+      try {
+        const historyWhere: any = orderId ? { orderId } : { sessionId };
+        const historyRecords = await (prisma as any).orderHistoryRecord.findMany({ where: historyWhere });
+        
+        for (const record of historyRecords) {
+          const items = Array.isArray(record.items) ? record.items : [];
+          let updated = false;
+          const updatedItems = items.map((it: any) => {
+            if (it.name === item.name) {
+              updated = true;
+              return { ...it, rating };
+            }
+            return it;
+          });
+
+          if (updated) {
+            await (prisma as any).orderHistoryRecord.update({
+              where: { id: record.id },
+              data: { items: updatedItems }
+            });
+          }
+        }
+
+        // Also update AnalyticsLog
+        await (prisma as any).analyticsLog.updateMany({
+          where: orderId ? { orderId, itemName: item.name } : { sessionId, itemName: item.name },
+          data: { rating }
+        });
+
+      } catch (err) {
+        console.error("[MENU] History rating sync error:", err);
+      }
+    }
+
     try {
       const io = getIO();
       io.emit("menu_updated");
@@ -713,6 +749,35 @@ router.post("/rate", async (req: Request, res: Response): Promise<void> => {
   } catch (err) {
     console.error("[MENU] Rate error:", err);
     res.status(500).json({ error: "Failed to submit rating" });
+  }
+});
+
+
+router.post("/feedback", async (req, res) => {
+  try {
+    const { sessionId, feedback } = req.body;
+    if (!sessionId) return res.status(400).json({ error: "Session ID is required" });
+
+    // Update Session
+    await (prisma as any).session.update({
+      where: { id: sessionId },
+      data: { feedback: feedback || null }
+    });
+
+    // Sync with OrderHistoryRecord if it exists
+    try {
+      await (prisma as any).orderHistoryRecord.updateMany({
+        where: { sessionId },
+        data: { feedback: feedback || null }
+      });
+    } catch (err) {
+      console.error("[MENU] History feedback sync error:", err);
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[MENU] Feedback error:", err);
+    res.status(500).json({ error: "Failed to submit feedback" });
   }
 });
 

@@ -18,6 +18,7 @@ interface AnalyticsOrder {
   id: string;
   status: string;
   items: AnalyticsOrderItem[];
+  packingCharges?: number;
 }
 
 /**
@@ -30,16 +31,16 @@ export async function logOrderAnalytics(
   paymentInfo?: { mode: string; status: string }
 ): Promise<void> {
   try {
+    if (order.status === "CANCELLED" || order.status === "REJECTED") {
+      return;
+    }
     const now = new Date();
     const date = now.toISOString().split("T")[0]; // YYYY-MM-DD
 
-    // Separate packing charges from regular items
-    const packingItem = order.items.find(i => i.name === "Packing Charges");
-    const packingCharges = packingItem ? packingItem.price * packingItem.quantity : 0;
 
     const logs = order.items
       .filter(i => i.name !== "Packing Charges")
-      .map(item => ({
+      .map((item, idx) => ({
         date,
         tableId: session.tableId,
         sessionId: session.id,
@@ -48,37 +49,17 @@ export async function logOrderAnalytics(
         itemName: item.name,
         quantity: item.quantity,
         basePrice: item.price,
-        discountApplied: null as string | null, // Discount info not available at order time
+        discountApplied: null as string | null,
         finalPrice: item.price * item.quantity,
         paymentMode: paymentInfo?.mode || null,
         paymentStatus: paymentInfo?.status || "PENDING",
         orderStatus: order.status,
         orderType: item.type || "DINE_IN",
-        packingCharges: 0,
+        // Only attach packing charges to the first item log of the order to avoid double counting
+        packingCharges: idx === 0 ? (order.packingCharges || 0) : 0,
         locationVerified: session.locationVerified,
       }));
 
-    // Add packing charges as a separate log entry if present
-    if (packingItem) {
-      logs.push({
-        date,
-        tableId: session.tableId,
-        sessionId: session.id,
-        sessionNumber: session.sessionNumber,
-        orderId: order.id,
-        itemName: "Packing Charges",
-        quantity: 1,
-        basePrice: packingCharges,
-        discountApplied: null,
-        finalPrice: packingCharges,
-        paymentMode: paymentInfo?.mode || null,
-        paymentStatus: paymentInfo?.status || "PENDING",
-        orderStatus: order.status,
-        orderType: "TAKEAWAY",
-        packingCharges,
-        locationVerified: session.locationVerified,
-      });
-    }
 
     if (logs.length > 0) {
       await prisma.analyticsLog.createMany({ data: logs });
@@ -113,5 +94,19 @@ export async function updateAnalyticsPayment(
     console.log(`[ANALYTICS] Updated payment info for session ${sessionId}`);
   } catch (err) {
     console.error("[ANALYTICS] Failed to update payment analytics:", err);
+  }
+}
+/**
+ * Remove analytics logs for a specific order.
+ * Called when an order is cancelled, rejected, or deleted.
+ */
+export async function removeOrderAnalytics(orderId: string): Promise<void> {
+  try {
+    await prisma.analyticsLog.deleteMany({
+      where: { orderId }
+    });
+    console.log(`[ANALYTICS] Removed logs for order ${orderId}`);
+  } catch (err) {
+    console.error(`[ANALYTICS] Failed to remove logs for order ${orderId}:`, err);
   }
 }

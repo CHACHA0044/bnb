@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { generateDailyReport, generateMonthlyCSV, generateRangeReport, storeReport } from "../lib/reports";
+import { isWithinWorkingHours, updateDailySummary } from "../lib/summaries";
 
 const router = Router();
 
@@ -98,8 +99,9 @@ router.post("/daily/regenerate", async (req: Request, res: Response): Promise<vo
   try {
     const date = (req.query.date as string) || new Date().toISOString().split("T")[0];
     const buffer = await generateDailyReport(date);
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.send(buffer);
+    const filename = `BnB_Daily_${date}.xlsx`;
+    await storeReport("DAILY_EXCEL", date, filename, buffer);
+    res.json({ success: true, date, filename });
   } catch (err) {
     console.error("[REPORTS] Regenerate error:", err);
     res.status(500).json({ error: "Failed to regenerate report" });
@@ -116,14 +118,33 @@ router.get("/summary", async (req: Request, res: Response): Promise<void> => {
     const toDate = req.query.to as string;
     const singleDate = (req.query.date as string) || new Date().toISOString().split("T")[0];
 
-    let whereClause: any = {};
+    const isSingleDay = !fromDate && !toDate;
+    const dateToUse = (fromDate && toDate && fromDate === toDate) ? fromDate : singleDate;
+
+    // During working hours, check for cached summary first
+    if (isSingleDay && isWithinWorkingHours()) {
+      const summary = await (prisma as any).dailySummary.findUnique({
+        where: { date: dateToUse }
+      });
+      if (summary && summary.data.groupedLogs) {
+        console.log(`[REPORTS] Serving cached summary for ${dateToUse}`);
+        res.json(summary.data);
+        return;
+      }
+    }
+
+
+    let whereClause: any = {
+      orderStatus: { notIn: ["REJECTED", "CANCELLED"] }
+    };
     if (fromDate && toDate) {
-      whereClause = { date: { gte: fromDate, lte: toDate } };
+      whereClause.date = { gte: fromDate, lte: toDate };
     } else {
-      whereClause = { date: singleDate };
+      whereClause.date = singleDate;
     }
 
     const logs = await prisma.analyticsLog.findMany({ where: whereClause });
+
     const sessionIds = [...new Set(logs.map(l => l.sessionId))];
     const sessions = await prisma.session.findMany({
       where: { id: { in: sessionIds } },
@@ -187,7 +208,7 @@ router.get("/summary", async (req: Request, res: Response): Promise<void> => {
       };
     }).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    res.json({
+    const reportData = {
       date: singleDate,
       totalRevenue,
       totalOrders,
@@ -195,7 +216,15 @@ router.get("/summary", async (req: Request, res: Response): Promise<void> => {
       upiRevenue: logs.filter(l => l.paymentMode === "UPI").reduce((sum, l) => sum + l.finalPrice, 0),
       cashRevenue: logs.filter(l => l.paymentMode === "CASH").reduce((sum, l) => sum + l.finalPrice, 0),
       logs: groupedLogs
-    });
+    };
+
+    // If outside working hours, update the cache
+    if (isSingleDay && !isWithinWorkingHours()) {
+      updateDailySummary(dateToUse).catch(e => console.error("[REPORTS] Auto-cache error:", e));
+    }
+
+    res.json(reportData);
+
   } catch (err) {
     console.error("[REPORTS] Summary error:", err);
     res.status(500).json({ error: "Failed to generate summary" });

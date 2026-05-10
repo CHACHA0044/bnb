@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
 import { getNextSessionNumber } from "../lib/session";
-import { logOrderAnalytics } from "../lib/analytics";
+import { logOrderAnalytics, removeOrderAnalytics } from "../lib/analytics";
 import { clearActiveCart, getActiveCart } from "../lib/socket";
 import crypto from "crypto";
 
@@ -19,13 +19,14 @@ const router = Router();
  */
 router.post("/", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { sessionId: reqSessionId, tableId, items, isTakeaway, packingCharges, instructions } = req.body as { 
+    const { sessionId: reqSessionId, tableId, items, isTakeaway, packingCharges, instructions, customerPhone } = req.body as { 
       sessionId?: string; 
       tableId?: string; 
       items: any[]; 
       isTakeaway?: boolean; 
       packingCharges?: number;
       instructions?: string;
+      customerPhone?: string;
     };
 
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -96,6 +97,7 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
       isTakeaway: Boolean(isTakeaway),
       packingCharges: Number(packingCharges || 0),
       instructions: instructions || "",
+      customerPhone: customerPhone || null,
       createdAt: new Date(),
       updatedAt: new Date(),
       items: items.map((item: { name: string; price: number; quantity?: number; type?: string }) => ({
@@ -175,7 +177,9 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
       if (status === "CANCELLED") {
         // Reject it
         pendingOrders.delete(orderId);
+        removeOrderAnalytics(orderId).catch(() => {});
         try {
+
           const io = getIO();
           io.to(`session:${pendingOrder.sessionId}`).to("admin").emit("order_deleted", {
             orderId,
@@ -196,6 +200,7 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
             isTakeaway: pendingOrder.isTakeaway,
             packingCharges: pendingOrder.packingCharges,
             instructions: pendingOrder.instructions,
+            customerPhone: pendingOrder.customerPhone,
             status: status,
             items: {
               create: pendingOrder.items.map((i: any) => ({
@@ -228,23 +233,45 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
     }
 
     // Normal DB order
-    const order = await prisma.order.update({
+    const order = await prisma.order.findUnique({ where: { id: orderId } }) as any;
+    if (!order) {
+      res.status(404).json({ error: "Order not found" });
+      return;
+    }
+
+    const timeline = Array.isArray(order.statusTimeline) ? order.statusTimeline : [];
+    const updatedOrder = (await prisma.order.update({
       where: { id: orderId },
-      data: { status },
+      data: { 
+        status,
+        statusTimeline: [...timeline, { status, timestamp: new Date().toISOString() }]
+      } as any,
       include: { items: true, session: true },
-    });
+    })) as any;
+
+
+    if (status === "CANCELLED") {
+      removeOrderAnalytics(orderId).catch(() => {});
+    }
+
+    // Trigger snapshot for history if served or cancelled
+    if (status === "SERVED" || status === "CANCELLED") {
+      const { createOrderHistorySnapshot } = require("../lib/orderHistory");
+      createOrderHistorySnapshot(orderId).catch((e: any) => console.error("Snapshot error:", e));
+    }
 
     console.log(`[ORDER] ${orderId} → ${status}`);
 
     try {
       const io = getIO();
-      io.to(`session:${order.sessionId}`).to("admin").emit("order_updated", {
-        order,
-        sessionId: order.sessionId,
-        tableId: order.session.tableId,
+      io.to(`session:${updatedOrder.sessionId}`).to("admin").emit("order_updated", {
+        order: updatedOrder,
+        sessionId: updatedOrder.sessionId,
+        tableId: updatedOrder.session.tableId,
       });
     } catch { /* skip */ }
-    res.json(order);
+    res.json(updatedOrder);
+
   } catch (err) {
     console.error("[ORDER] Update error:", err);
     res.status(500).json({ error: "Failed to update order" });
@@ -375,6 +402,9 @@ router.delete("/:orderId", requireAdmin, async (req: Request, res: Response): Pr
       prisma.payment.deleteMany({ where: { orderId } }),
       prisma.order.delete({ where: { id: orderId } })
     ]);
+
+    removeOrderAnalytics(orderId).catch(() => {});
+
 
     try {
       const io = getIO();

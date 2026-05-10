@@ -19,6 +19,7 @@ model Session {
   sessionNumber     Int       @default(0)
   deviceFingerprint String?
   locationVerified  Boolean   @default(false)
+  feedback          String?
   orders            Order[]
   payments          Payment[]
 }
@@ -28,9 +29,11 @@ model Order {
   sessionId      String
   status         String      @default("UNCONFIRMED")
   instructions   String?
+  customerPhone  String?
   createdAt      DateTime    @default(now())
   isTakeaway     Boolean     @default(false)
   packingCharges Int         @default(0)
+  statusTimeline Json?       @default("[]")
   session        Session     @relation(fields: [sessionId], references: [id])
   items          OrderItem[]
   payments       Payment[]
@@ -138,6 +141,37 @@ model AnalyticsLog {
   packingCharges   Int      @default(0)
   locationVerified Boolean  @default(false)
   sessionNumber    Int      @default(0)
+  rating           Int?
+
+  @@index([date])
+  @@index([orderId])
+  @@index([sessionId])
+}
+
+model DailySummary {
+  id        String   @id @default(uuid())
+  date      String   @unique
+  data      Json
+  updatedAt DateTime @updatedAt
+}
+
+model OrderHistoryRecord {
+  id               String   @id @default(uuid())
+  orderId          String   @unique
+  sessionId        String
+  customerDetails  Json?
+  items            Json     // Array of items with details
+  totalAmount      Int
+  taxesAndFees     Int      @default(0)
+  paymentMethod    String?
+  paymentStatus    String
+  orderStatus      String
+  timeline         Json     // Status changes with timestamps
+  staffInfo        Json?
+  pickupDelivery   Json?
+  notes            String?
+  feedback         String?
+  createdAt        DateTime @default(now())
 }
 
 model Report {
@@ -150,3 +184,4 @@ model Report {
 
   @@unique([type, date])
 }
+

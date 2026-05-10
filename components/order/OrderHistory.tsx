@@ -1,5 +1,6 @@
-import { Star } from "lucide-react";
-import { memo } from "react";
+import { Star, MessageSquare } from "lucide-react";
+import { memo, useState, useEffect } from "react";
+import { motion } from "framer-motion";
 
 interface OrderHistoryProps {
   orders: any[];
@@ -7,14 +8,33 @@ interface OrderHistoryProps {
   onRateItem?: (name: string, rating: number, orderId?: string) => void;
   ratings?: Record<string, number>;
   ratedItems?: Set<string>;
+  onFeedbackSubmit?: (feedback: string) => void;
+  sessionFeedback?: string;
 }
 
-const OrderHistory = ({ orders, isTakeawayMode, onRateItem, ratings = {}, ratedItems = new Set() }: OrderHistoryProps) => {
+const OrderHistory = ({ 
+  orders, 
+  isTakeawayMode, 
+  onRateItem, 
+  ratings = {}, 
+  ratedItems = new Set(),
+  onFeedbackSubmit,
+  sessionFeedback = ""
+}: OrderHistoryProps) => {
+  const [localFeedback, setLocalFeedback] = useState(sessionFeedback || "");
+
+  useEffect(() => {
+    const safeFeedback = sessionFeedback || "";
+    if (safeFeedback !== localFeedback) {
+      setLocalFeedback(safeFeedback);
+    }
+  }, [sessionFeedback]);
+
   if (!orders || orders.length === 0) return null;
 
   return (
-    <div id="order-history-section" className="pt-12 pb-10 border-t border-[#3A241C]/5">
-      <h3 className="text-[9px] lg:text-[10px] font-black uppercase tracking-[0.4em] text-[#3A241C]/30 mb-6 px-2">Order History</h3>
+    <div id="order-history-section" className="pt-8 pb-6 border-t border-[#3A241C]/5">
+      <h3 className="text-[9px] lg:text-[10px] font-black uppercase tracking-[0.4em] text-[#3A241C]/50 mb-4 px-2">Order History</h3>
       <div className="space-y-4">
         {[...orders]
           .sort((a, b) => {
@@ -23,7 +43,7 @@ const OrderHistory = ({ orders, isTakeawayMode, onRateItem, ratings = {}, ratedI
             return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
           })
           .map((order: any) => {
-            const isTakeawayOrder = order.items.some((it: any) => it.name.toLowerCase().includes("(to-go)"));
+            const isTakeawayOrder = order.items.some((it: any) => it.name.toLowerCase().includes("(packing)"));
             const isReady = order.status === 'SERVED' && isTakeawayOrder;
             const displayStatus = isReady ? "READY" : order.status;
             const isServed = order.status === 'SERVED';
@@ -73,30 +93,17 @@ const OrderHistory = ({ orders, isTakeawayMode, onRateItem, ratings = {}, ratedI
                           
                           return (
                             <div className="flex items-center justify-between pl-1">
-                              <div className="flex gap-1.5">
+                              <div className="flex gap-1">
                                 {[1, 2, 3, 4, 5].map(star => (
-                                  <div key={star} className="relative flex w-5 h-8 cursor-pointer group">
-                                    {/* Background Star (Gray) */}
-                                    <Star size={16} className="absolute inset-0 text-[#3A241C]/10" />
-                                    
-                                    {/* Colored Star (Foreground) */}
+                                  <div key={star} className="relative w-10 h-10 flex items-center justify-center">
+                                    <Star size={20} className="text-[#3A241C]/10" />
                                     {currentRating >= star - 0.5 && (
-                                      <div className="absolute inset-0 overflow-hidden" style={{ width: currentRating >= star ? '100%' : '50%' }}>
-                                        <Star size={16} className="fill-[#E76F51] text-[#E76F51]" />
+                                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ clipPath: currentRating >= star ? 'none' : 'inset(0 50% 0 0)' }}>
+                                        <Star size={20} className="fill-[#E76F51] text-[#E76F51]" />
                                       </div>
                                     )}
-
-                                    {/* Hit Areas */}
-                                    <button 
-                                      disabled={isRated} 
-                                      onClick={() => onRateItem(it.name, star - 0.5, order.id)} 
-                                      className="absolute left-0 top-0 w-1/2 h-full z-10 cursor-pointer touch-manipulation opacity-0"
-                                    />
-                                    <button 
-                                      disabled={isRated} 
-                                      onClick={() => onRateItem(it.name, star, order.id)} 
-                                      className="absolute right-0 top-0 w-1/2 h-full z-10 cursor-pointer touch-manipulation opacity-0"
-                                    />
+                                    <button disabled={isRated} onClick={() => onRateItem(it.name, star - 0.5, order.id)} className="absolute left-0 top-0 w-1/2 h-full z-15 opacity-0 cursor-pointer" />
+                                    <button disabled={isRated} onClick={() => onRateItem(it.name, star, order.id)} className="absolute right-0 top-0 w-1/2 h-full z-15 opacity-0 cursor-pointer" />
                                   </div>
                                 ))}
                               </div>
@@ -111,6 +118,51 @@ const OrderHistory = ({ orders, isTakeawayMode, onRateItem, ratings = {}, ratedI
               </div>
             );
           })}
+      </div>
+
+      {/* GENERAL FEEDBACK SECTION */}
+      <div className="mt-8 pb-4">
+        <h4 className="text-[9px] font-black uppercase tracking-[0.4em] text-[#3A241C]/50 mb-4 px-2">General Feedback</h4>
+        <div className="relative group">
+          <div className={`flex items-start gap-4 bg-white p-3 lg:p-4 rounded-[1.2rem] lg:rounded-[1.5rem] border border-[#3A241C]/10 shadow-sm transition-all duration-300 ${localFeedback ? 'bg-[#F9F8F6]' : ''}`}>
+            <div className="w-10 h-10 rounded-2xl bg-[#3A241C]/5 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <MessageSquare size={16} className={`transition-colors ${localFeedback ? 'text-[#E76F51]' : 'text-[#3A241C]/20'}`} />
+            </div>
+            
+            <div className="flex-1 relative pt-2">
+              {!localFeedback && (
+                <div className="absolute inset-0 flex flex-col justify-center pointer-events-none select-none">
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/40 leading-none">
+                    Your Comments
+                  </span>
+                </div>
+              )}
+              <textarea 
+                value={localFeedback}
+                onChange={(e) => {
+                  const val = e.target.value.slice(0, 100);
+                  setLocalFeedback(val);
+                }}
+                onBlur={() => onFeedbackSubmit?.(localFeedback)}
+                maxLength={100}
+                rows={1}
+                spellCheck={false}
+                onInput={(e: any) => {
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                style={{ border: 'none', outline: 'none', boxShadow: 'none' }}
+                className="w-full bg-transparent border-none outline-none focus:outline-none focus:ring-0 focus:ring-transparent text-[13px] font-bold text-[#3A241C] resize-none overflow-hidden min-h-[26px] p-0 placeholder:text-transparent appearance-none shadow-none"
+              />
+            </div>
+          </div>
+          
+          {(localFeedback?.length ?? 0) >= 100 && (
+            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-[7px] font-black text-[#E76F51] uppercase tracking-widest mt-2 ml-4">
+              Maximum limit reached
+            </motion.p>
+          )}
+        </div>
       </div>
     </div>
   );
