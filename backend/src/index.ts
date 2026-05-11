@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import express from "express";
+import express, { Request, Response } from "express";
 import cors from "cors";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
@@ -59,8 +59,9 @@ app.use("/api/admin/analytics", analyticsRouter);
 import { prisma } from "./lib/prisma";
 
 // Health check
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+app.get("/api/health", (_req: express.Request, res: express.Response) => {
+  const ts = new Date().toISOString();
+  res.json({ status: "ok", timestamp: ts });
 });
 
 /* ─── Ping config (resolved once at startup) ── */
@@ -68,8 +69,8 @@ app.get("/api/health", (_req, res) => {
 const PING_SECRET: string = process.env.PING_SECRET ?? "";
 const BACKEND_URL: string = process.env.BACKEND_URL ?? "";
 
-app.get("/api/ping", (req, res) => {
-  const token = req.headers["x-ping-token"];
+app.get("/api/ping", (req: express.Request, res: express.Response) => {
+  const token = req.headers["x-ping-token"] as string | undefined;
 
   // Reject if secret is not configured or token doesn't match
   if (!PING_SECRET || token !== PING_SECRET) {

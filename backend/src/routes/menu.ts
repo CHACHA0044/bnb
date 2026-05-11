@@ -16,7 +16,7 @@ const upload = multer({
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   },
-  fileFilter: (_req, file, cb) => {
+  fileFilter: (_req: Request, file: Express.Multer.File, cb: any) => {
     const allowed = ["image/jpeg", "image/png", "image/webp"];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
@@ -753,7 +753,7 @@ router.post("/rate", async (req: Request, res: Response): Promise<void> => {
 });
 
 
-router.post("/feedback", async (req, res) => {
+router.post("/feedback", async (req: Request, res: Response) => {
   try {
     const { sessionId, feedback } = req.body;
     if (!sessionId) return res.status(400).json({ error: "Session ID is required" });
