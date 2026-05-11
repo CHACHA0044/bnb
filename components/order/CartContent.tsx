@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import { ShoppingCart, MessageSquare, Info, Banknote, QrCode, ChevronLeft, Phone, ArrowRight, Loader2 } from "lucide-react";
+import { ShoppingCart, MessageSquare, Info, Banknote, QrCode, ChevronLeft, Phone, ArrowRight, Loader2, Receipt, X, Clock, Printer } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CartItem from "./CartItem";
 import OrderSummary from "./OrderSummary";
@@ -48,6 +48,8 @@ interface CartContentProps {
   onScrollComplete?: () => void;
   onFeedbackSubmit?: (feedback: string) => void;
   mobileFooter?: React.ReactNode;
+  orderConfig?: { upiId: string } | null;
+  tableId?: string;
 }
 
 const CartContent = ({
@@ -89,11 +91,14 @@ const CartContent = ({
   autoScrollToHistory,
   onScrollComplete,
   onFeedbackSubmit,
-  mobileFooter
+  mobileFooter,
+  orderConfig,
+  tableId
 }: CartContentProps) => {
   const [localInstructions, setLocalInstructions] = React.useState(instructionsRef.current);
   const [showPresets, setShowPresets] = React.useState(false);
   const [paymentStep, setPaymentStep] = React.useState<'CART' | 'SELECTION' | 'CASH_DETAILS'>('CART');
+  const [showBill, setShowBill] = React.useState(false);
   const [phoneNumber, setPhoneNumber] = React.useState('');
   const [phoneError, setPhoneError] = React.useState('');
   const presets = ["Make it spicy", "Less spicy", "Extra crispy", "No onion/garlic", "Extra chutney", "Extra sambar"];
@@ -122,6 +127,13 @@ const CartContent = ({
       setLocalInstructions("");
     }
   }, [instructionsRef.current]);
+
+  // Auto-reset payment step if cart becomes empty or balance is settled
+  React.useEffect(() => {
+    if (paymentStep !== 'CART' && cart.length === 0 && remaining === 0) {
+      setPaymentStep('CART');
+    }
+  }, [cart.length, remaining, paymentStep]);
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -195,12 +207,13 @@ const CartContent = ({
         showReviewPrompt={showReviewPrompt}
         setShowReviewPrompt={setShowReviewPrompt}
         onFeedbackSubmit={onFeedbackSubmit}
+        orderConfig={orderConfig}
       />
     );
   }
 
   return (
-    <div className="flex flex-col w-full lg:flex-1 lg:min-h-0 lg:h-full">
+    <div className="flex flex-col w-full lg:flex-1 lg:min-h-0 lg:h-full no-print">
       {/* HEADER SECTION - Fixed at top */}
       <div className="px-6 lg:px-10 pt-6 lg:pt-8 flex-shrink-0">
         <div className="flex items-center justify-between bg-[#F9F7F4]/60 p-4 lg:p-5 rounded-[2rem] border border-[#3A241C]/5 backdrop-blur-md">
@@ -221,27 +234,33 @@ const CartContent = ({
       {/* SCROLLABLE AREA - Hardware Accelerated */}
       <div 
         ref={scrollContainerRef}
-        className="overflow-y-auto custom-scrollbar touch-auto px-6 lg:px-10 pt-4 pb-4 lg:pb-10"
-        style={{ maxHeight: 'calc(92vh - 200px)' }}
+        className="overflow-y-auto custom-scrollbar touch-auto px-6 lg:px-10 pt-4 pb-12 lg:pb-16 flex-1"
+        style={{ maxHeight: 'calc(92vh - 140px)' }}
       >
         
         {/* Bill Summary Row */}
         {session && sessionTotal > 0 && (
-          <div className="w-full mb-8 space-y-4">
+          <div className="w-full mb-8 space-y-4 no-print">
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-[#F9F7F4] p-4 rounded-2xl border border-[#3A241C]/5 flex flex-col justify-center">
-                <p className="text-[7px] font-black text-[#3A241C]/40 uppercase tracking-[0.2em] mb-1.5">Total Bill</p>
+              <div 
+                onClick={() => remaining === 0 && setShowBill(true)}
+                className={`bg-[#F9F7F4] p-2.5 lg:p-3 rounded-2xl border border-[#3A241C]/10 flex flex-col justify-center transition-all group ${remaining === 0 ? 'cursor-pointer hover:bg-[#F9F7F4]/80 active:scale-95' : 'opacity-80'}`}
+              >
+                <p className="text-[7px] font-black text-[#3A241C]/60 uppercase tracking-[0.2em] mb-1">Total Bill</p>
                 <p className="text-sm lg:text-base font-black text-[#3A241C]">₹{sessionTotal}</p>
+                {remaining === 0 && (
+                  <p className="text-[6px] font-bold text-[#E76F51] uppercase tracking-widest mt-0.5 group-hover:underline">View Details</p>
+                )}
               </div>
-              <div className="bg-[#6A994E]/5 p-4 rounded-2xl border border-[#6A994E]/10 flex flex-col justify-center">
-                <p className="text-[7px] font-black text-[#6A994E]/40 uppercase tracking-[0.2em] mb-1.5">Paid</p>
+              <div className="bg-[#6A994E]/5 p-2.5 lg:p-3 rounded-2xl border border-[#6A994E]/20 flex flex-col justify-center">
+                <p className="text-[7px] font-black text-[#6A994E]/70 uppercase tracking-[0.2em] mb-1">Paid</p>
                 <p className="text-sm lg:text-base font-black text-[#6A994E]">₹{paidTotal}</p>
               </div>
               <div 
                 onClick={() => remaining > 0 && setOrderPlaced(true)}
-                className={`bg-[#E76F51]/5 p-4 rounded-2xl border border-[#E76F51]/10 flex flex-col justify-center ring-2 ring-[#E76F51]/5 transition-all active:scale-95 ${remaining > 0 ? 'cursor-pointer hover:bg-[#E76F51]/10' : ''}`}
+                className={`bg-[#E76F51]/5 p-2.5 lg:p-3 rounded-2xl border border-[#E76F51]/20 flex flex-col justify-center ring-2 ring-[#E76F51]/5 transition-all active:scale-95 ${remaining > 0 ? 'cursor-pointer hover:bg-[#E76F51]/10' : 'opacity-50'}`}
               >
-                <p className="text-[7px] font-black text-[#E76F51] uppercase tracking-[0.2em] mb-1.5">Balance</p>
+                <p className="text-[7px] font-black text-[#E76F51]/80 uppercase tracking-[0.2em] mb-1">Balance</p>
                 <p className="text-sm lg:text-base font-black text-[#3A241C]">₹{remaining}</p>
               </div>
             </div>
@@ -287,7 +306,7 @@ const CartContent = ({
                   </div>
                   <div className="flex-1 text-left">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <h4 className="font-black text-base text-[#3A241C] tracking-tight">UPI / QR Code</h4>
+                      <h4 className="font-black text-base text-[#3A241C] tracking-tight">UPI</h4>
                       {!ordering && <span className="px-2 py-0.5 bg-[#6A994E]/10 text-[#6A994E] text-[8px] font-black uppercase tracking-widest rounded-md">Suggested</span>}
                     </div>
                     <p className="text-[10px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Scan and pay instantly</p>
@@ -390,17 +409,32 @@ const CartContent = ({
           ) : cart.length === 0 ? (
             <motion.div 
               key="empty-cart"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="py-12 flex flex-col items-center justify-center text-[#3A241C]/30 h-full relative"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="py-20 flex flex-col items-center justify-center text-[#3A241C]/30 h-full relative"
             >
-              <div className="w-24 h-24 rounded-full bg-[#F9F7F4] flex items-center justify-center mb-6 shadow-inner border border-[#3A241C]/5">
-                <ShoppingCart size={40} className="text-[#3A241C]/20" />
+              <div className="relative mb-8">
+                <motion.div 
+                  animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                  className="absolute inset-0 bg-[#E76F51]/10 rounded-full blur-2xl" 
+                />
+                <div className="relative w-28 h-28 rounded-[2.5rem] bg-white flex items-center justify-center shadow-[0_20px_50px_rgba(58,36,28,0.05)] border border-[#3A241C]/5">
+                  <ShoppingCart size={48} className="text-[#3A241C]/10" />
+                  <motion.div 
+                    initial={{ x: -5, y: -5, opacity: 0 }}
+                    animate={{ x: 0, y: 0, opacity: 1 }}
+                    transition={{ delay: 0.5 }}
+                    className="absolute -top-1 -right-1 w-8 h-8 bg-[#F9F7F4] rounded-full border-4 border-white flex items-center justify-center"
+                  >
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#E76F51]/30" />
+                  </motion.div>
+                </div>
               </div>
-              <h3 className="font-black text-lg text-[#3A241C]/40 tracking-tight mb-2">Basket is Empty</h3>
-              <p className="text-[10px] lg:text-[11px] font-bold uppercase tracking-[0.3em] text-[#3A241C]/20 text-center leading-loose">
-                Add some delicious items<br/>from the menu
+              <h3 className="font-black text-2xl text-[#3A241C]/30 tracking-tighter uppercase mb-3">Your Basket is Empty</h3>
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/20 text-center leading-loose max-w-[200px]">
+                Browse our menu and add your favorite dishes to start your meal
               </p>
             </motion.div>
           ) : (
@@ -580,6 +614,212 @@ const CartContent = ({
           </div>
         )}
       </div>
+
+      {/* DETAILED BILL MODAL */}
+      <AnimatePresence>
+        {showBill && (
+          <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 lg:p-12 print:p-0 print:static">
+            <style jsx global>{`
+              @media print {
+                /* Aggressively hide everything except the bill */
+                body > *:not(.bill-portal) { display: none !important; }
+                #print-bill-root, #print-bill-root * { display: block !important; visibility: visible !important; }
+                
+                /* Reset body for print */
+                body { 
+                  visibility: hidden !important; 
+                  background: white !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                }
+
+                .bill-to-print { 
+                  visibility: visible !important;
+                  display: block !important;
+                  position: absolute !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 100% !important;
+                  margin: 0 !important;
+                  padding: 40px !important;
+                  height: auto !important;
+                  box-shadow: none !important;
+                  border: none !important;
+                  border-radius: 0 !important;
+                  background: white !important;
+                }
+                
+                .bill-to-print * { visibility: visible !important; }
+                .no-print { display: none !important; }
+                .bill-scroll-area { overflow: visible !important; max-height: none !important; }
+                
+                /* Hide the close button and print button on the printed page */
+                .no-print-element { display: none !important; }
+              }
+            `}</style>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowBill(false)}
+              className="absolute inset-0 bg-[#3A241C]/60 backdrop-blur-md no-print"
+            />
+            
+            <motion.div
+              id="print-bill-root"
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-[calc(100%-2rem)] md:max-w-md bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[85vh] bill-to-print mx-4 my-6 lg:my-10"
+            >
+              {/* BILL HEADER */}
+              <div className="bg-[#3A241C] text-white p-8 pb-10 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-8 no-print no-print-element">
+                  <button onClick={() => setShowBill(false)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-all">
+                    <X size={20} />
+                  </button>
+                </div>
+                
+                <div className="flex flex-col gap-4">
+                  <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center">
+                    <Receipt size={32} />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-black tracking-tight leading-none mb-2">Order Bill</h2>
+                    <div className="flex items-center gap-4 opacity-60">
+                      <div className="flex items-center gap-2">
+                        <Clock size={12} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">{new Date().toLocaleDateString()}</span>
+                      </div>
+                      <div className="w-1 h-1 rounded-full bg-white/30" />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest">Table {tableId || "T1"}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* BILL ITEMS - SCROLLABLE */}
+              <div className="flex-1 overflow-y-auto overscroll-contain bill-scroll-area custom-scrollbar p-6 lg:p-8 pt-4 lg:pt-6">
+                <div className="space-y-6">
+                  {/* Group items across all orders */}
+                  {(() => {
+                    const allItems = session?.orders
+                      .filter((o: any) => o.status !== "CANCELLED")
+                      .flatMap((o: any) => o.items) || [];
+                    
+                    const grouped = allItems.reduce((acc: any, it: any) => {
+                      const key = `${it.name}-${it.variant || ''}`;
+                      if (!acc[key]) acc[key] = { ...it };
+                      else acc[key].quantity += it.quantity;
+                      return acc;
+                    }, {});
+
+                    return Object.values(grouped).map((it: any, idx) => (
+                      <div key={idx} className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <h4 className="font-black text-sm text-[#3A241C] leading-tight mb-1">{it.name}</h4>
+                          <p className="text-[10px] font-bold text-[#3A241C]/40 uppercase tracking-widest">₹{it.price} x {it.quantity}</p>
+                        </div>
+                        <span className="font-black text-sm text-[#3A241C]">₹{it.price * it.quantity}</span>
+                      </div>
+                    ));
+                  })()}
+
+                  {/* Packing Charges if any */}
+                  {(() => {
+                    const totalPacking = session?.orders
+                      .filter((o: any) => o.status !== "CANCELLED")
+                      .reduce((sum: number, o: any) => sum + (o.packingCharges || 0), 0) || 0;
+                    
+                    if (totalPacking === 0) return null;
+                    return (
+                      <div className="flex justify-between items-center py-4 border-t border-[#3A241C]/5">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Packing Charges</span>
+                        <span className="font-black text-sm text-[#3A241C]">₹{totalPacking}</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* PAYMENT METHODS */}
+                {(session?.payments?.length ?? 0) > 0 && (
+                  <div className="mt-8 pt-6 border-t-2 border-dashed border-[#3A241C]/5">
+                    <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/30 mb-4">Payment History</h5>
+                    <div className="space-y-3">
+                      {session.payments.filter((p: any) => p.status === "CONFIRMED").map((p: any, idx: number) => (
+                        <div key={idx} className="flex justify-between items-center bg-[#F9F7F4] p-3 rounded-xl border border-[#3A241C]/5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-[#3A241C]/40 shadow-sm">
+                              {p.method === 'UPI' ? <QrCode size={14} /> : <Banknote size={14} />}
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black text-[#3A241C] uppercase tracking-widest">{p.method}</p>
+                            </div>
+                          </div>
+                          <span className="text-sm font-black text-[#6A994E]">₹{p.amount}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* BILL TOTALS */}
+              <div className="bg-[#F9F7F4] p-8 border-t border-[#3A241C]/5 no-print">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center opacity-60">
+                    <span className="text-[10px] font-black uppercase tracking-widest">Paid Amount</span>
+                    <span className="font-black text-sm tracking-tight text-[#6A994E]">₹{paidTotal}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center">
+                    <div className="flex flex-col">
+                      <span className="text-[11px] font-black uppercase tracking-widest text-[#3A241C]/30 mb-1">Total Bill</span>
+                      <span className="text-4xl font-black tracking-tighter text-[#3A241C]">₹{sessionTotal}</span>
+                    </div>
+                    {remaining > 0 ? (
+                      <div className="flex flex-col items-end">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-[#E76F51] mb-1">Balance</span>
+                        <span className="text-2xl font-black tracking-tighter text-[#E76F51]">₹{remaining}</span>
+                      </div>
+                    ) : (
+                      <div className="bg-[#6A994E]/10 text-[#6A994E] px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest">
+                        Fully Paid
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => window.print()}
+                  className="w-full mt-8 h-14 rounded-2xl bg-[#3A241C] text-white font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-xl shadow-[#3A241C]/20 active:scale-[0.98] transition-all no-print no-print-element"
+                >
+                  <Printer size={18} /> Print Invoice
+                </button>
+              </div>
+
+              {/* PRINT-ONLY TOTALS */}
+              <div className="hidden print:block p-8 bg-[#F9F7F4] border-t-4 border-double border-[#3A241C]/10">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 mb-1">Total Amount Paid</p>
+                    <p className="text-4xl font-black text-[#3A241C] tracking-tighter">₹{sessionTotal}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#6A994E] mb-1">Status</p>
+                    <p className="text-xl font-black text-[#6A994E] tracking-widest uppercase">Fully Paid</p>
+                  </div>
+                </div>
+                <div className="mt-8 text-center border-t border-[#3A241C]/5 pt-6">
+                  <p className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3A241C]/20">Thank you for visiting Benne n Beans!</p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

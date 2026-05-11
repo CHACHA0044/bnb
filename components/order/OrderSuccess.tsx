@@ -26,6 +26,7 @@ interface OrderSuccessProps {
   showReviewPrompt?: boolean;
   setShowReviewPrompt?: (val: boolean) => void;
   onFeedbackSubmit?: (feedback: string) => void;
+  orderConfig?: { upiId: string } | null;
 }
 
 const OrderSuccess = ({
@@ -48,10 +49,40 @@ const OrderSuccess = ({
   sessionClosed = false,
   showReviewPrompt = false,
   setShowReviewPrompt,
-  onFeedbackSubmit
+  onFeedbackSubmit,
+  orderConfig
 }: OrderSuccessProps) => {
   const [showCancellation, setShowCancellation] = useState(false);
   const [localFeedback, setLocalFeedback] = useState(session?.feedback || "");
+  const [isMobile, setIsMobile] = useState(false);
+  const [upiView, setUpiView] = useState<'CHOICE' | 'QR'>('CHOICE');
+  const [hasPaid, setHasPaid] = useState(payingUPI);
+  const [payDelay, setPayDelay] = useState(10);
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  const upiId = orderConfig?.upiId || process.env.NEXT_PUBLIC_UPI_ID || "hemadembla505@okicici";
+  const upiLink = `upi://pay?pa=${upiId}&pn=Benne%20n%20Beans&am=${remaining}&cu=INR`;
+
+  useEffect(() => {
+    setMounted(true);
+    setIsMobile(/Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 1024);
+  }, []);
+
+  useEffect(() => {
+    if (mounted) {
+      setUpiView(isMobile ? 'CHOICE' : 'QR');
+    }
+  }, [isMobile, mounted]);
+
+  useEffect(() => {
+    if (paymentMode === 'UPI' && !hasPaid) {
+      const timer = setInterval(() => {
+        setPayDelay(prev => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [paymentMode, hasPaid]);
 
   useEffect(() => {
     if (session?.feedback !== undefined && session.feedback !== localFeedback) {
@@ -133,9 +164,9 @@ const OrderSuccess = ({
         >
           <CheckCircle2 size={48} className="text-[#6A994E]" />
         </motion.div>
-        <h2 className="text-3xl font-black text-[#3A241C] mb-4 uppercase tracking-tighter">Payment Received</h2>
+        <h2 className="text-2xl font-black text-[#3A241C] mb-4 uppercase tracking-tighter">Payment confirmed</h2>
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#3A241C]/40 mb-8">
-          Admin has confirmed your payment.<br/>Thank you for your visit!
+          Order placed successfully • Thank you!
         </p>
         <motion.button
           whileTap={{ scale: 0.95 }}
@@ -195,25 +226,100 @@ const OrderSuccess = ({
       {isFullyCancelled ? (
         <p className="text-[10px] font-black uppercase tracking-widest text-[#B71C1C]/40 mb-4">Staff has rejected your request</p>
       ) : showProcessing && (
-        <div className="space-y-4 mb-6">
-          <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 animate-pulse">Waiting for Admin Confirmation</p>
-          
-          {paymentMode === "UPI" && (
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }} 
-              animate={{ scale: 1, opacity: 1 }} 
-              className="bg-white rounded-[2rem] p-3 border-2 border-[#E76F51] shadow-2xl mx-auto max-w-[320px] w-full"
-            >
-              <div className="relative w-full aspect-square mx-auto mb-2 rounded-2xl overflow-hidden bg-white">
-                <Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-contain" priority />
+          <div className="flex flex-col items-center gap-8 w-full max-w-[400px] mx-auto px-2">
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#3A241C]/40 animate-pulse">Waiting for Admin Confirmation</p>
+            
+            {paymentMode === "UPI" && (
+              <div className="w-full space-y-8">
+                {hasPaid ? (
+                  <motion.div 
+                    initial={{ scale: 0.9, opacity: 0 }} 
+                    animate={{ scale: 1, opacity: 1 }} 
+                    className="bg-white rounded-[2.5rem] p-8 border-2 border-[#E76F51] shadow-2xl w-full"
+                  >
+                    <div className="py-8 space-y-6">
+                      <div className="w-24 h-24 bg-[#6A994E]/10 rounded-full flex items-center justify-center mx-auto border-2 border-dashed border-[#6A994E]/30">
+                        <Loader2 className="animate-spin text-[#6A994E]" size={40} />
+                      </div>
+                      <div className="space-y-2">
+                        <h4 className="font-black text-[#3A241C] text-xl uppercase tracking-tight">Verifying Payment</h4>
+                        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3A241C]/40 leading-relaxed">
+                          Waiting for payment confirmation<br/>from admin
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <div className="w-full space-y-10">
+                    {mounted && isMobile && upiView === 'CHOICE' ? (
+                      <div className="space-y-4">
+                        <a 
+                          href={upiLink}
+                          className="w-full h-20 bg-[#3A241C] text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-4 shadow-2xl shadow-[#3A241C]/30 active:scale-[0.98] transition-all"
+                        >
+                          <CreditCard size={20} /> Pay with UPI App
+                        </a>
+                        <div className="grid grid-cols-2 gap-4">
+                          <button 
+                            onClick={() => setUpiView('QR')}
+                            className="w-full py-5 border-2 border-[#3A241C]/10 text-[#3A241C]/60 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#3A241C]/5 transition-all"
+                          >
+                            Show QR Instead
+                          </button>
+                          <button 
+                            onClick={onCashPayment}
+                            className="w-full py-5 border-2 border-[#3A241C]/10 text-[#3A241C]/60 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#3A241C]/5 transition-all"
+                          >
+                            Cash Payment
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-8">
+                        <motion.div 
+                          initial={{ scale: 0.95, opacity: 0 }}
+                          animate={{ scale: 1, opacity: 1 }}
+                          className="relative w-full aspect-square mx-auto rounded-[3rem] overflow-hidden bg-white border-2 border-[#E76F51] shadow-[0_30px_80px_-15px_rgba(231,111,81,0.25)] p-4"
+                        >
+                          <div className="relative w-full h-full rounded-[2rem] overflow-hidden">
+                            <Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-cover" priority />
+                          </div>
+                        </motion.div>
+                        
+                        <p className="text-[12px] font-black uppercase tracking-[0.4em] text-[#3A241C] opacity-80">Scan to pay now</p>
+                      </div>
+                    )}
+
+                    <div className="space-y-6">
+                      <AnimatePresence>
+                        {payDelay === 0 ? (
+                          <motion.button 
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            onClick={() => {
+                              setHasPaid(true);
+                              onUPIPayment();
+                            }}
+                            className="w-full py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all bg-[#6A994E] text-white shadow-[0_20px_50px_rgba(106,153,78,0.3)] active:scale-95 border-2 border-[#6A994E]"
+                          >
+                            I Have Paid
+                          </motion.button>
+                        ) : (
+                          <div className="py-4 text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/20 animate-pulse">
+                            Processing UPI Session... {payDelay}s
+                          </div>
+                        )}
+                      </AnimatePresence>
+
+                      <div className="flex items-center justify-center gap-3 text-[#6A994E] font-black text-[11px] uppercase tracking-[0.2em] opacity-80">
+                        <CheckCircle2 size={16} /> Real-time confirmation
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3A241C]/30 mb-2">Scan to pay now</p>
-              <div className="flex items-center justify-center gap-2 text-[#6A994E] font-black text-[9px] uppercase tracking-widest pb-2">
-                <CheckCircle2 size={12} /> Pay and wait for confirmation
-              </div>
-            </motion.div>
-          )}
-        </div>
+            )}
+          </div>
       )}
       
       {!showProcessing && (
@@ -225,14 +331,16 @@ const OrderSuccess = ({
 
       {!isFullyCancelled && !hasUnconfirmed && remaining > 0 ? (
         <div className="w-full space-y-4 lg:space-y-6 mt-6 mb-10">
-          <div className="bg-[#F9F7F4] rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-8 shadow-inner border-2 border-[#E76F51]/20">
-            <span className="text-[9px] lg:text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.4em]">Pending Bill</span>
-            <p className="text-3xl lg:text-4xl font-black text-[#3A241C] mt-2 tracking-tighter">₹ {remaining}</p>
+          <div className="bg-[#F9F7F4] rounded-[1.5rem] p-4 shadow-inner border-2 border-[#E76F51]/10">
+            <span className="text-[8px] font-black text-[#3A241C]/30 uppercase tracking-[0.4em]">Pending Bill</span>
+            <p className="text-2xl font-black text-[#3A241C] mt-1 tracking-tighter">₹ {remaining}</p>
           </div>
           
-          {hasPendingPayment ? (
+          {hasPendingPayment || payingUPI || hasPaid ? (
             <div className="bg-[#F9F7F4] rounded-[2rem] p-8 border-2 border-dashed border-[#3A241C]/10 flex flex-col items-center gap-4">
-              <Loader2 className="animate-spin text-[#3A241C]/20" size={32} />
+              <div className="w-12 h-12 bg-white/50 rounded-full flex items-center justify-center border-2 border-dashed border-[#3A241C]/10">
+                <Loader2 className="animate-spin text-[#3A241C]/20" size={24} />
+              </div>
               <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Waiting for admin confirmation...</p>
             </div>
           ) : !paymentMode ? (
@@ -246,11 +354,29 @@ const OrderSuccess = ({
             </div>
           ) : paymentMode === "UPI" ? (
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[2rem] p-6 border-2 border-[#E76F51] shadow-2xl">
-              <div className="relative w-40 h-40 mx-auto mb-4 border-2 border-[#F9F7F4] p-2 rounded-2xl overflow-hidden bg-[#F9F7F4]"><Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-contain" /></div>
+              <div className="relative w-44 h-44 mx-auto mb-4 border-2 border-[#F9F7F4] p-2 rounded-2xl overflow-hidden bg-[#F9F7F4]"><Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-contain" /></div>
               <p className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3A241C]/30 mb-6">Scan to pay directly</p>
-              <button onClick={onUPIPayment} disabled={payingUPI} className="w-full py-4 bg-[#6A994E] text-white rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#6A994E]/20">
-                {payingUPI ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} I Have Paid
-              </button>
+              
+              <AnimatePresence>
+                {payDelay === 0 ? (
+                  <motion.button 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    onClick={() => {
+                      setHasPaid(true);
+                      onUPIPayment();
+                    }} 
+                    disabled={payingUPI} 
+                    className="w-full py-5 bg-[#6A994E] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#6A994E]/20 active:scale-95 transition-all"
+                  >
+                    {payingUPI ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} I Have Paid
+                  </motion.button>
+                ) : (
+                  <div className="py-4 text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/20 animate-pulse">
+                    Waiting for UPI session... {payDelay}s
+                  </div>
+                )}
+              </AnimatePresence>
             </motion.div>
           ) : null}
         </div>

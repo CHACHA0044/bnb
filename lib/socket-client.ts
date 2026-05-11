@@ -3,7 +3,17 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+const getApiUrl = () => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  if (typeof window !== "undefined") {
+    const { hostname } = window.location;
+    if (hostname !== "localhost" && envUrl.includes("localhost")) {
+      return envUrl.replace("localhost", hostname);
+    }
+  }
+  return envUrl;
+};
+const API_URL = getApiUrl();
 
 /**
  * React hook for Socket.IO connection with automatic reconnect

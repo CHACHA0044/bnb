@@ -43,14 +43,6 @@ const MenuHeader = ({
         )}
         
         <div className="flex items-center gap-2 lg:gap-3 min-w-0">
-          <div className={`flex items-center justify-center h-9 lg:h-11 px-3 lg:w-32 rounded-xl lg:rounded-2xl text-[8px] lg:text-[10px] font-black uppercase tracking-[0.2em] shadow-sm flex-shrink-0 whitespace-nowrap ${isTakeawayMode ? "bg-[#F4A261]" : "bg-[#E76F51]"}`}>
-            {isTakeawayMode ? (
-              <><Package size={12} className="mr-1.5 lg:w-4 lg:h-4" />Takeaway</>
-            ) : (
-              <>Table {tableId.replace(/^t/i, '')}</>
-            )}
-          </div>
-
           {timeLeft && (
             <div className="hidden xs:flex items-center gap-2 bg-[#B71C1C] h-9 lg:h-11 px-3 lg:px-4 rounded-xl lg:rounded-2xl animate-pulse shadow-lg flex-shrink-0">
               <div className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
@@ -68,29 +60,13 @@ const MenuHeader = ({
       </div>
 
       <div className="flex-shrink-0 ml-2">
-        {!isTakeawayMode ? (
-          <div className="flex items-center bg-black/20 rounded-xl lg:rounded-[1.25rem] p-1 gap-1 border border-white/5 shadow-inner h-11 lg:h-[52px]">
-            <button 
-              onClick={() => onToggleGlobalTakeaway(false)}
-              className={`flex items-center justify-center gap-1.5 h-full px-3 lg:px-5 rounded-lg lg:rounded-xl text-[8px] lg:text-[10px] font-black uppercase tracking-[0.2em] transition-all ${!isTakeawayGlobal ? "bg-[#E76F51] text-white shadow-md" : "text-white/40 hover:text-white"}`}
-            >
-              <Utensils size={12} className="lg:w-4 lg:h-4" /> 
-              <span>Dine-in</span>
-            </button>
-            <button 
-              onClick={() => onToggleGlobalTakeaway(true)}
-              className={`flex items-center justify-center gap-1.5 h-full px-3 lg:px-5 rounded-lg lg:rounded-xl text-[8px] lg:text-[10px] font-black uppercase tracking-[0.2em] transition-all ${isTakeawayGlobal ? "bg-[#E76F51] text-white shadow-md" : "text-white/40 hover:text-white"}`}
-            >
-              <Package size={12} className="lg:w-4 lg:h-4" /> 
-              <span>Takeaway</span>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center h-9 lg:h-11 bg-[#F4A261]/10 rounded-xl lg:rounded-2xl px-3 lg:px-5 border border-[#F4A261]/20">
-            <Package size={14} className="text-[#F4A261] mr-2" />
-            <span className="text-[8px] lg:text-[9px] font-black uppercase tracking-widest text-[#F4A261] whitespace-nowrap">Takeaway Only</span>
-          </div>
-        )}
+        <div className={`flex items-center justify-center h-9 lg:h-11 px-4 lg:px-6 rounded-xl lg:rounded-2xl text-[9px] lg:text-[10px] font-black uppercase tracking-[0.2em] shadow-2xl flex-shrink-0 whitespace-nowrap bg-[#E76F51] border-2 border-[#3A241C] ring-1 ring-white/10`}>
+          {isTakeawayMode ? (
+            <><Package size={14} className="mr-2 lg:w-5 lg:h-5" />Takeaway</>
+          ) : (
+            <><Utensils size={14} className="mr-2 lg:w-5 lg:h-5" />Dine-in</>
+          )}
+        </div>
       </div>
     </header>
   );

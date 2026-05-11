@@ -65,10 +65,10 @@ const MenuItem = ({
   return (
     <motion.div
       onClick={handleAdd as any}
-      className={`bg-white rounded-[2rem] p-3 lg:p-4 border flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-500 ease-[var(--cubic-bezier)] ${isAnimating
-        ? "border-[#6A994E] shadow-[0_20px_50px_-15px_rgba(106,153,78,0.25)] ring-2 ring-[#6A994E]"
-        : "border-[#3A241C]/5 shadow-[0_1px_2px_rgba(58,36,28,0.05)]"
-        } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-[0_25px_60px_-15px_rgba(58,36,28,0.12)] cursor-pointer"}`}
+      className={`bg-white rounded-[2rem] p-3 lg:p-4 border-2 flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-500 ease-[var(--cubic-bezier)] ${isAnimating
+        ? "border-[#6A994E] shadow-[0_25px_60px_-15px_rgba(106,153,78,0.25)] ring-2 ring-[#6A994E]/10"
+        : "border-[#3A241C]/10 shadow-[0_8px_30px_-10px_rgba(58,36,28,0.08)]"
+        } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-[0_30px_70px_-15px_rgba(58,36,28,0.15)] hover:border-[#E76F51]/30 cursor-pointer"}`}
     >
       <AnimatePresence>
         {isAnimating && (

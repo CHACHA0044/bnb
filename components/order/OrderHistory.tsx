@@ -77,7 +77,7 @@ const OrderHistory = ({
                           <span className={`font-black ${isServed ? 'text-[#3A241C]/30' : 'text-[#3A241C]/40'} tracking-tight`}>₹{it.price * it.quantity}</span>
                         </div>
                         
-                        {isServed && onRateItem && (() => {
+                        {(order.status !== "CANCELLED" && order.status !== "UNCONFIRMED") && onRateItem && (() => {
                           const name = it.name.toLowerCase();
                           const isExcluded = name.includes("water") || 
                                            name.includes("soft drink") || 

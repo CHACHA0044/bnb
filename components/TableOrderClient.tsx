@@ -8,6 +8,7 @@ import dynamic from "next/dynamic";
 import {
   fetchSession, placeOrder, createPayment, fetchMenu,
   fetchRestaurantStatus, verifyLocation, dismissReviewRequest,
+  fetchOrderConfig,
   type SessionData, type OrderData, type PaymentData,
   type RestaurantStatusData
 } from "@/lib/api";
@@ -102,6 +103,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const [ratings, setRatings] = useState<{ [itemName: string]: number }>({});
   const [ratedItems, setRatedItems] = useState<Set<string>>(new Set());
   const [showReviewPrompt, setShowReviewPrompt] = useState(false);
+  const [orderConfig, setOrderConfig] = useState<{ upiId: string } | null>(null);
 
   // Socket
   const { socket, joinSession, on, connected } = useSocket();
@@ -126,8 +128,26 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
   /* ─── Geolocation Verification ─────────── */
   const tryVerifyLocation = useCallback(async (sid?: string) => {
-    if (typeof navigator === "undefined" || !navigator.geolocation) {
+    if (typeof navigator === "undefined") {
       setLocationVerified(null);
+      return;
+    }
+
+    // DEVELOPMENT BYPASS: Auto-verify on local network IPs or localhost
+    const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+    const isLocal = hostname === "localhost" || hostname === "127.0.0.1" || 
+                    hostname.startsWith("192.168.") || hostname.startsWith("10.") || 
+                    hostname.startsWith("172.");
+
+    if (isLocal) {
+      console.log("[DEV] Local network detected, bypassing location check.");
+      setLocationVerified(true);
+      setLocationDistance(0);
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      setLocationVerified(false);
       return;
     }
 
@@ -138,11 +158,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           setLocationVerified(result.verified);
           setLocationDistance(result.distance);
         } catch {
-          setLocationVerified(null);
+          setLocationVerified(false);
         }
       },
-      () => setLocationVerified(false),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      (err) => {
+        console.warn("Geolocation failed:", err);
+        setLocationVerified(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   }, []);
 
@@ -304,6 +327,9 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (locationVerified === null) {
       tryVerifyLocation(session?.id);
     }
+    
+    // Fetch Order Config
+    fetchOrderConfig().then(setOrderConfig).catch(console.error);
   }, [session?.id, tryVerifyLocation, locationVerified]);
 
   const showToast = useCallback((msg: string) => {
@@ -339,21 +365,23 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     const unsubs = [
       on("order_placed", () => loadSession()),
       on("order_updated", (data: any) => {
+        console.log("[SOCKET] order_updated received:", data.order?.id, data.order?.status);
         setIsProcessingOrder(false);
         if (data.order) {
           setSession(prev => {
             if (!prev) return null;
-            const updatedOrders = prev.orders.map(o =>
-              o.id === data.order.id || o.id === data.tempOrderId ? { ...o, ...data.order } : o
-            );
+            const updatedOrders = prev.orders.map(o => {
+              if (o.id === data.order.id || o.id === data.tempOrderId) {
+                // Deep merge items to preserve local state if necessary
+                return { ...o, ...data.order, items: data.order.items || o.items };
+              }
+              return o;
+            });
             return { ...prev, orders: updatedOrders };
           });
         }
+        // Force a re-fetch to be absolutely sure we have latest state
         loadSession();
-        // Show confirmation toast when admin confirms
-        if (data.order && data.order.status === "PLACED") {
-          showToast("Order confirmed by staff!");
-        }
       }),
       on("order_deleted", (data: any) => {
         setIsProcessingOrder(false);
@@ -861,46 +889,31 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
           className="fixed inset-0 z-[1000] bg-[#F9F7F4] flex flex-col items-center justify-center p-8 overflow-hidden"
         >
-          {/* Animated Background Elements */}
-          <motion.div
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.5, 0.3],
-              rotate: [0, 90, 0]
-            }}
-            transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-            className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-[var(--benne-primary)]/5 rounded-full blur-[100px]"
-          />
-          <motion.div
-            animate={{
-              scale: [1, 1.3, 1],
-              opacity: [0.2, 0.4, 0.2],
-              rotate: [0, -90, 0]
-            }}
-            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-            className="absolute bottom-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-[#3A241C]/5 rounded-full blur-[100px]"
-          />
+          {/* Hardware Accelerated Background Elements */}
+          <div className="absolute top-[-10%] right-[-10%] w-[50vw] h-[50vw] bg-[var(--benne-primary)]/5 rounded-full blur-[80px] pointer-events-none transform-gpu translate-z-0" />
+          <div className="absolute bottom-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-[#3A241C]/5 rounded-full blur-[80px] pointer-events-none transform-gpu translate-z-0" />
 
           <div className="relative z-10 flex flex-col items-center text-center max-w-sm">
             {/* Logo Animation */}
             <motion.div
-              initial={{ scale: 0.8, opacity: 0, rotate: -10 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={{ duration: 0.8, ease: "backOut" }}
-              className="w-24 h-24 bg-[#3A241C] rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl relative"
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="w-24 h-24 bg-[#3A241C] rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl relative will-change-transform"
             >
               <Coffee size={40} className="text-white" />
               <motion.div
-                animate={{ scale: [1, 1.5, 1], opacity: [0.5, 0, 0.5] }}
-                transition={{ duration: 2, repeat: Infinity }}
-                className="absolute inset-0 border-4 border-[#3A241C] rounded-[2.5rem]"
+                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                className="absolute inset-0 border-4 border-[#3A241C] rounded-[2.5rem] will-change-transform"
               />
             </motion.div>
 
             <motion.div
               initial={{ y: 20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
-              transition={{ delay: 0.3, duration: 0.8 }}
+              transition={{ delay: 0.1, duration: 0.5 }}
+              className="will-change-transform"
             >
               <h1 className="font-[var(--font-playfair)] text-4xl font-bold text-[#3A241C] mb-4 italic">
                 {showWelcome ? "Welcome to  Benne n Beans" : "Brewing things back up"}
@@ -916,21 +929,28 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
               </p>
 
               <div className="flex flex-col items-center gap-4">
-                {/* Progress Indicator */}
+                {/* Optimized Progress Indicator */}
                 <div className="relative w-48 h-1 bg-[#3A241C]/5 rounded-full overflow-hidden">
                   <motion.div
                     initial={{ x: "-100%" }}
-                    animate={{ x: (loading || menuLoading) ? "-20%" : "0%" }}
-                    transition={{ duration: 2, ease: "easeInOut" }}
+                    animate={(!loading && !menuLoading) ? { x: "0%" } : { 
+                      x: ["-100%", "-20%", "-20%", "0%"],
+                      transition: { 
+                        times: [0, 0.4, 0.8, 1],
+                        duration: 3,
+                        ease: "easeInOut",
+                        repeat: (loading || menuLoading) ? Infinity : 0
+                      }
+                    }}
                     onAnimationComplete={() => {
                       if (!loading && !menuLoading) {
                         setWelcomeDismissed(true);
                       }
                     }}
-                    className="absolute inset-0 bg-[var(--benne-primary)]"
+                    className="absolute inset-0 bg-[var(--benne-primary)] will-change-transform"
                   />
                 </div>
-                <span className="text-[10px] font-black text-[#3A241C]/20 uppercase tracking-[0.2em] animate-pulse">
+                <span className="text-[10px] font-black text-[#3A241C]/20 uppercase tracking-[0.2em]">
                   {(loading || menuLoading) ? "Getting things ready..." : "Ready to serve"}
                 </span>
               </div>
@@ -956,6 +976,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const commonCartProps = {
     cart, cartSubtotal, cartTotal, packingCharges, session,
     ordering, orderPlaced, setOrderPlaced,
+    orderConfig,
     onPlaceOrder: handlePlaceOrder,
     onRemove: removeFromCart,
     onAdd: addToCart,
@@ -973,6 +994,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     paymentSuccess,
     sessionClosed,
     showReviewPrompt,
+    tableId: tableId,
     setShowReviewPrompt,
     onAnimationComplete: () => {
       // Animation complete logic moved to handlePlaceOrder
@@ -1057,22 +1079,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             </motion.div>
           )}
 
-          {showConfirmed && (
-            <motion.div
-              key="order-confirmed"
-              initial={{ y: -20, opacity: 0, scale: 0.9 }} animate={{ y: 0, opacity: 1, scale: 1 }} exit={{ y: -20, opacity: 0, scale: 0.9 }} className="mx-auto w-fit max-w-[90vw] bg-[#3A241C] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto">
-              <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#6A994E] rounded-xl flex items-center justify-center flex-shrink-0">
-                <CheckCircle2 size={18} className="text-white" />
-              </div>
-              <div className="flex-1 text-left pr-2">
-                <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest mb-0.5 leading-tight">Order Placed!</p>
-                <p className="text-[8px] lg:text-[9px] font-bold text-white/80 leading-tight">Your request is being processed by our staff.</p>
-              </div>
-              <button onClick={() => setShowConfirmed(false)} className="w-7 h-7 lg:w-8 lg:h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors flex-shrink-0">
-                <X size={16} />
-              </button>
-            </motion.div>
-          )}
+
 
           {showCancellation && (
             <motion.div
@@ -1117,8 +1124,19 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-[200] bg-[#3A241C]/95 backdrop-blur-xl flex flex-col items-center justify-center p-8 text-center">
           <div className="w-24 h-24 rounded-full bg-[#E76F51]/10 flex items-center justify-center text-[#E76F51] mb-8 border border-[#E76F51]/20"><MapPin size={48} className="animate-pulse" /></div>
           <h2 className="text-3xl font-black text-white mb-4 tracking-tighter uppercase">Remote Orders Restricted</h2>
-          <p className="text-[#F9F7F4]/60 text-xs font-bold uppercase tracking-[0.2em] max-w-xs leading-loose mb-4">We only accept orders from users within the restaurant premises (50m range).</p>
-          <p className="text-[#E76F51] text-[10px] font-black uppercase tracking-[0.2em] max-w-xs leading-loose">If at restaurant, please enable location and refresh to start ordering.</p>
+          <p className="text-[#F9F7F4]/60 text-xs font-bold uppercase tracking-[0.2em] max-w-xs leading-loose mb-8">We only accept orders from users within the restaurant premises (50m range).</p>
+          
+          <button 
+            onClick={() => {
+              setLocationVerified(null);
+              tryVerifyLocation(session?.id);
+            }}
+            className="bg-[#E76F51] text-white px-8 py-4 rounded-2xl font-black uppercase tracking-[0.2em] text-[10px] shadow-[0_20px_50px_rgba(231,111,81,0.3)] hover:scale-105 active:scale-95 transition-all mb-8 border border-white/10"
+          >
+            Allow Location & Try Again
+          </button>
+
+          <p className="text-[#E76F51] text-[10px] font-black uppercase tracking-[0.2em] max-w-xs leading-loose">If at restaurant, please enable location permissions and tap try again.</p>
         </motion.div>
       )}
 
@@ -1356,13 +1374,15 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
               initial={{ opacity: 0, y: -40, scale: 0.9 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
-              className="fixed top-24 lg:top-12 left-0 right-0 mx-auto w-fit z-[200] px-6 transform-gpu translate-z-0"
+              className="fixed top-24 lg:top-12 left-0 right-0 mx-auto w-fit max-w-[90vw] z-[200] px-6 transform-gpu translate-z-0 pointer-events-none"
             >
-              <div className="bg-[#3A241C] text-white px-6 py-3.5 rounded-[2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/10 flex items-center gap-3 transform-gpu backdrop-blur-xl">
-                <div className="w-6 h-6 rounded-full bg-[#6A994E] flex items-center justify-center flex-shrink-0">
-                  <CheckCircle2 size={14} className="text-white" />
+              <div className="bg-[#3A241C] text-white p-3 lg:p-4 rounded-2xl flex items-center gap-3 lg:gap-4 shadow-2xl border border-white/10 pointer-events-auto backdrop-blur-xl">
+                <div className="w-8 h-8 lg:w-10 lg:h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md flex-shrink-0">
+                  <Bell size={18} className="text-white" />
                 </div>
-                <span className="font-black text-[10px] lg:text-[11px] uppercase tracking-[0.15em] whitespace-nowrap">{toast}</span>
+                <div className="flex-1 text-left pr-2">
+                  <p className="text-[10px] lg:text-[11px] font-black uppercase tracking-widest leading-tight">{toast}</p>
+                </div>
               </div>
             </motion.div>
           )}

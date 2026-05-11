@@ -11,6 +11,15 @@ export const pendingOrders = new Map<string, any>();
 
 
 const router = Router();
+/**
+ * GET /api/order/config
+ * Return public configuration for the client (e.g. UPI ID)
+ */
+router.get("/config", (_req: Request, res: Response) => {
+  res.json({
+    upiId: process.env.UPI_ID || "hemadembla505@okicici"
+  });
+});
 
 /**
  * POST /api/order
@@ -295,11 +304,19 @@ router.patch("/item/:itemId/served", requireAdmin, async (req: Request, res: Res
 
     try {
       const io = getIO();
-      io.to(`session:${item.order.sessionId}`).to("admin").emit("order_updated", {
-        order: item.order,
-        sessionId: item.order.sessionId,
-        tableId: item.order.session.tableId,
+      // Fetch full order with items to ensure client has complete state
+      const fullOrder = await prisma.order.findUnique({
+        where: { id: item.orderId },
+        include: { items: true, session: true }
       });
+
+      if (fullOrder) {
+        io.to(`session:${item.order.sessionId}`).to("admin").emit("order_updated", {
+          order: fullOrder,
+          sessionId: item.order.sessionId,
+          tableId: (fullOrder as any).session.tableId,
+        });
+      }
 
       if (isServed && item.order.isTakeaway) {
         io.to(`session:${item.order.sessionId}`).emit("takeaway_ready", {
