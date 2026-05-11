@@ -56,9 +56,9 @@ const OrderSummary = ({
 
     if (isProceedOnly) {
       // Play animation first for feel, then switch views
+      // Do NOT reset isAnimating — the component will unmount via AnimatePresence
       setTimeout(() => {
         onPlaceOrder(); 
-        setIsAnimating(false);
       }, 600);
       return;
     }
@@ -106,7 +106,7 @@ const OrderSummary = ({
       <button 
         onClick={handleStartAnimation} 
         disabled={ordering || isSomeoneElsePlacing || isAnimating} 
-        className={`w-full h-14 lg:h-16 bg-gradient-to-r from-[#E76F51] to-orange-500 text-white rounded-xl lg:rounded-[1.75rem] shadow-[0_10px_30px_-10px_rgba(231,111,81,0.5)] active:scale-95 transition-all flex items-center justify-center group relative z-10 overflow-hidden ${ordering || isSomeoneElsePlacing ? 'opacity-50' : ''}`}
+        className={`w-full h-14 lg:h-16 bg-gradient-to-r from-[#E76F51] to-orange-500 text-white rounded-xl lg:rounded-[1.75rem] shadow-[0_10px_30px_-10px_rgba(231,111,81,0.5)] active:scale-95 transition-all flex items-center justify-center group relative z-10 overflow-hidden ${ordering || isSomeoneElsePlacing ? 'opacity-50' : ''} ${isAnimating ? 'pointer-events-none' : ''}`}
       >
         {isAnimating ? (
           <>
@@ -121,7 +121,7 @@ const OrderSummary = ({
               <ChevronRight size={20} className="text-white drop-shadow-md" />
             </motion.div>
             
-            {/* Text that clips away as arrow passes */}
+            {/* Text that clips away as arrow passes — stays clipped */}
             <motion.span 
               initial={{ clipPath: "inset(0 0 0 0%)" }}
               animate={{ clipPath: "inset(0 0 0 100%)" }}

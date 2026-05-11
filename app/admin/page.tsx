@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, Check } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import {
-  adminFetchSessions, adminCloseSession, adminConfirmPayment,
-  adminUpdateOrder, adminAddOrder, adminToggleItemServed,
-  adminToggleOrderItems,
+  adminCloseSession, 
+  adminConfirmPayment,
   adminDeleteOrder,
-  adminDeletePayment, adminToggleReminder, adminRecordPayment,
+  adminDeletePayment, 
+  adminToggleReminder, 
+  adminRecordPayment,
+  adminToggleItemServed,
+  adminToggleOrderItemsServed,
+  adminCreateSession,
+  adminAddManualOrder,
+  adminUpdateOrder,
   adminToggleReviewRequest,
   type SessionData,
 } from "@/lib/api";
@@ -16,17 +22,14 @@ import { useSocket } from "@/lib/socket-client";
 import AdminTableColumn from "@/components/AdminTableColumn";
 import AdminPaymentSummary from "@/components/AdminPaymentSummary";
 import AddOrderModal from "@/components/AddOrderModal";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useAdmin } from "./AdminContext";
 
 const TABLES = ["T1", "T2", "T3"];
 const TAKEAWAY_ID = "TAKEAWAY";
-const TABLE_COLUMNS = [...TABLES]; // Regular tables stay fixed
-
+const TABLE_COLUMNS = [...TABLES];
 
 export default function DashboardPage() {
-  const { secret, authenticated } = useAdminAuth();
-  const [sessions, setSessions] = useState<SessionData[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { sessions, setSessions, loadStats, loading, authenticated, secret } = useAdmin();
   const [addOrderData, setAddOrderData] = useState<{ sessionId?: string | null, tableId?: string | null } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
@@ -38,568 +41,191 @@ export default function DashboardPage() {
     loading?: boolean;
   }>({ show: false, title: "", message: "", onConfirm: () => {} });
 
-  const { socket, joinAdmin, on, connected } = useSocket();
-  const pendingUpdates = useRef<Set<string>>(new Set());
-
-  const loadSessions = useCallback(async () => {
-    if (!authenticated || !secret) return;
-    setLoading(true);
-    try {
-      const data = await adminFetchSessions(secret);
-      
-      // Merge with pending updates to prevent flicker
-      setSessions(prev => {
-        return data.map(newS => {
-          return {
-            ...newS,
-            orders: newS.orders.map(newO => {
-              const isOrderPending = pendingUpdates.current.has(newO.id);
-              return {
-                ...newO,
-                items: newO.items.map(newI => {
-                  const isItemPending = pendingUpdates.current.has(newI.id);
-                  if (isItemPending || isOrderPending) {
-                    const oldS = prev.find(ps => ps.id === newS.id);
-                    const oldO = oldS?.orders.find(po => po.id === newO.id);
-                    const oldI = oldO?.items.find(pi => pi.id === newI.id);
-                    
-                    if (isOrderPending) {
-                      const targetStatus = prev.find(ps => ps.id === newS.id)?.orders.find(po => po.id === newO.id)?.status;
-                      if (targetStatus === "SERVED") return { ...newI, isServed: true };
-                      if (targetStatus === "PLACED") return { ...newI, isServed: false };
-                    }
-                    
-                    if (isItemPending && oldI) return oldI;
-                  }
-                  return newI;
-                }),
-                status: isOrderPending 
-                  ? (prev.find(ps => ps.id === newS.id)?.orders.find(po => po.id === newO.id)?.status || newO.status) 
-                  : newO.status
-              };
-            }),
-            paymentReminder: pendingUpdates.current.has(newS.id) 
-              ? (prev.find(ps => ps.id === newS.id)?.paymentReminder ?? newS.paymentReminder) 
-              : newS.paymentReminder,
-            reviewRequested: pendingUpdates.current.has(newS.id)
-              ? (prev.find(ps => ps.id === newS.id)?.reviewRequested ?? newS.reviewRequested)
-              : newS.reviewRequested
-          };
-        });
-      });
-    } catch (err) {
-      console.error("Failed to load sessions:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [authenticated, secret]);
-
-  useEffect(() => { loadSessions(); }, [loadSessions]);
+  const { joinAdmin, connected } = useSocket();
 
   useEffect(() => {
     if (!authenticated || !secret) return;
     joinAdmin();
-    const unsubs = [
-      on("order_placed", (data: any) => {
-        if (data.fullSession) {
-          setSessions(prev => {
-            const exists = prev.some(s => s.id === data.fullSession.id);
-            if (exists) {
-              return prev.map(s => s.id === data.fullSession.id ? data.fullSession : s);
-            }
-            return [data.fullSession, ...prev];
-          });
-          return;
-        }
-        setSessions(prev => {
-          const sessionIndex = prev.findIndex(s => s.id === data.sessionId);
-          if (sessionIndex === -1) { loadSessions(); return prev; }
-          const alreadyHas = prev[sessionIndex].orders.some(o => o.id === data.order.id);
-          if (alreadyHas) return prev;
-          const updated = [...prev];
-          updated[sessionIndex] = {
-            ...updated[sessionIndex],
-            orders: [data.order, ...updated[sessionIndex].orders]
-          };
-          return updated;
-        });
-      }),
-      on("order_updated", (data: any) => {
-        setSessions(prev => {
-          const sessionIndex = prev.findIndex(s => s.id === data.sessionId);
-          if (sessionIndex === -1) { loadSessions(); return prev; }
-          const updated = [...prev];
-          updated[sessionIndex] = {
-            ...updated[sessionIndex],
-            orders: updated[sessionIndex].orders.map(o => o.id === data.order.id ? data.order : o)
-          };
-          return updated;
-        });
-      }),
-      on("payment_created", () => loadSessions()),
-      on("payment_confirmed", () => loadSessions()),
-      on("session_updated", () => loadSessions()),
-      on("order_deleted", (data: any) => {
-        setSessions(prev => {
-          const sessionIndex = prev.findIndex(s => s.id === data.sessionId);
-          if (sessionIndex === -1) { loadSessions(); return prev; }
-          const updated = [...prev];
-          updated[sessionIndex] = {
-            ...updated[sessionIndex],
-            orders: updated[sessionIndex].orders.filter(o => o.id !== data.orderId)
-          };
-          return updated;
-        });
-      }),
-    ];
-    return () => unsubs.forEach((u) => u());
-  }, [authenticated, secret, joinAdmin, on, loadSessions]);
+  }, [authenticated, secret, joinAdmin]);
 
+  // Periodic refresh as a fallback
   useEffect(() => {
-    if (connected || !authenticated || !secret) return;
-    const interval = setInterval(loadSessions, 5000);
+    if (!connected || !authenticated || !secret) return;
+    const interval = setInterval(loadStats, 15000);
     return () => clearInterval(interval);
-  }, [connected, authenticated, secret, loadSessions]);
+  }, [connected, authenticated, secret, loadStats]);
 
-  const confirmPayment = async (paymentId: string) => {
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleUpdateStatus = async (orderId: string, status: string) => {
+    if (!secret) return;
+    
+    // Optimistic Update
+    const previousSessions = [...sessions];
     setSessions(prev => prev.map(s => ({
       ...s,
-      payments: s.payments.map(p => p.id === paymentId ? { ...p, status: "CONFIRMED" } : p)
-    })));
-    try { 
-      await adminConfirmPayment(paymentId, secret!); 
-      if (socket) socket.emit("payment_confirmed", { paymentId });
-      
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('bnb_admin_update', { 
-          detail: { type: 'PAYMENT_CONFIRMED', paymentId } 
-        }));
-      }
-
-      loadSessions(); 
-    } catch (err) { 
-      loadSessions();
-    }
-  };
-
-  const updateOrderStatus = async (orderId: string, status: string) => {
-    if (status === "CANCELLED") {
-      deleteOrder(orderId);
-      return;
-    }
-    pendingUpdates.current.add(orderId);
-    // Optimistic UI update for status
-    setSessions(prev => prev.map(s => ({
-      ...s,
-      orders: s.orders.map(o => {
-        if (o.id === orderId) {
-          // Auto-toggle items based on status
-          const shouldBeServed = status === "SERVED";
-          return {
-            ...o,
-            status,
-            items: o.items.map(i => ({ ...i, isServed: shouldBeServed }))
-          };
-        }
-        return o;
-      })
+      orders: s.orders.map(o => o.id === orderId ? { ...o, status } : o)
     })));
 
-    try { 
-      // Bulk update items if needed
-      const shouldBeServed = status === "SERVED";
-      await adminToggleOrderItems(orderId, shouldBeServed, secret!);
-      await adminUpdateOrder(orderId, status, secret!); 
-      if (socket) socket.emit("order_updated", { orderId });
-    } catch (err) { 
-      console.error(err); 
-      loadSessions();
-    } finally {
-      setTimeout(() => {
-        pendingUpdates.current.delete(orderId);
-      }, 3000);
+    try {
+      await adminUpdateOrder(orderId, status, secret);
+      loadStats();
+    } catch (err) {
+      console.error(err);
+      setSessions(previousSessions);
     }
   };
 
-  const closeSession = async (sessionId: string) => {
-    setConfirmModal({
-      show: true,
-      title: "Close Session?",
-      message: "This will finalize all orders and payments for this table. This action cannot be undone.",
-      danger: true,
-      onConfirm: async () => {
-        setConfirmModal(prev => ({ ...prev, loading: true }));
-        // Optimistic UI update
-        setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, status: "CLOSED" } : s));
-        try { 
-          await adminCloseSession(sessionId, secret!); 
-          if (socket) socket.emit("session_updated", { sessionId });
-          setConfirmModal(prev => ({ ...prev, show: false, loading: false }));
-          await loadSessions(); 
-        } catch (err) { 
-          console.error(err); 
-          setConfirmModal(prev => ({ ...prev, show: false, loading: false }));
-          await loadSessions(); // Revert on error
-        }
-      }
-    });
+  const handleConfirmPayment = async (paymentId: string) => {
+    if (!secret) return;
+    try { 
+      await adminConfirmPayment(paymentId, secret); 
+      loadStats(); 
+    } catch (err) { 
+      console.error(err);
+    }
   };
 
-  const deletePayment = async (paymentId: string) => {
+  const handleDeletePayment = async (paymentId: string) => {
     setConfirmModal({
       show: true,
       title: "Reject Payment?",
-      message: "Are you sure you want to deny this payment request? The user will be notified to try again.",
+      message: "Are you sure you want to deny this payment request?",
       danger: true,
       onConfirm: async () => {
-        try { await adminDeletePayment(paymentId, secret!); loadSessions(); } catch (err) { console.error(err); }
-        setConfirmModal(prev => ({ ...prev, show: false }));
+        if (!secret) return;
+        setConfirmModal(prev => ({ ...prev, loading: true }));
+        try { 
+          await adminDeletePayment(paymentId, secret); 
+          loadStats(); 
+        } catch (err) { console.error(err); }
+        setConfirmModal(prev => ({ ...prev, show: false, loading: false }));
       }
     });
   };
 
-  const toggleReminder = async (sessionId: string, reminder: boolean) => {
-    pendingUpdates.current.add(sessionId);
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, paymentReminder: reminder } : s));
+  const handleToggleReminder = async (sessionId: string, reminder: boolean) => {
+    if (!secret) return;
     try { 
-      await adminToggleReminder(sessionId, reminder, secret!); 
-      loadSessions(); 
+      await adminToggleReminder(sessionId, reminder, secret); 
+      loadStats(); 
     } catch (err) { 
-      loadSessions();
-    } finally {
-      setTimeout(() => {
-        pendingUpdates.current.delete(sessionId);
-      }, 3000);
+      console.error(err);
     }
   };
 
-  const deleteOrder = async (orderId: string) => {
-    // OPTIMISTIC UPDATE: Remove instantly
-    setSessions(prev => prev.map(s => ({
-      ...s,
-      orders: s.orders.filter(o => o.id !== orderId)
-    })));
-
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!secret) return;
     try {
-      await adminDeleteOrder(orderId, secret!);
+      await adminDeleteOrder(orderId, secret);
+      loadStats();
     } catch (err) {
-      // Revert/Refresh only on error
-      loadSessions();
+      console.error(err);
     }
   };
 
-  const recordPayment = async (sessionId: string, method: "CASH" | "UPI", amount: number) => {
-    // 1. Create optimistic payment object
-    const optimisticPayment = {
-      id: `temp-${Date.now()}`,
-      sessionId,
-      method,
-      amount,
-      status: "CONFIRMED",
-      createdAt: new Date().toISOString()
-    };
-
-    // 2. Update local state immediately
-    setSessions(prev => prev.map(s => {
-      if (s.id === sessionId) {
-        return {
-          ...s,
-          payments: [optimisticPayment, ...s.payments]
-        };
-      }
-      return s;
-    }));
-
-    try {
-      await adminRecordPayment(sessionId, amount, method, secret!);
-
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('bnb_admin_update', { 
-          detail: { type: 'PAYMENT_RECORDED', sessionId, amount, method } 
-        }));
-      }
-
-      // Optional: Small delay before refresh to let socket arrive or just refresh
-      loadSessions();
-    } catch (err) {
-      console.error("Failed to record payment:", err);
-      // Revert/Sync on error
-      loadSessions();
-    }
-  };
-
-  const sendReviewRequest = async (sessionId: string, requested: boolean) => {
-    pendingUpdates.current.add(sessionId);
-    // Optimistic UI update
-    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, reviewRequested: requested } : s));
-    try {
-      await adminToggleReviewRequest(sessionId, requested, secret!);
-      loadSessions();
-    } catch (err) {
-      console.error("Failed to toggle review request:", err);
-      setToast("Error: Failed to update request");
-      loadSessions();
-    } finally {
-      setTimeout(() => {
-        pendingUpdates.current.delete(sessionId);
-      }, 3000);
-    }
-  };
-
-  const toggleItemServed = async (itemId: string, isServed: boolean) => {
-    pendingUpdates.current.add(itemId);
-    setSessions(prev => prev.map(s => ({
-      ...s,
-      orders: s.orders.map(o => ({
-        ...o,
-        items: o.items.map(i => i.id === itemId ? { ...i, isServed } : i)
-      }))
-    })));
+  const handleCloseSession = async (sessionId: string) => {
+    if (!secret) return;
+    // Optimistic Update: Remove session locally immediately
+    const previousSessions = [...sessions];
+    setSessions(prev => prev.filter(s => s.id !== sessionId));
     
-    try { 
-      await adminToggleItemServed(itemId, isServed, secret!); 
-    } catch (err) { 
-      loadSessions();
-    } finally {
-      setTimeout(() => {
-        pendingUpdates.current.delete(itemId);
-      }, 2000);
-    }
-  };
-
-  const toggleOrderItems = async (orderId: string, isServed: boolean) => {
-    pendingUpdates.current.add(orderId);
-    setSessions(prev => prev.map(s => ({
-      ...s,
-      orders: s.orders.map(o => {
-        if (o.id === orderId) {
-          return {
-            ...o,
-            items: o.items.map(i => ({ ...i, isServed }))
-          };
-        }
-        return o;
-      })
-    })));
-
     try {
-      await adminToggleOrderItems(orderId, isServed, secret!);
+      await adminCloseSession(sessionId, secret);
+      // loadStats will eventually sync with server
+      loadStats();
     } catch (err) {
-      loadSessions();
-    } finally {
-      setTimeout(() => {
-        pendingUpdates.current.delete(orderId);
-      }, 2000);
+      console.error(err);
+      // Rollback on error
+      setSessions(previousSessions);
     }
   };
 
-  const handleAddManualOrder = async (
-    items: any[], 
-    isTakeaway: boolean, 
-    tableId?: string, 
-    paymentMethod?: "CASH" | "QR",
-    totalAmount?: number
-  ) => {
+  const handleToggleItemServed = async (itemId: string, isServed: boolean) => {
+    if (!secret) return;
     try {
-      const order = await adminAddOrder(addOrderData?.sessionId || null, items, secret!, isTakeaway, tableId);
-      
-      // If cash is collected now, record a confirmed payment
-      if (paymentMethod === "CASH" && totalAmount) {
-        // We need the sessionId. If it was a new session, the order response should have it.
-        const sid = addOrderData?.sessionId || (order as any).sessionId;
-        if (sid) {
-          await adminRecordPayment(sid, totalAmount, "CASH", secret!);
-        }
-      }
-
-      loadSessions();
+      await adminToggleItemServed(secret, itemId, isServed);
+      loadStats();
     } catch (err) {
-      throw err;
+      console.error(err);
     }
   };
 
-  const liveSessions = sessions.filter(s => s.status === "OPEN");
+  const handleToggleOrderItems = async (orderId: string, isServed: boolean) => {
+    if (!secret) return;
+    try {
+      await adminToggleOrderItemsServed(secret, orderId, isServed);
+      loadStats();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
+  const handleRecordPayment = async (sessionId: string, method: "CASH" | "UPI", amount: number) => {
+    if (!secret) return;
+    try {
+      await adminRecordPayment(secret, sessionId, method, amount);
+      loadStats();
+      showToast("Payment recorded");
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-  if (!authenticated || !secret) return null;
+  const handleSendReviewRequest = async (sessionId: string, requested: boolean) => {
+    if (!secret) return;
+    try {
+      await adminToggleReviewRequest(sessionId, requested, secret);
+      loadStats();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const takeawaySessions = sessions.filter(s => s.tableId === TAKEAWAY_ID && s.status === "OPEN");
+  const tableSessions = sessions.filter(s => s.tableId !== TAKEAWAY_ID && s.status === "OPEN");
+
+  if (loading && sessions.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[600px] w-full">
+        <div className="flex flex-col items-center gap-6">
+          <Loader2 size={48} className="text-[#E76F51] animate-spin" />
+          <p className="text-[10px] font-black text-[#3A241C]/20 uppercase tracking-[0.2em]">Initializing Dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 lg:space-y-8">
-      {/* Engine Status (Compact) */}
-      <div className="flex items-center gap-2 px-2 -mt-4 mb-2">
-        <span className={`w-1.5 h-1.5 rounded-full ${connected ? "bg-[#6A994E]" : "bg-[#B71C1C]"} ${connected ? "animate-pulse" : ""}`} />
-        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/20">
-          {connected ? "Engine Connected" : "Polling Updates"}
-        </span>
-      </div>
-
-      {/* TOAST NOTIFICATION */}
+    <div className="space-y-10">
       <AnimatePresence>
         {toast && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }} 
-            animate={{ opacity: 1, y: 0 }} 
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-8 left-1/2 -translate-x-1/2 z-[300] bg-[#3A241C] text-white px-6 py-3 rounded-2xl shadow-2xl border border-white/10 flex items-center gap-3"
+          <motion.div
+            initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className="fixed top-10 left-1/2 -translate-x-1/2 z-[100] bg-[#3A241C] text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10"
           >
-            <div className="w-5 h-5 rounded-full bg-[#6A994E] flex items-center justify-center">
-              <Check size={12} className="text-white" />
+            <div className="w-6 h-6 bg-[#6A994E] rounded-full flex items-center justify-center">
+              <Check size={14} className="text-white" />
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest">{toast}</span>
+            <span className="font-bold text-sm tracking-tight">{toast}</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-
-      {/* DASHBOARD CONTENT WRAPPER */}
-      <div className={`transition-all duration-500 space-y-6 lg:space-y-8 ${confirmModal.show ? "blur-[3px] pointer-events-none opacity-40 scale-[0.99] grayscale-[0.2]" : ""}`}>
-        {/* PAYMENTS ROW */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6">
-        {TABLE_COLUMNS.map((colId) => (
-          <AdminPaymentSummary
-            key={`pay-${colId}`}
-            tableId={colId}
-            session={liveSessions.find(s => s.tableId === colId) || null}
-            onConfirmPayment={confirmPayment}
-            onDeletePayment={deletePayment}
-            onToggleReminder={toggleReminder}
-            onRecordPayment={recordPayment}
-            onSendReviewRequest={sendReviewRequest}
-          />
-        ))}
-        {/* Takeaway sessions: Show all active ones + one placeholder if none active */}
-        {liveSessions.filter(s => s.tableId === TAKEAWAY_ID).length > 0 ? (
-          liveSessions.filter(s => s.tableId === TAKEAWAY_ID).map((session) => (
-            <AdminPaymentSummary
-              key={`pay-${session.id}`}
-              tableId={TAKEAWAY_ID}
-              session={session}
-              onConfirmPayment={confirmPayment}
-              onDeletePayment={deletePayment}
-              onToggleReminder={toggleReminder}
-              onRecordPayment={recordPayment}
-              onSendReviewRequest={sendReviewRequest}
-              isTakeaway={true}
-            />
-          ))
-        ) : (
-          <AdminPaymentSummary
-            key="pay-takeaway-placeholder"
-            tableId={TAKEAWAY_ID}
-            session={null}
-            onConfirmPayment={confirmPayment}
-            onDeletePayment={deletePayment}
-            onToggleReminder={toggleReminder}
-            onRecordPayment={recordPayment}
-            onSendReviewRequest={sendReviewRequest}
-            isTakeaway={true}
-          />
-        )}
-      </div>
-
-      {/* TABLES + TAKEAWAY GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6 pt-2">
-        {TABLE_COLUMNS.map((colId) => (
-          <AdminTableColumn
-            key={colId}
-            tableId={colId}
-            session={liveSessions.find(s => s.tableId === colId) || null}
-            onUpdateStatus={updateOrderStatus}
-            onConfirmPayment={confirmPayment}
-            onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: colId })}
-            onCloseSession={closeSession}
-            onToggleItemServed={toggleItemServed}
-            onToggleOrderItems={toggleOrderItems}
-            onDeleteOrder={deleteOrder}
-            onDeletePayment={deletePayment}
-            onToggleReminder={toggleReminder}
-          />
-        ))}
-        
-        {/* Multiple Takeaway Columns or Scrollable list? 
-            User wants independent takeaway scans. We'll map all OPEN takeaway sessions.
-        */}
-        {liveSessions.filter(s => s.tableId === TAKEAWAY_ID).map((session) => (
-          <AdminTableColumn
-            key={session.id}
-            tableId={TAKEAWAY_ID}
-            session={session}
-            onUpdateStatus={updateOrderStatus}
-            onConfirmPayment={confirmPayment}
-            onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: TAKEAWAY_ID })}
-            onCloseSession={closeSession}
-            onToggleItemServed={toggleItemServed}
-            onToggleOrderItems={toggleOrderItems}
-            onDeleteOrder={deleteOrder}
-            onDeletePayment={deletePayment}
-            onToggleReminder={toggleReminder}
-            isTakeaway={true}
-            allTakeawaySessions={liveSessions.filter(s => s.tableId === TAKEAWAY_ID)}
-          />
-        ))}
-
-        {/* If no takeaway sessions, show empty slot */}
-        {liveSessions.filter(s => s.tableId === TAKEAWAY_ID).length === 0 && (
-          <AdminTableColumn
-            tableId={TAKEAWAY_ID}
-            session={null}
-            onUpdateStatus={updateOrderStatus}
-            onConfirmPayment={confirmPayment}
-            onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: TAKEAWAY_ID })}
-            onCloseSession={closeSession}
-            onToggleItemServed={toggleItemServed}
-            onToggleOrderItems={toggleOrderItems}
-            onDeleteOrder={deleteOrder}
-            onDeletePayment={deletePayment}
-            onToggleReminder={toggleReminder}
-            isTakeaway={true}
-          />
-        )}
-      </div>
-
-      </div>
-      {/* CUSTOM CONFIRM MODAL */}
       <AnimatePresence>
         {confirmModal.show && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))}
-              className="absolute inset-0 bg-[#3A241C]/60 backdrop-blur-md"
-            />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-sm bg-white rounded-[2.5rem] p-10 shadow-2xl overflow-hidden border border-white/20"
-            >
-              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mb-6 ${confirmModal.danger ? "bg-red-50 text-red-500" : "bg-orange-50 text-orange-500"}`}>
-                <Shield size={32} />
-              </div>
-              <h3 className="text-2xl font-black text-[#3A241C] tracking-tight mb-2">{confirmModal.title}</h3>
-              <p className="text-[#3A241C]/60 text-sm leading-relaxed mb-10 font-medium">{confirmModal.message}</p>
-              
-              <div className="flex flex-col gap-3">
-                <motion.button 
-                  whileTap={{ scale: 0.95 }}
-                  whileHover={{ scale: 1.02 }}
-                  onClick={confirmModal.onConfirm}
-                  disabled={confirmModal.loading}
-                  className={`w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg transition-all flex items-center justify-center gap-3 ${
-                    confirmModal.danger ? "bg-[#B71C1C] text-white shadow-red-900/20" : "bg-[#3A241C] text-white shadow-black/20"
-                  } ${confirmModal.loading ? "opacity-70 cursor-wait" : ""}`}
-                >
-                  {confirmModal.loading ? (
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    "Confirm Action"
-                  )}
-                </motion.button>
-                <button 
-                  onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))}
-                  className="w-full py-4 text-[#3A241C]/30 font-black text-[10px] uppercase tracking-[0.2em] hover:text-[#3A241C] transition-colors"
-                >
-                  Cancel
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !confirmModal.loading && setConfirmModal(prev => ({ ...prev, show: false }))} className="absolute inset-0 bg-[#3A241C]/60 backdrop-blur-md" />
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl border border-[#3A241C]/5">
+              <h3 className={`text-2xl font-black tracking-tight mb-4 ${confirmModal.danger ? 'text-[#B71C1C]' : 'text-[#3A241C]'}`}>{confirmModal.title}</h3>
+              <p className="text-[#3A241C]/60 font-medium leading-relaxed mb-10">{confirmModal.message}</p>
+              <div className="flex gap-4">
+                <button disabled={confirmModal.loading} onClick={() => setConfirmModal(prev => ({ ...prev, show: false }))} className="flex-1 py-4 rounded-2xl bg-[#F9F7F4] text-[#3A241C] font-bold hover:bg-[#F3E8DA] transition-colors disabled:opacity-50">Cancel</button>
+                <button disabled={confirmModal.loading} onClick={confirmModal.onConfirm} className={`flex-1 py-4 rounded-2xl text-white font-bold transition-all shadow-xl flex items-center justify-center gap-2 ${confirmModal.danger ? 'bg-[#B71C1C] hover:bg-[#D32F2F] shadow-[#B71C1C]/20' : 'bg-[#3A241C] hover:bg-[#E76F51] shadow-[#3A241C]/20'}`}>
+                  {confirmModal.loading ? <Loader2 size={20} className="animate-spin" /> : "Confirm"}
                 </button>
               </div>
             </motion.div>
@@ -607,14 +233,105 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
+      <div className="space-y-12">
+        {/* Top Row: Payment Activity */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between px-2">
+            <h4 className="text-[10px] font-black text-[#3A241C]/40 uppercase tracking-[0.2em]">Payment Activity</h4>
+            <span className="text-[9px] font-bold text-[#E76F51] bg-[#E76F51]/10 px-2 py-0.5 rounded-full">{sessions.filter(s => s.status === "OPEN" && s.payments.length > 0).length} Active</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {TABLE_COLUMNS.map(tableId => {
+              const session = sessions.find(s => s.tableId === tableId && s.status === "OPEN");
+              return (
+                <AdminPaymentSummary
+                  key={`pay-${tableId}`}
+                  tableId={tableId}
+                  session={session || null}
+                  onConfirmPayment={handleConfirmPayment}
+                  onDeletePayment={handleDeletePayment}
+                  onToggleReminder={handleToggleReminder}
+                  onRecordPayment={handleRecordPayment}
+                  onSendReviewRequest={handleSendReviewRequest}
+                />
+              );
+            })}
+            
+            <AdminPaymentSummary
+              tableId="Takeaway"
+              session={takeawaySessions[0] || null}
+              onConfirmPayment={handleConfirmPayment}
+              onDeletePayment={handleDeletePayment}
+              onToggleReminder={handleToggleReminder}
+              onRecordPayment={handleRecordPayment}
+              onSendReviewRequest={handleSendReviewRequest}
+              isTakeaway
+            />
+          </div>
+        </div>
+
+        {/* Bottom Row: Tables and Takeaway */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between px-2">
+            <h4 className="text-[10px] font-black text-[#3A241C]/40 uppercase tracking-[0.2em]">Tables & Takeaway</h4>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {TABLE_COLUMNS.map(tableId => {
+              const session = tableSessions.find(s => s.tableId === tableId);
+              return (
+                <AdminTableColumn
+                  key={tableId}
+                  tableId={tableId}
+                  session={session || null}
+                  onUpdateStatus={handleUpdateStatus}
+                  onConfirmPayment={handleConfirmPayment}
+                  onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId })}
+                  onCloseSession={handleCloseSession}
+                  onToggleItemServed={handleToggleItemServed}
+                  onToggleOrderItems={handleToggleOrderItems}
+                  onDeleteOrder={handleDeleteOrder}
+                  onDeletePayment={handleDeletePayment}
+                  onToggleReminder={handleToggleReminder}
+                />
+              );
+            })}
+            
+            <AdminTableColumn
+              tableId="Takeaway"
+              session={takeawaySessions[0] || null}
+              onUpdateStatus={handleUpdateStatus}
+              onConfirmPayment={handleConfirmPayment}
+              onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: TAKEAWAY_ID })}
+              onCloseSession={handleCloseSession}
+              onToggleItemServed={handleToggleItemServed}
+              onToggleOrderItems={handleToggleOrderItems}
+              onDeleteOrder={handleDeleteOrder}
+              onDeletePayment={handleDeletePayment}
+              onToggleReminder={handleToggleReminder}
+              isTakeaway
+              allTakeawaySessions={takeawaySessions}
+            />
+          </div>
+        </div>
+      </div>
+
       <AnimatePresence>
         {addOrderData && (
           <AddOrderModal
-            sessionId={addOrderData.sessionId}
-            tableId={addOrderData.tableId}
-            availableTables={TABLE_COLUMNS}
+            sessionId={addOrderData?.sessionId}
+            tableId={addOrderData?.tableId}
             onClose={() => setAddOrderData(null)}
-            onSubmit={handleAddManualOrder}
+            onSubmit={async (items, isTakeaway) => {
+              if (!secret) return;
+              if (addOrderData?.sessionId) {
+                await adminAddManualOrder(secret, addOrderData.sessionId, { items, isTakeaway });
+              } else if (addOrderData?.tableId) {
+                await adminCreateSession(secret, { tableId: addOrderData.tableId, items, isTakeaway });
+              }
+              setAddOrderData(null);
+              loadStats();
+              showToast("Order added");
+            }}
           />
         )}
       </AnimatePresence>

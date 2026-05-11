@@ -3,7 +3,7 @@
 import React, { memo, useCallback, useState } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Star, Check } from "lucide-react";
+import { Plus, Star, Check, Tag } from "lucide-react";
 import { type OrderMenuItem } from "@/lib/menu";
 
 // Per-phase transitions: exit is fast (on click), enter is a spring (returning after tick)
@@ -65,10 +65,10 @@ const MenuItem = ({
   return (
     <motion.div
       onClick={handleAdd as any}
-      className={`bg-white rounded-[2rem] p-3 lg:p-4 border-2 flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-500 ease-[var(--cubic-bezier)] ${isAnimating
-        ? "border-[#6A994E] shadow-[0_25px_60px_-15px_rgba(106,153,78,0.25)] ring-2 ring-[#6A994E]/10"
+      className={`bg-white rounded-[2rem] p-3 lg:p-4 border-2 flex items-center gap-3 lg:gap-4 group relative overflow-hidden h-[140px] lg:h-[164px] transition-all duration-300 ease-out ${isAnimating
+        ? "border-[#6A994E] shadow-[0_25px_60px_-15px_rgba(106,153,78,0.25)] ring-4 ring-[#6A994E]/20"
         : "border-[#3A241C]/10 shadow-[0_8px_30px_-10px_rgba(58,36,28,0.08)]"
-        } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : "hover:shadow-[0_30px_70px_-15px_rgba(58,36,28,0.15)] hover:border-[#E76F51]/30 cursor-pointer"}`}
+        } ${isDisabled ? "grayscale opacity-60 pointer-events-none" : isAnimating ? "cursor-default" : "hover:shadow-[0_30px_70px_-15px_rgba(58,36,28,0.15)] hover:border-[#E76F51]/30 cursor-pointer"}`}
     >
       <AnimatePresence>
         {isAnimating && (
@@ -81,19 +81,39 @@ const MenuItem = ({
         )}
       </AnimatePresence>
 
+      {/* Premium Slanted Corner Ribbon */}
+      {hasDiscount && !item.outOfStock && (
+        <div className="absolute top-0 left-0 w-20 h-20 overflow-hidden pointer-events-none z-30 rounded-tl-[2rem]">
+          <motion.div 
+            initial={{ opacity: 0, x: -10, y: -10 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            className="absolute top-0 left-0 w-full h-full"
+          >
+            <div 
+              className="absolute top-[18%] left-[-35%] w-[150%] py-1.5 bg-gradient-to-r from-[#6A994E] via-[#85B868] to-[#4F772D] shadow-[0_4px_10px_rgba(0,0,0,0.15)] flex items-center justify-center -rotate-45 border-y border-white/20"
+            >
+              <span className="text-[10px] lg:text-[11px] font-black text-white uppercase tracking-tighter drop-shadow-md flex items-center gap-1">
+                {item.discountPct ? `${item.discountPct}% OFF` : `₹${item.discountFlat} OFF`}
+              </span>
+              {/* Shine effect */}
+              <motion.div 
+                animate={{ x: ['-100%', '200%'] }}
+                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12"
+              />
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {item.outOfStock && (
-        <div className="absolute inset-0 z-20 bg-[#3A241C]/20 backdrop-blur-[2px] flex items-center justify-center">
+        <div className="absolute inset-0 z-40 bg-[#3A241C]/20 backdrop-blur-[2px] flex items-center justify-center">
           <span className="bg-[#3A241C] text-white px-4 py-2 rounded-full font-black text-[10px] lg:text-[12px] uppercase tracking-[0.2em] shadow-2xl">OUT OF STOCK</span>
         </div>
       )}
 
       {/* Image Box */}
       <div className="w-[104px] h-[104px] lg:w-[124px] lg:h-[124px] rounded-2xl bg-[#F9F7F4] flex-shrink-0 overflow-hidden relative border border-[#3A241C]/5 shadow-sm">
-        {hasDiscount && !item.outOfStock && (
-          <div className="absolute top-2 left-2 z-10 bg-[#6A994E] text-white px-2 py-0.5 rounded-lg font-black text-[8px] lg:text-[10px] uppercase tracking-widest shadow-lg">
-            {item.discountPct ? `${item.discountPct}% OFF` : `₹${item.discountFlat} OFF`}
-          </div>
-        )}
         {item.image && (
           <Image
             src={item.image}

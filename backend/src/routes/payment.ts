@@ -111,11 +111,14 @@ router.delete("/:paymentId", requireAdmin, async (req: Request, res: Response): 
 
     try {
       const io = getIO();
-      io.to(`session:${payment.sessionId}`).to("admin").emit("payment_confirmed", {
+      const rejectedPayload = {
         payment: { ...payment, status: "REJECTED" },
         sessionId: payment.sessionId,
         tableId: payment.session.tableId,
-      });
+      };
+      // Emit dedicated rejection event + backward-compatible confirmed event
+      io.to(`session:${payment.sessionId}`).to("admin").emit("payment_rejected", rejectedPayload);
+      io.to(`session:${payment.sessionId}`).to("admin").emit("payment_confirmed", rejectedPayload);
     } catch { /* skip */ }
 
     res.json({ success: true });

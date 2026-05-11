@@ -127,12 +127,56 @@ export function adminVerifySecret(secret: string) {
   return apiFetch<{ success: boolean }>("/api/admin/verify", { adminSecret: secret });
 }
 
-/** Admin: Fetch all sessions (optional date filtering) */
+/** Admin: Create new session and order */
+export function adminCreateSession(secret: string, data: { tableId: string; items: any[]; isTakeaway: boolean }) {
+  return apiFetch<OrderData>("/api/admin/orders/new", {
+    method: "POST",
+    adminSecret: secret,
+    body: JSON.stringify(data),
+  });
+}
+
+/** Admin: Add manual order to existing session */
+export function adminAddManualOrder(secret: string, sessionId: string, data: { items: any[]; isTakeaway: boolean }) {
+  return apiFetch<OrderData>(`/api/admin/sessions/${sessionId}/order`, {
+    method: "POST",
+    adminSecret: secret,
+    body: JSON.stringify(data),
+  });
+}
+
+/** Admin: Record payment directly */
+export function adminRecordPayment(secret: string, sessionId: string, method: "CASH" | "UPI", amount: number) {
+  return apiFetch<PaymentData>("/api/admin/payments/record", {
+    method: "POST",
+    adminSecret: secret,
+    body: JSON.stringify({ sessionId, method, amount }),
+  });
+}
+
+/** Admin: Toggle item served status */
+export function adminToggleItemServed(secret: string, itemId: string, isServed: boolean) {
+  return apiFetch<OrderItemData>(`/api/order/item/${itemId}/served`, {
+    method: "PATCH",
+    adminSecret: secret,
+    body: JSON.stringify({ isServed }),
+  });
+}
+
+/** Admin: Bulk toggle order items served status */
+export function adminToggleOrderItemsServed(secret: string, orderId: string, isServed: boolean) {
+  return apiFetch<{ success: boolean; count: number }>(`/api/order/${orderId}/items/served`, {
+    method: "PATCH",
+    adminSecret: secret,
+    body: JSON.stringify({ isServed }),
+  });
+}
+
+/** Fetch all sessions for admin dashboard */
 export function adminFetchSessions(secret: string, from?: string, to?: string) {
   let query = "";
-  if (from) query += `&from=${from}`;
-  if (to) query += `&to=${to}`;
-  query = query ? `?${query.slice(1)}` : "";
+  if (from) query += `?from=${from}`;
+  if (to) query += (query ? "&" : "?") + `to=${to}`;
   return apiFetch<SessionData[]>(`/api/admin/sessions${query}`, { adminSecret: secret });
 }
 
@@ -160,6 +204,7 @@ export function adminConfirmPayment(paymentId: string, secret: string) {
   });
 }
 
+/** Admin: Delete/Reject a payment */
 export function adminDeletePayment(paymentId: string, secret: string) {
   return apiFetch(`/api/payment/${paymentId}`, {
     method: "DELETE",
@@ -167,6 +212,7 @@ export function adminDeletePayment(paymentId: string, secret: string) {
   });
 }
 
+/** Admin: Toggle payment reminder */
 export function adminToggleReminder(sessionId: string, reminder: boolean, secret: string) {
   return apiFetch(`/api/table/session/${sessionId}/reminder`, {
     method: "PATCH",
@@ -175,6 +221,7 @@ export function adminToggleReminder(sessionId: string, reminder: boolean, secret
   });
 }
 
+/** Admin: Toggle review request */
 export function adminToggleReviewRequest(sessionId: string, requested: boolean, secret: string) {
   return apiFetch(`/api/table/session/${sessionId}/review-request`, {
     method: "PATCH",
@@ -182,6 +229,8 @@ export function adminToggleReviewRequest(sessionId: string, requested: boolean, 
     adminSecret: secret,
   });
 }
+
+/** Public: Dismiss review request (from client side) */
 export function dismissReviewRequest(sessionId: string) {
   return apiFetch(`/api/table/session/${sessionId}/review-dismiss`, {
     method: "PATCH",
@@ -197,21 +246,12 @@ export function adminUpdateOrder(orderId: string, status: string, secret: string
   });
 }
 
-/** Admin: Add manual order */
+/** Admin: Legacy Add Manual Order (keeping for compat if needed, but redirects to newer version) */
 export function adminAddOrder(sessionId: string | null, items: { name: string; price: number; quantity: number; type?: string }[], secret: string, isTakeaway: boolean = false, tableId?: string) {
   const path = sessionId ? `/api/admin/sessions/${sessionId}/order` : "/api/admin/orders/new";
   return apiFetch<OrderData>(path, {
     method: "POST",
     body: JSON.stringify({ items, isTakeaway, tableId }),
-    adminSecret: secret,
-  });
-}
-
-/** Admin: Record a confirmed payment directly */
-export function adminRecordPayment(sessionId: string, amount: number, method: string, secret: string) {
-  return apiFetch("/api/admin/payments/record", {
-    method: "POST",
-    body: JSON.stringify({ sessionId, amount, method }),
     adminSecret: secret,
   });
 }
@@ -262,11 +302,8 @@ export function adminUploadImage(file: File, itemName: string, secret: string) {
 
   return apiFetch<{ success: boolean; path: string; filename: string }>("/api/menu/admin/upload", {
     method: "POST",
-    body: formData as any, // apiFetch handles headers, but for FormData we must let fetch set it
+    body: formData as any,
     adminSecret: secret,
-    headers: {
-      // Don't set Content-Type, fetch will set it with boundary
-    }
   });
 }
 
@@ -336,24 +373,6 @@ export function adminRollbackMenu(versionId: string, secret: string) {
   });
 }
 
-/** Admin: Toggle item served status */
-export function adminToggleItemServed(itemId: string, isServed: boolean, secret: string) {
-  return apiFetch(`/api/order/item/${itemId}/served`, {
-    method: "PATCH",
-    body: JSON.stringify({ isServed }),
-    adminSecret: secret,
-  });
-}
-
-/** Admin: Bulk toggle items served status for an order */
-export function adminToggleOrderItems(orderId: string, isServed: boolean, secret: string) {
-  return apiFetch(`/api/order/${orderId}/items/served`, {
-    method: "PATCH",
-    body: JSON.stringify({ isServed }),
-    adminSecret: secret,
-  });
-}
-
 /** Submit rating for a menu item */
 export function submitRating(itemId: string, rating: number, sessionId?: string, orderId?: string) {
   return apiFetch("/api/menu/rate", {
@@ -361,7 +380,6 @@ export function submitRating(itemId: string, rating: number, sessionId?: string,
     body: JSON.stringify({ itemId, rating, sessionId, orderId }),
   });
 }
-
 
 export interface RestaurantStatusData {
   isOpen: boolean;
@@ -535,7 +553,6 @@ export function adminFetchHistory(secret: string, page: number = 1, limit: numbe
     };
   }>(`/api/admin/history${query}`, { adminSecret: secret });
 }
-
 
 /** Submit general feedback for a session */
 export function submitFeedback(sessionId: string, feedback: string) {

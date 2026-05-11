@@ -5,7 +5,7 @@ import {
   Clock, CheckCircle2, Coffee, 
   CreditCard, Banknote, RotateCcw,
   QrCode, Download, Plus, Bell, X,
-  Square, CheckSquare, PackageCheck, Check, Shield, Copy, Package, MessageSquare, XCircle
+  Square, CheckSquare, PackageCheck, Check, Shield, Copy, Package, MessageSquare, XCircle, Loader2
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { 
@@ -13,7 +13,7 @@ import {
   generateQrToken,
 } from "@/lib/api";
 import { QRCodeSVG } from "qrcode.react";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useAdmin } from "../app/admin/AdminContext";
 
 interface AdminTableColumnProps {
   tableId: string;
@@ -57,16 +57,16 @@ export default function AdminTableColumn({
   isTakeaway = false,
   allTakeawaySessions = [],
 }: AdminTableColumnProps) {
-  const { secret } = useAdminAuth();
+  const { secret } = useAdmin();
   const [showPackedNote, setShowPackedNote] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [processingOrder, setProcessingOrder] = useState<string | null>(null);
 
   // Duplicate Detection Logic
   const duplicates = isTakeaway && session && allTakeawaySessions ? allTakeawaySessions.filter(s => {
     if (s.id === session.id) return false;
-    // Simple comparison: do they have the same items and quantities?
-    const currentItems = session.orders.flatMap(o => o.items.map(i => `${i.name}-${i.quantity}`)).sort().join('|');
-    const otherItems = s.orders.flatMap(o => o.items.map(i => `${i.name}-${i.quantity}`)).sort().join('|');
+    const currentItems = (session.orders || []).flatMap(o => (o.items || []).map(i => `${i.name}-${i.quantity}`)).sort().join('|');
+    const otherItems = (s.orders || []).flatMap(o => (o.items || []).map(i => `${i.name}-${i.quantity}`)).sort().join('|');
     return currentItems === otherItems && currentItems.length > 0;
   }) : [];
 
@@ -87,16 +87,16 @@ export default function AdminTableColumn({
   const getSessionStats = () => {
     if (!session) return { total: 0, paid: 0, balance: 0, paymentMode: "NONE" };
     
-    const total = session.orders
+    const total = (session.orders || [])
       .filter(o => o.status !== "CANCELLED")
       .reduce((acc, o) => 
-        acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
+        acc + (o.items || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0) + (o.packingCharges || 0), 0
       );
-    const paid = session.payments
+    const paid = (session.payments || [])
       .filter(p => p.status === "CONFIRMED")
-      .reduce((acc, p) => acc + p.amount, 0);
+      .reduce((acc, p) => acc + (p.amount || 0), 0);
     
-    const methods = new Set(session.payments.map(p => p.method));
+    const methods = new Set((session.payments || []).map(p => p.method));
     let paymentMode = "NONE";
     if (methods.size > 1) paymentMode = "MIXED";
     else if (methods.has("UPI")) paymentMode = "UPI";
@@ -299,18 +299,17 @@ export default function AdminTableColumn({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
               <motion.button 
-                whileTap={{ scale: 0.95 }}
-                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.9 }}
+                whileHover={{ scale: 1.05, backgroundColor: "#E76F51" }}
                 onClick={() => onAddOrder(session.id)}
-                className="py-2.5 bg-[#3A241C] text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[#E76F51] transition-all shadow-lg shadow-[#3A241C]/10 flex items-center justify-center gap-2"
+                className="py-2.5 bg-[#3A241C] text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-[#3A241C]/10 flex items-center justify-center gap-2"
               >
                 <Plus size={14} /> Add Items
               </motion.button>
               <motion.button 
-                whileTap={balance > 0 ? {} : { scale: 0.95 }}
-                whileHover={balance > 0 ? {} : { scale: 1.02 }}
+                whileTap={balance > 0 ? {} : { scale: 0.9 }}
+                whileHover={balance > 0 ? {} : { scale: 1.05 }}
                 onClick={() => {
                   if (balance > 0) {
                     const el = document.getElementById(`payment-${session.id}`);
@@ -336,7 +335,7 @@ export default function AdminTableColumn({
                 )}
               </motion.button>
             </div>
-          </div>
+          // </div>
         )}
       </div>
 
@@ -442,17 +441,29 @@ export default function AdminTableColumn({
                               <div className="flex items-center gap-1.5">
                                 <motion.button
                                   whileTap={{ scale: 0.95 }}
-                                  onClick={() => onUpdateStatus(order.id, "PLACED")}
-                                  className="px-3 py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-1"
+                                  disabled={processingOrder === order.id}
+                                  onClick={async () => {
+                                    setProcessingOrder(order.id);
+                                    try { await onUpdateStatus(order.id, "PLACED"); }
+                                    finally { setProcessingOrder(null); }
+                                  }}
+                                  className="px-3 py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-1 disabled:opacity-50"
                                 >
-                                  <CheckCircle2 size={14} /> Confirm
+                                  {processingOrder === order.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} 
+                                  Confirm
                                 </motion.button>
                                 <motion.button
                                   whileTap={{ scale: 0.95 }}
-                                  onClick={() => onUpdateStatus(order.id, "CANCELLED")}
-                                  className="px-3 py-2 bg-[#B71C1C] text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-red-700 transition-all flex items-center gap-1"
+                                  disabled={processingOrder === order.id}
+                                  onClick={async () => {
+                                    setProcessingOrder(order.id);
+                                    try { await onUpdateStatus(order.id, "CANCELLED"); }
+                                    finally { setProcessingOrder(null); }
+                                  }}
+                                  className="px-3 py-2 bg-[#B71C1C] text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-red-700 transition-all flex items-center gap-1 disabled:opacity-50"
                                 >
-                                  <X size={14} /> Reject
+                                  {processingOrder === order.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />} 
+                                  Reject
                                 </motion.button>
                               </div>
                             ) : status !== "SERVED" ? (

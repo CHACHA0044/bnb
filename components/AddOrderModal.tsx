@@ -22,13 +22,34 @@ export default function AddOrderModal({
   onSubmit,
   availableTables = ["T1", "T2", "T3"]
 }: AddOrderModalProps) {
-  const [menu, setMenu] = useState<OrderMenuItem[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [menu, setMenu] = useState<OrderMenuItem[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("bnb_admin_menu_cache");
+      if (cached) {
+        try { return JSON.parse(cached); } catch (e) {}
+      }
+    }
+    return [];
+  });
+  const [categories, setCategories] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem("bnb_admin_categories_cache");
+      if (cached) {
+        try { return JSON.parse(cached); } catch (e) {}
+      }
+    }
+    return [];
+  });
   const [cart, setCart] = useState<Record<string, { id: string; quantity: number; variant?: string }>>({});
   const [itemPacking, setItemPacking] = useState<Record<string, boolean>>({});
   const [paymentMethod, setPaymentMethod] = useState<"QR" | "CASH">("QR");
   const [loading, setLoading] = useState(false);
-  const [fetchingMenu, setFetchingMenu] = useState(true);
+  const [fetchingMenu, setFetchingMenu] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("bnb_admin_menu_cache");
+    }
+    return true;
+  });
   const [success, setSuccess] = useState(false);
   const [selectedTable, setSelectedTable] = useState(initialTableId || availableTables[0]);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
@@ -46,8 +67,12 @@ export default function AddOrderModal({
           .filter(i => i.name !== "Packing Charges")
           .map(i => ({ ...i, category: c.name }))
       );
-      setMenu(allItems);
-      setCategories(filteredCategories.map(c => c.name));
+      const menuItems = allItems;
+      const catNames = filteredCategories.map(c => c.name);
+      setMenu(menuItems);
+      setCategories(catNames);
+      localStorage.setItem("bnb_admin_menu_cache", JSON.stringify(menuItems));
+      localStorage.setItem("bnb_admin_categories_cache", JSON.stringify(catNames));
     } catch (err) {
       console.error("Failed to fetch menu:", err);
     } finally {

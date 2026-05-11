@@ -62,7 +62,7 @@ const OrderSuccess = ({
   const [mounted, setMounted] = useState(false);
 
   const upiId = orderConfig?.upiId || process.env.NEXT_PUBLIC_UPI_ID || "hemadembla505@okicici";
-  const upiLink = `upi://pay?pa=${upiId}&pn=Benne%20n%20Beans&am=${remaining}&cu=INR`;
+  const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent("Benne n Beans")}&am=${remaining.toFixed(2)}&cu=INR&tn=${encodeURIComponent("Order at Benne n Beans")}`;
 
   useEffect(() => {
     setMounted(true);
@@ -89,6 +89,15 @@ const OrderSuccess = ({
       setLocalFeedback(session.feedback || "");
     }
   }, [session?.feedback]);
+
+  // Reset UPI/payment state on rejection
+  useEffect(() => {
+    if (!paymentSuccess && hasPaid) {
+      setHasPaid(false);
+      setPayDelay(10);
+      if (mounted && isMobile) setUpiView('CHOICE');
+    }
+  }, [paymentSuccess]);
   const notifiedCancelledIds = React.useRef<Set<string>>(new Set());
 
   const cancelledOrders = [

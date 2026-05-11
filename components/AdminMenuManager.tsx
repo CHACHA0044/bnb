@@ -172,7 +172,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingItem, setEditingItem] = useState<any>(null);
   const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [showBulkDiscount, setShowBulkDiscount] = useState<string | null>(null); // categoryId
+  const [showBulkDiscount, setShowBulkDiscount] = useState<string[] | null>(null); // array of categoryIds
   const [versions, setVersions] = useState<any[]>([]);
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
 
@@ -182,6 +182,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
   const [savingItem, setSavingItem] = useState(false);
   const [savingCategory, setSavingCategory] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [applyingType, setApplyingType] = useState<"APPLY" | "CLEAR" | null>(null);
 
   // Dropdown state
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
@@ -553,11 +554,11 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                       <motion.button 
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
-                        onClick={() => setShowBulkDiscount(cat.id)}
+                        onClick={() => setShowBulkDiscount([cat.id])}
                         className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl text-[10px] font-black uppercase tracking-widest text-[#E76F51] border border-[#E76F51]/10 hover:bg-[#E76F51] hover:text-white transition-all shadow-sm"
                       >
-                        <Tag size={12} />
-                        Bulk Discount
+                        <Tag size={12} className="shrink-0" />
+                        Discount
                       </motion.button>
                     </div>
 
@@ -596,7 +597,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                                 </div>
                                 <div className="flex items-center gap-2 mb-2">
                                   <span className={`font-black text-[#E76F51] text-xs ${currentStatus ? "opacity-40" : ""}`}>₹{item.price}</span>
-                                  {item.discountPct && <span className="text-[8px] font-black bg-[#6A994E] text-white px-1 py-0.5 rounded-sm">-{item.discountPct}%</span>}
+                                  {item.discountPct && <span className="text-[9px] font-black bg-gradient-to-br from-[#6A994E] to-[#4F772D] text-white px-2 py-0.5 rounded-lg shadow-sm">-{item.discountPct}%</span>}
                                 </div>
                                 <div className="flex gap-2">
                                   <motion.button 
@@ -1021,41 +1022,120 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowBulkDiscount(null)} className="absolute inset-0 bg-[#3A241C]/90 backdrop-blur-md" />
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-2xl text-center"
+              className="relative bg-white w-full max-w-sm rounded-[3rem] p-8 lg:p-10 shadow-2xl text-center overflow-hidden"
             >
-              <div className="w-16 h-16 bg-[#6A994E]/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <Tag size={32} className="text-[#6A994E]" />
+              {/* Close Button Top Right */}
+              <button 
+                onClick={() => setShowBulkDiscount(null)}
+                className="absolute top-6 right-6 p-2 rounded-full bg-[#3A241C]/5 text-[#3A241C]/40 hover:bg-[#B71C1C]/10 hover:text-[#B71C1C] transition-all"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="w-14 h-14 bg-[#6A994E]/10 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                <Tag size={28} className="text-[#6A994E]" />
               </div>
-              <h3 className="text-2xl font-black text-[#3A241C] tracking-tight mb-2">Category Discount</h3>
-              <p className="text-xs text-[#3A241C]/40 font-medium mb-8">Apply a percentage discount to all items in this category that don't have individual discounts.</p>
+              <h3 className="text-xl font-black text-[#3A241C] tracking-tight mb-1">Apply Discounts</h3>
+              <p className="text-[10px] text-[#3A241C]/40 font-medium mb-6">Select categories and set a percentage.</p>
               
+              <div className="mb-6">
+                <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto no-scrollbar p-1">
+                  {categories.map(cat => {
+                    const isSelected = showBulkDiscount.includes(cat.id);
+                    return (
+                      <button
+                        key={`select-cat-${cat.id}`}
+                        onClick={() => {
+                          if (isSelected) {
+                            if (showBulkDiscount.length > 1) setShowBulkDiscount(showBulkDiscount.filter(id => id !== cat.id));
+                          } else {
+                            setShowBulkDiscount([...showBulkDiscount, cat.id]);
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 border ${isSelected ? "bg-[#3A241C] text-white border-transparent" : "bg-white text-[#3A241C]/40 border-[#3A241C]/10 hover:border-[#E76F51]"}`}
+                      >
+                        {isSelected && <Check size={8} />}
+                        {cat.name}
+                      </button>
+                    );
+                  })}
+                  <button 
+                    onClick={() => {
+                      if (showBulkDiscount.length === categories.length) {
+                        setShowBulkDiscount([categories[0].id]); // keep at least one
+                      } else {
+                        setShowBulkDiscount(categories.map(c => c.id));
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-[8px] font-black uppercase tracking-widest transition-all border ${showBulkDiscount.length === categories.length ? "bg-red-50 text-red-600 border-red-100" : "bg-[#E76F51]/10 text-[#E76F51] border-transparent hover:bg-[#E76F51] hover:text-white"}`}
+                  >
+                    {showBulkDiscount.length === categories.length ? "Deselect All" : "Select All"}
+                  </button>
+                </div>
+              </div>
+
               <div className="space-y-6">
-                <div className="relative">
-                  <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-[#3A241C]">%</span>
+                <div className="relative group max-w-[200px] mx-auto">
+                  <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-[#3A241C]/20 group-focus-within:text-[#6A994E] transition-colors text-lg">%</span>
                   <input 
                     id="bulk-disc-input"
                     type="number"
-                    placeholder="Enter percentage"
-                    className="w-full bg-[#F9F7F4] border-none rounded-2xl py-5 px-8 text-center font-black text-2xl text-[#3A241C] outline-none ring-2 ring-transparent focus:ring-[#6A994E]"
+                    autoFocus
+                    placeholder="0"
+                    className="w-full bg-[#F9F7F4] border-2 border-transparent rounded-2xl py-4 px-6 text-center font-black text-2xl text-[#3A241C] outline-none transition-all focus:border-[#6A994E]/20 focus:bg-white focus:shadow-lg focus:shadow-[#6A994E]/5"
                   />
                 </div>
-                <div className="flex flex-col gap-3">
-                  <button 
-                    onClick={() => {
+                <div className="grid grid-cols-2 gap-3">
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={!!applyingType}
+                    onClick={async () => {
                       const val = (document.getElementById('bulk-disc-input') as HTMLInputElement).value;
-                      if(val) adminBulkDiscount(showBulkDiscount, { discountPct: parseInt(val) }, secret).then(() => { showToast("Bulk discount applied"); setShowBulkDiscount(null); loadData(); });
+                      if (!val) return;
+                      setApplyingType("APPLY");
+                      try {
+                        await Promise.all(showBulkDiscount.map(catId => 
+                          adminBulkDiscount(catId, { discountPct: parseInt(val) }, secret)
+                        ));
+                        showToast(`${showBulkDiscount.length > 1 ? "Discounts" : "Discount"} applied`);
+                        setShowBulkDiscount(null);
+                        await loadData(false);
+                      } catch (err) {
+                        showToast("Failed to apply discounts", "error");
+                      } finally {
+                        setApplyingType(null);
+                      }
                     }}
-                    className="w-full py-5 bg-[#3A241C] text-white rounded-2xl font-bold shadow-xl shadow-[#3A241C]/10 hover:bg-[#6A994E] transition-all"
+                    className="w-full py-4 bg-[#3A241C] text-white rounded-2xl font-black uppercase tracking-widest text-[9px] shadow-xl shadow-[#3A241C]/20 hover:bg-[#6A994E] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    Apply Discount
-                  </button>
-                  <button 
-                    onClick={() => adminBulkDiscount(showBulkDiscount, { clear: true }, secret).then(() => { showToast("Category discounts cleared"); setShowBulkDiscount(null); loadData(); })}
-                    className="w-full py-4 text-[#B71C1C] font-bold text-xs uppercase tracking-widest hover:bg-[#B71C1C]/5 rounded-xl transition-all"
+                    {applyingType === "APPLY" ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} className="stroke-[3]" />}
+                    {applyingType === "APPLY" ? "..." : "Apply"}
+                  </motion.button>
+                  <motion.button 
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={!!applyingType}
+                    onClick={async () => {
+                      setApplyingType("CLEAR");
+                      try {
+                        await Promise.all(showBulkDiscount.map(catId => 
+                          adminBulkDiscount(catId, { clear: true }, secret)
+                        ));
+                        showToast("Discounts cleared");
+                        setShowBulkDiscount(null);
+                        await loadData(false);
+                      } catch (err) {
+                        showToast("Failed to clear discounts", "error");
+                      } finally {
+                        setApplyingType(null);
+                      }
+                    }}
+                    className="w-full py-4 text-[#B71C1C] bg-[#B71C1C]/5 rounded-2xl font-black uppercase tracking-widest text-[9px] hover:bg-[#B71C1C] hover:text-white transition-all disabled:opacity-50 flex items-center justify-center gap-2 border border-[#B71C1C]/10"
                   >
-                    Clear All Discounts
-                  </button>
-                  <button onClick={() => setShowBulkDiscount(null)} className="mt-2 text-[#3A241C]/20 font-bold text-[10px] uppercase tracking-widest hover:text-[#3A241C]">Close</button>
+                    {applyingType === "CLEAR" ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} className="stroke-[3]" />}
+                    {applyingType === "CLEAR" ? "..." : "Clear"}
+                  </motion.button>
                 </div>
               </div>
             </motion.div>

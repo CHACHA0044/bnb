@@ -7,7 +7,12 @@ import { adminVerifySecret } from "@/lib/api";
 export function useAdminAuth() {
   const [secret, setSecret] = useState<string | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !!localStorage.getItem("bnb_admin_secret");
+    }
+    return true;
+  });
   const router = useRouter();
   const pathname = usePathname();
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
-import { ShoppingCart, MessageSquare, Info, Banknote, QrCode, ChevronLeft, Phone, ArrowRight, Loader2, Receipt, X, Clock, Printer } from "lucide-react";
+import { ShoppingCart, MessageSquare, Info, Banknote, QrCode, ChevronLeft, Phone, ArrowRight, Loader2, Receipt, X, Clock, Printer, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import CartItem from "./CartItem";
 import OrderSummary from "./OrderSummary";
@@ -108,15 +108,33 @@ const CartContent = ({
   };
 
   const handlePresetClick = (preset: string) => {
-    let newVal = localInstructions;
-    if (newVal && newVal.includes(preset)) {
-      newVal = newVal.replace(preset, '').replace(/,\s*,/g, ',').replace(/^,\s*/, '').replace(/,\s*$/, '');
-    } else if (newVal) {
-      newVal = newVal + (newVal.endsWith(" ") ? "" : ", ") + preset;
+    let currentInstructions = localInstructions.trim();
+    const presetLower = preset.toLowerCase();
+
+    // Check if exactly this preset exists (case-insensitive) - split by comma now
+    const parts = currentInstructions.split(/,\s*/).map(p => p.trim());
+    const isPresent = parts.some(p => p.toLowerCase() === presetLower);
+
+    if (isPresent) {
+      // Remove it
+      const filteredParts = parts.filter(p => p.toLowerCase() !== presetLower);
+      currentInstructions = filteredParts.join(', ');
     } else {
-      newVal = preset;
+      // Add it
+      if (currentInstructions) {
+        currentInstructions = `${currentInstructions}, ${preset.toLowerCase()}`;
+      } else {
+        currentInstructions = preset;
+      }
     }
-    const val = newVal.slice(0, 100);
+
+    // Professional formatting
+    if (currentInstructions) {
+      currentInstructions = currentInstructions.replace(/,\s*,/g, ',').replace(/^,\s*/, '').trim();
+      currentInstructions = currentInstructions.charAt(0).toUpperCase() + currentInstructions.slice(1);
+    }
+
+    const val = currentInstructions.slice(0, 100);
     setLocalInstructions(val);
     instructionsRef.current = val;
   };
@@ -147,7 +165,7 @@ const CartContent = ({
           const rect = historyEl.getBoundingClientRect();
           const containerRect = container.getBoundingClientRect();
           const targetOffset = container.scrollTop + (rect.top - containerRect.top) - 20;
-          
+
           container.scrollTo({
             top: targetOffset,
             behavior: 'smooth'
@@ -186,7 +204,7 @@ const CartContent = ({
 
   if (orderPlaced) {
     return (
-      <OrderSuccess 
+      <OrderSuccess
         session={session}
         remaining={remaining}
         onAddMore={() => setOrderPlaced(false)}
@@ -232,17 +250,17 @@ const CartContent = ({
       </div>
 
       {/* SCROLLABLE AREA - Hardware Accelerated */}
-      <div 
+      <div
         ref={scrollContainerRef}
-        className="overflow-y-auto custom-scrollbar touch-auto px-6 lg:px-10 pt-4 pb-12 lg:pb-16 flex-1"
-        style={{ maxHeight: 'calc(92vh - 140px)' }}
+        className="overflow-y-auto custom-scrollbar touch-auto px-6 lg:px-10 pt-4 pb-6 lg:pb-16 flex-1 min-h-0"
+        style={{ overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}
       >
-        
+
         {/* Bill Summary Row */}
         {session && sessionTotal > 0 && (
           <div className="w-full mb-8 space-y-4 no-print">
             <div className="grid grid-cols-3 gap-2">
-              <div 
+              <div
                 onClick={() => remaining === 0 && setShowBill(true)}
                 className={`bg-[#F9F7F4] p-2.5 lg:p-3 rounded-2xl border border-[#3A241C]/10 flex flex-col justify-center transition-all group ${remaining === 0 ? 'cursor-pointer hover:bg-[#F9F7F4]/80 active:scale-95' : 'opacity-80'}`}
               >
@@ -256,7 +274,7 @@ const CartContent = ({
                 <p className="text-[7px] font-black text-[#6A994E]/70 uppercase tracking-[0.2em] mb-1">Paid</p>
                 <p className="text-sm lg:text-base font-black text-[#6A994E]">₹{paidTotal}</p>
               </div>
-              <div 
+              <div
                 onClick={() => remaining > 0 && setOrderPlaced(true)}
                 className={`bg-[#E76F51]/5 p-2.5 lg:p-3 rounded-2xl border border-[#E76F51]/20 flex flex-col justify-center ring-2 ring-[#E76F51]/5 transition-all active:scale-95 ${remaining > 0 ? 'cursor-pointer hover:bg-[#E76F51]/10' : 'opacity-50'}`}
               >
@@ -271,206 +289,207 @@ const CartContent = ({
         <div className="flex-1">
           <AnimatePresence mode="wait">
             {paymentStep === 'SELECTION' ? (
-              <motion.div 
+              <motion.div
                 key="payment-selection"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 className="py-8 space-y-6"
               >
-              <div className="flex items-center gap-4 mb-6">
-                <button 
-                  onClick={() => setPaymentStep('CART')}
-                  className="w-11 h-11 rounded-2xl bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/60 hover:bg-[#3A241C]/10 transition-all active:scale-90"
-                >
-                  <ChevronLeft size={22} />
-                </button>
-                <div>
-                  <h3 className="font-black text-2xl text-[#3A241C] tracking-tight leading-none mb-1">Choose Payment</h3>
-                  <p className="text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em]">Select your method</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div 
-                  onClick={() => {
-                    if (ordering) return;
-                    setPaymentMode('UPI');
-                    setOrderPlaced(true); // Show QR screen immediately
-                    onPlaceOrder();
-                  }}
-                  className={`w-full p-5 bg-white rounded-3xl border-2 transition-all flex items-center gap-5 group cursor-pointer shadow-sm hover:shadow-xl active:scale-[0.98] ${ordering ? 'opacity-50 pointer-events-none' : 'border-[#3A241C]/5 hover:border-[#E76F51]/30'}`}
-                >
-                  <div className="w-14 h-14 rounded-2xl bg-[#E76F51]/10 flex items-center justify-center text-[#E76F51] group-hover:bg-[#E76F51] group-hover:text-white transition-all duration-300">
-                    <QrCode size={28} />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <h4 className="font-black text-base text-[#3A241C] tracking-tight">UPI</h4>
-                      {!ordering && <span className="px-2 py-0.5 bg-[#6A994E]/10 text-[#6A994E] text-[8px] font-black uppercase tracking-widest rounded-md">Suggested</span>}
-                    </div>
-                    <p className="text-[10px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Scan and pay instantly</p>
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/20 group-hover:bg-[#E76F51]/10 group-hover:text-[#E76F51] transition-all">
-                    <ArrowRight size={16} />
-                  </div>
-                </div>
-
-                <div 
-                  onClick={() => {
-                    if (ordering) return;
-                    setPaymentStep('CASH_DETAILS');
-                  }}
-                  className={`w-full p-5 bg-white rounded-3xl border-2 transition-all flex items-center gap-5 group cursor-pointer shadow-sm hover:shadow-xl active:scale-[0.98] ${ordering ? 'opacity-50 pointer-events-none' : 'border-[#3A241C]/5 hover:border-[#3A241C]/30'}`}
-                >
-                  <div className="w-14 h-14 rounded-2xl bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/30 group-hover:bg-[#3A241C] group-hover:text-white transition-all duration-300">
-                    <Banknote size={28} />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <h4 className="font-black text-base text-[#3A241C] tracking-tight">Cash Payment</h4>
-                    <p className="text-[10px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Pay at counter or to staff</p>
-                  </div>
-                  <div className="w-8 h-8 rounded-full bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/20 group-hover:bg-[#3A241C]/10 group-hover:text-[#3A241C] transition-all">
-                    <ArrowRight size={16} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-4 flex flex-col items-center gap-2 opacity-40">
-                <div className="flex items-center gap-2">
-                  <div className="h-px w-8 bg-[#3A241C]" />
-                  <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3A241C]">Secure Checkout</span>
-                  <div className="h-px w-8 bg-[#3A241C]" />
-                </div>
-                <p className="text-[7px] font-bold text-[#3A241C] uppercase tracking-widest">Orders are synchronized in real-time</p>
-              </div>
-            </motion.div>
-          ) : paymentStep === 'CASH_DETAILS' ? (
-            <motion.div 
-              key="cash-details"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              className="py-8 space-y-6"
-            >
-              <div className="flex items-center gap-4 mb-6">
-                <button 
-                  onClick={() => setPaymentStep('SELECTION')}
-                  className="w-11 h-11 rounded-2xl bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/60 hover:bg-[#3A241C]/10 transition-all active:scale-90"
-                >
-                  <ChevronLeft size={22} />
-                </button>
-                <div>
-                  <h3 className="font-black text-2xl text-[#3A241C] tracking-tight leading-none mb-1">Cash Payment</h3>
-                  <p className="text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em]">Enter contact details</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-2">Phone Number</label>
-                  <div className={`flex items-center gap-4 bg-white p-4 rounded-2xl border-2 transition-all ${phoneError ? 'border-red-200' : 'border-[#3A241C]/5 focus-within:border-[#3A241C]/20'}`}>
-                    <Phone size={20} className="text-[#3A241C]/20" />
-                    <input 
-                      type="tel"
-                      value={phoneNumber}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                        setPhoneNumber(val);
-                        if (val.length === 10) setPhoneError('');
-                      }}
-                      placeholder="Enter 10 digit number"
-                      className="flex-1 bg-transparent border-none outline-none focus:ring-0 font-bold text-[#3A241C] placeholder:text-[#3A241C]/20"
-                    />
-                  </div>
-                  {phoneError && (
-                    <p className="text-[9px] font-black text-red-500 uppercase tracking-widest ml-2">{phoneError}</p>
-                  )}
-                </div>
-
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  disabled={ordering}
-                  onClick={() => {
-                    if (phoneNumber.length !== 10) {
-                      setPhoneError('Please enter a valid 10-digit number');
-                      return;
-                    }
-                    setPaymentMode('CASH');
-                    onPlaceOrder(phoneNumber);
-                  }}
-                  className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all ${ordering ? 'bg-[#3A241C]/50 cursor-not-allowed' : 'bg-[#3A241C] text-white shadow-[#3A241C]/20'}`}
-                >
-                  Confirm Cash Order <ArrowRight size={18} />
-                </motion.button>
-              </div>
-            </motion.div>
-          ) : cart.length === 0 ? (
-            <motion.div 
-              key="empty-cart"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="py-20 flex flex-col items-center justify-center text-[#3A241C]/30 h-full relative"
-            >
-              <div className="relative mb-8">
-                <motion.div 
-                  animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                  className="absolute inset-0 bg-[#E76F51]/10 rounded-full blur-2xl" 
-                />
-                <div className="relative w-28 h-28 rounded-[2.5rem] bg-white flex items-center justify-center shadow-[0_20px_50px_rgba(58,36,28,0.05)] border border-[#3A241C]/5">
-                  <ShoppingCart size={48} className="text-[#3A241C]/10" />
-                  <motion.div 
-                    initial={{ x: -5, y: -5, opacity: 0 }}
-                    animate={{ x: 0, y: 0, opacity: 1 }}
-                    transition={{ delay: 0.5 }}
-                    className="absolute -top-1 -right-1 w-8 h-8 bg-[#F9F7F4] rounded-full border-4 border-white flex items-center justify-center"
+                <div className="flex items-center gap-4 mb-6">
+                  <button
+                    onClick={() => setPaymentStep('CART')}
+                    className="w-11 h-11 rounded-2xl bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/60 hover:bg-[#3A241C]/10 transition-all active:scale-90"
                   >
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#E76F51]/30" />
-                  </motion.div>
-                </div>
-              </div>
-              <h3 className="font-black text-2xl text-[#3A241C]/30 tracking-tighter uppercase mb-3">Your Basket is Empty</h3>
-              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/20 text-center leading-loose max-w-[200px]">
-                Browse our menu and add your favorite dishes to start your meal
-              </p>
-            </motion.div>
-          ) : (
-            <motion.div 
-              key="cart-items"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="space-y-6"
-            >
-              {groupedCartArray.map((group: any) => (
-                <div key={group.name} className="space-y-3 mb-8 last:mb-0">
-                  <h3 className="text-[9px] lg:text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/40 ml-2">
-                    {group.isMe ? "Added by You" : `Added by ${group.name}`}
-                  </h3>
-                  <div className="space-y-2">
-                    <AnimatePresence initial={false} mode="popLayout">
-                      {group.items.map((item: any) => (
-                        <CartItem 
-                          key={item.cartItemId || `${item.id}-${item.forPacking}-${item.variant}`}
-                          item={item}
-                          isTakeaway={isTakeaway}
-                          cartLocked={cartLocked}
-                          clientId={clientId}
-                          onRemove={onRemove}
-                          onAdd={onAdd}
-                          onDelete={onDelete}
-                          onTogglePacking={onTogglePacking}
-                        />
-                      ))}
-                    </AnimatePresence>
+                    <ChevronLeft size={22} />
+                  </button>
+                  <div>
+                    <h3 className="font-black text-2xl text-[#3A241C] tracking-tight leading-none mb-1">Choose Payment</h3>
+                    <p className="text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em]">Select your method</p>
                   </div>
                 </div>
-              ))}
-            </motion.div>
-          )}
+
+                <div className="space-y-4">
+                  <div
+                    onClick={() => {
+                      if (ordering) return;
+                      setPaymentMode('UPI');
+                      setOrderPlaced(true); // Show QR screen immediately
+                      onPlaceOrder();
+                    }}
+                    className={`w-full p-5 bg-white rounded-3xl border-2 transition-all flex items-center gap-5 group cursor-pointer shadow-sm hover:shadow-xl active:scale-[0.98] ${ordering ? 'opacity-50 pointer-events-none' : 'border-[#3A241C]/5 hover:border-[#E76F51]/30'}`}
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-[#E76F51]/10 flex items-center justify-center text-[#E76F51] group-hover:bg-[#E76F51] group-hover:text-white transition-all duration-300">
+                      <QrCode size={28} />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h4 className="font-black text-base text-[#3A241C] tracking-tight">UPI</h4>
+                        {!ordering && <span className="px-2 py-0.5 bg-[#6A994E]/10 text-[#6A994E] text-[8px] font-black uppercase tracking-widest rounded-md">Suggested</span>}
+                      </div>
+                      <p className="text-[10px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Scan and pay instantly</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/20 group-hover:bg-[#E76F51]/10 group-hover:text-[#E76F51] transition-all">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      if (ordering) return;
+                      setPaymentStep('CASH_DETAILS');
+                    }}
+                    className={`w-full p-5 bg-white rounded-3xl border-2 transition-all flex items-center gap-5 group cursor-pointer shadow-sm hover:shadow-xl active:scale-[0.98] ${ordering ? 'opacity-50 pointer-events-none' : 'border-[#3A241C]/5 hover:border-[#3A241C]/30'}`}
+                  >
+                    <div className="w-14 h-14 rounded-2xl bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/30 group-hover:bg-[#3A241C] group-hover:text-white transition-all duration-300">
+                      <Banknote size={28} />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <h4 className="font-black text-base text-[#3A241C] tracking-tight">Cash Payment</h4>
+                      <p className="text-[10px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Pay at counter or to staff</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/20 group-hover:bg-[#3A241C]/10 group-hover:text-[#3A241C] transition-all">
+                      <ArrowRight size={16} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex flex-col items-center gap-2 opacity-40">
+                  <div className="flex items-center gap-2">
+                    <div className="h-px w-8 bg-[#3A241C]" />
+                    <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3A241C]">Secure Checkout</span>
+                    <div className="h-px w-8 bg-[#3A241C]" />
+                  </div>
+                  <p className="text-[7px] font-bold text-[#3A241C] uppercase tracking-widest">Orders are synchronized in real-time</p>
+                </div>
+              </motion.div>
+            ) : paymentStep === 'CASH_DETAILS' ? (
+              <motion.div
+                key="cash-details"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="py-8 space-y-6"
+              >
+                <div className="flex items-center gap-4 mb-6">
+                  <button
+                    onClick={() => setPaymentStep('SELECTION')}
+                    className="w-11 h-11 rounded-2xl bg-[#3A241C]/5 flex items-center justify-center text-[#3A241C]/60 hover:bg-[#3A241C]/10 transition-all active:scale-90"
+                  >
+                    <ChevronLeft size={22} />
+                  </button>
+                  <div>
+                    <h3 className="font-black text-2xl text-[#3A241C] tracking-tight leading-none mb-1">Cash Payment</h3>
+                    <p className="text-[10px] font-black text-[#3A241C]/30 uppercase tracking-[0.2em]">Enter contact details</p>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-2">Phone Number</label>
+                    <div className={`flex items-center gap-4 bg-white p-4 rounded-2xl border-2 transition-all ${phoneError ? 'border-red-200' : 'border-[#3A241C]/5 focus-within:border-[#3A241C]/20'}`}>
+                      <Phone size={20} className="text-[#3A241C]/20" />
+                      <input
+                        type="tel"
+                        value={phoneNumber}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                          setPhoneNumber(val);
+                          if (val.length === 10) setPhoneError('');
+                        }}
+                        placeholder="Enter 10 digit number"
+                        className="flex-1 bg-transparent border-none outline-none focus:ring-0 font-bold text-[#3A241C] placeholder:text-[#3A241C]/20"
+                      />
+                    </div>
+                    {phoneError && (
+                      <p className="text-[9px] font-black text-red-500 uppercase tracking-widest ml-2">{phoneError}</p>
+                    )}
+                  </div>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    disabled={ordering}
+                    onClick={() => {
+                      if (phoneNumber.length !== 10) {
+                        setPhoneError('Please enter a valid 10-digit number');
+                        return;
+                      }
+                      setPaymentMode('CASH');
+                      onPlaceOrder(phoneNumber);
+                    }}
+                    className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all ${ordering ? 'bg-[#3A241C]/50 cursor-not-allowed' : 'bg-[#3A241C] text-white shadow-[#3A241C]/20'}`}
+                  >
+                    Confirm Cash Order <ArrowRight size={18} />
+                  </motion.button>
+                </div>
+              </motion.div>
+            ) : cart.length === 0 ? (
+              <motion.div
+                key="empty-cart"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="py-20 flex flex-col items-center justify-center text-[#3A241C]/30 h-full relative"
+              >
+                <div className="relative mb-8">
+                  <motion.div
+                    animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.6, 0.3] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute inset-0 bg-[#E76F51]/10 rounded-full blur-2xl"
+                  />
+                  <div className="relative w-28 h-28 rounded-[2.5rem] bg-white flex items-center justify-center shadow-[0_20px_50px_rgba(58,36,28,0.05)] border border-[#3A241C]/5">
+                    <ShoppingCart size={48} className="text-[#3A241C]/10" />
+                    <motion.div
+                      initial={{ x: -5, y: -5, opacity: 0 }}
+                      animate={{ x: 0, y: 0, opacity: 1 }}
+                      transition={{ delay: 0.5 }}
+                      className="absolute -top-1 -right-1 w-8 h-8 bg-[#F9F7F4] rounded-full border-4 border-white flex items-center justify-center"
+                    >
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#E76F51]/30" />
+                    </motion.div>
+                  </div>
+                </div>
+                <h3 className="font-black text-2xl text-[#3A241C]/30 tracking-tighter uppercase mb-3">Your Basket is Empty</h3>
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/20 text-center leading-loose max-w-[200px]">
+                  Browse our menu and add your favorite dishes to start your meal
+                </p>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="cart-items"
+                layout
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-6"
+              >
+                {groupedCartArray.map((group: any) => (
+                  <motion.div layout key={group.name} className="space-y-3 mb-8 last:mb-0">
+                    <h3 className="text-[9px] lg:text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/40 ml-2">
+                      {group.isMe ? "Added by You" : `Added by ${group.name}`}
+                    </h3>
+                    <div className="space-y-2">
+                      <AnimatePresence initial={false} mode="popLayout">
+                        {group.items.map((item: any) => (
+                          <CartItem
+                            key={item.cartItemId || `${item.id}-${item.forPacking}-${item.variant}`}
+                            item={item}
+                            isTakeaway={isTakeaway}
+                            cartLocked={cartLocked}
+                            clientId={clientId}
+                            onRemove={onRemove}
+                            onAdd={onAdd}
+                            onDelete={onDelete}
+                            onTogglePacking={onTogglePacking}
+                          />
+                        ))}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                ))}
+              </motion.div>
+            )}
           </AnimatePresence>
         </div>
 
@@ -497,75 +516,79 @@ const CartContent = ({
                         <Info size={13} />
                       </button>
                     </div>
-                    
-                    <div className="flex-1 relative pt-1.5 lg:pt-2">
-                    {!localInstructions && (
-                      <div className="absolute inset-0 flex flex-col justify-center pointer-events-none select-none">
-                        <span className="text-[10px] lg:text-[11px] font-black tracking-wide text-[#3A241C]/50 leading-none">
-                          Cooking Instructions
-                        </span>
-                        <span className="text-[8px] lg:text-[9px] font-bold text-[#3A241C]/40 tracking-wide leading-none mt-1">
-                          We will try to implement them as best as possible
-                        </span>
-                      </div>
-                    )}
-                    <textarea 
-                      value={localInstructions}
-                      onChange={(e) => {
-                        const val = e.target.value.slice(0, 100);
-                        setLocalInstructions(val);
-                        instructionsRef.current = val;
-                      }}
-                      maxLength={100}
-                      rows={1}
-                      spellCheck={false}
-                      onInput={(e: any) => {
-                        e.target.style.height = 'auto';
-                        e.target.style.height = e.target.scrollHeight + 'px';
-                      }}
-                      style={{ 
-                        border: 'none', 
-                        outline: 'none', 
-                        boxShadow: 'none',
-                        WebkitAppearance: 'none'
-                      }}
-                      className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:ring-transparent text-xs lg:text-sm font-semibold text-[#3A241C] resize-none overflow-hidden min-h-[20px] p-0 placeholder:text-transparent appearance-none shadow-none"
-                    />
-                  </div>
-                </div>
 
-                <AnimatePresence>
-                  {showPresets && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                      animate={{ height: "auto", opacity: 1, marginTop: 12 }}
-                      exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                      className="overflow-hidden w-full"
-                    >
-                      <div className="flex overflow-x-auto gap-2 pb-2 pt-1 custom-scrollbar">
-                        {presets.map(p => {
-                          const isSelected = localInstructions.includes(p);
-                          const isContradicting = contradictions[p] && localInstructions.includes(contradictions[p]);
+                    <div className="flex-1 relative pt-1.5 lg:pt-2">
+                      {!localInstructions && (
+                        <div className="absolute inset-0 flex flex-col justify-center pointer-events-none select-none">
+                          <span className="text-[10px] lg:text-[11px] font-black tracking-wide text-[#3A241C]/50 leading-none">
+                            Cooking Instructions
+                          </span>
+                          <span className="text-[8px] lg:text-[9px] font-bold text-[#3A241C]/40 tracking-wide leading-none mt-1">
+                            We will try to implement them as best as possible
+                          </span>
+                        </div>
+                      )}
+                      <textarea
+                        value={localInstructions}
+                        onChange={(e) => {
+                          const val = e.target.value.slice(0, 100);
+                          setLocalInstructions(val);
+                          instructionsRef.current = val;
+                        }}
+                        maxLength={100}
+                        rows={1}
+                        wrap="off"
+                        spellCheck={false}
+                        style={{
+                          border: 'none',
+                          outline: 'none',
+                          boxShadow: 'none',
+                          WebkitAppearance: 'none',
+                          whiteSpace: 'nowrap',
+                          overflowX: 'auto'
+                        }}
+                        className="w-full bg-transparent border-0 outline-none focus:outline-none focus:ring-0 focus:ring-transparent text-xs lg:text-sm font-semibold text-[#3A241C] resize-none p-0 placeholder:text-transparent appearance-none shadow-none custom-scrollbar-hide"
+                      />
+                    </div>
+                  </div>
+
+                  <AnimatePresence>
+                    {showPresets && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                        animate={{ height: "auto", opacity: 1, marginTop: 12 }}
+                        exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                        className="overflow-hidden w-full py-1"
+                      >
+                        <div className="flex overflow-x-auto gap-2 pb-2 pt-1 px-0.5 custom-scrollbar">
+                        {presets.map((p, idx) => {
+                          const lowerInstr = localInstructions.toLowerCase();
+                          const isSelected = lowerInstr.split(/,\s*/).some(part => part.trim() === p.toLowerCase());
+                          const contra = contradictions[p];
+                          const isContradicting = contra && lowerInstr.split(/,\s*/).some(part => part.trim() === contra.toLowerCase());
                           
                           return (
-                            <button
+                            <motion.button
                               key={p}
+                              whileTap={{ scale: 0.95 }}
+                              animate={isSelected ? { scale: 1.02 } : { scale: 1 }}
                               disabled={!!isContradicting}
                               onClick={() => handlePresetClick(p)}
-                              className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${isSelected ? 'bg-[#E76F51] text-white shadow-sm ring-1 ring-white/20' : isContradicting ? 'bg-[#3A241C]/5 text-[#3A241C]/30 opacity-50 cursor-not-allowed' : 'bg-[#3A241C]/5 text-[#3A241C]/60 hover:bg-[#3A241C]/10 hover:text-[#3A241C]'}`}
+                              className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${isSelected ? 'bg-[#E76F51]/10 text-[#E76F51] border-[#E76F51]/30 shadow-sm' : isContradicting ? 'bg-[#3A241C]/5 text-[#3A241C]/30 border-transparent opacity-50 cursor-not-allowed' : 'bg-[#3A241C]/5 text-[#3A241C]/60 border-transparent hover:bg-[#3A241C]/10'}`}
                             >
+                              {isSelected && <Check size={12} className="stroke-[3]" />}
                               {p}
-                            </button>
+                            </motion.button>
                           );
                         })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-                
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 {localInstructions.length >= 100 && (
-                  <motion.p 
+                  <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="text-[7px] font-black text-[#E76F51] uppercase tracking-widest mt-2 ml-14"
@@ -581,7 +604,7 @@ const CartContent = ({
         {/* TOTALS BOX */}
         <AnimatePresence>
           {cart.length > 0 && paymentStep === 'CART' && (
-            <OrderSummary 
+            <OrderSummary
               cartSubtotal={cartSubtotal}
               packingCharges={packingCharges}
               cartTotal={cartTotal}
@@ -597,16 +620,16 @@ const CartContent = ({
         </AnimatePresence>
 
         {/* ORDER HISTORY */}
-        <OrderHistory 
-          orders={session?.orders} 
-          isTakeawayMode={isTakeaway} 
+        <OrderHistory
+          orders={session?.orders}
+          isTakeawayMode={isTakeaway}
           onRateItem={handleRateItem}
           ratings={ratings}
           ratedItems={ratedItems}
           onFeedbackSubmit={onFeedbackSubmit}
           sessionFeedback={session?.feedback}
         />
-        
+
         {/* Mobile bottom footer (e.g. Continue Browsing button) */}
         {mobileFooter && (
           <div className="lg:hidden w-full pt-1 pb-4">
@@ -657,14 +680,14 @@ const CartContent = ({
                 .no-print-element { display: none !important; }
               }
             `}</style>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowBill(false)}
               className="absolute inset-0 bg-[#3A241C]/60 backdrop-blur-md no-print"
             />
-            
+
             <motion.div
               id="print-bill-root"
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -679,7 +702,7 @@ const CartContent = ({
                     <X size={20} />
                   </button>
                 </div>
-                
+
                 <div className="flex flex-col gap-4">
                   <div className="w-14 h-14 rounded-2xl bg-white/10 flex items-center justify-center">
                     <Receipt size={32} />
@@ -708,7 +731,7 @@ const CartContent = ({
                     const allItems = session?.orders
                       .filter((o: any) => o.status !== "CANCELLED")
                       .flatMap((o: any) => o.items) || [];
-                    
+
                     const grouped = allItems.reduce((acc: any, it: any) => {
                       const key = `${it.name}-${it.variant || ''}`;
                       if (!acc[key]) acc[key] = { ...it };
@@ -732,7 +755,7 @@ const CartContent = ({
                     const totalPacking = session?.orders
                       .filter((o: any) => o.status !== "CANCELLED")
                       .reduce((sum: number, o: any) => sum + (o.packingCharges || 0), 0) || 0;
-                    
+
                     if (totalPacking === 0) return null;
                     return (
                       <div className="flex justify-between items-center py-4 border-t border-[#3A241C]/5">
@@ -773,7 +796,7 @@ const CartContent = ({
                     <span className="text-[10px] font-black uppercase tracking-widest">Paid Amount</span>
                     <span className="font-black text-sm tracking-tight text-[#6A994E]">₹{paidTotal}</span>
                   </div>
-                  
+
                   <div className="flex justify-between items-center">
                     <div className="flex flex-col">
                       <span className="text-[11px] font-black uppercase tracking-widest text-[#3A241C]/30 mb-1">Total Bill</span>
@@ -792,7 +815,7 @@ const CartContent = ({
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => window.print()}
                   className="w-full mt-8 h-14 rounded-2xl bg-[#3A241C] text-white font-black text-xs uppercase tracking-[0.2em] flex items-center justify-center gap-3 shadow-xl shadow-[#3A241C]/20 active:scale-[0.98] transition-all no-print no-print-element"
                 >

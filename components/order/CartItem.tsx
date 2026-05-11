@@ -25,7 +25,6 @@ const CartItem = ({
   onDelete,
   onTogglePacking
 }: CartItemProps) => {
-  const [isDeleting, setIsDeleting] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
   const textContainerRef = useRef<HTMLDivElement>(null);
 
@@ -42,12 +41,8 @@ const CartItem = ({
   const disabled = cartLocked || !isOwner;
 
   const handleDelete = () => {
-    if (disabled || isDeleting) return;
-    setIsDeleting(true);
-    
-    setTimeout(() => {
-      onDelete(item.id, !!item.forPacking, item.variant);
-    }, 350);
+    if (disabled) return;
+    onDelete(item.id, !!item.forPacking, item.variant);
   };
 
   const tactileTransition: any = { type: "spring", stiffness: 500, damping: 30 };
@@ -55,24 +50,23 @@ const CartItem = ({
 
   return (
     <motion.div 
-      layout="position"
-      initial={{ opacity: 0, scale: 0.95 }}
+      layout
+      initial={{ opacity: 0, y: 15, scale: 0.98 }}
       animate={{ 
-        opacity: isDeleting ? 0 : 1,
-        borderColor: isDeleting ? "#B71C1C" : (item.forPacking ? "rgba(58, 36, 28, 0.2)" : "rgba(58, 36, 28, 0.12)"),
-        borderWidth: isDeleting ? "2px" : "1px",
-        backgroundColor: isDeleting ? "#FDECEA" : (item.forPacking ? "#F4EFEB" : "rgba(255, 255, 255, 1)"),
-        scale: isDeleting ? 0.95 : 1,
-        filter: isDeleting ? "blur(4px)" : "blur(0px)"
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        borderColor: item.forPacking ? "rgba(58, 36, 28, 0.25)" : "rgba(58, 36, 28, 0.12)",
+        backgroundColor: item.forPacking ? "#F4EFEB" : "rgba(255, 255, 255, 1)",
       }}
       exit={{ 
         opacity: 0, 
-        scale: 0.8,
-        transition: { duration: 0.25, ease: [0.22, 1, 0.36, 1] } 
+        scale: 0.9,
+        transition: { duration: 0.2 } 
       }}
-      transition={smoothTransition}
-      style={{ willChange: "transform, opacity, border-color, background-color, filter" }}
-      className="flex items-center justify-between group p-3 lg:p-4 rounded-[1.25rem] lg:rounded-2xl border gap-2 lg:gap-4 overflow-hidden transform-gpu"
+      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+      style={{ willChange: "transform, opacity" }}
+      className="relative flex items-center justify-between group p-3 lg:p-4 rounded-2xl border gap-2 lg:gap-4 transform-gpu overflow-hidden"
     >
       <AnimatePresence>
         {!isTakeaway && item.forPacking && (
@@ -80,57 +74,59 @@ const CartItem = ({
             initial={{ x: "-100%" }}
             animate={{ x: 0 }}
             exit={{ x: "-100%" }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            className="absolute left-0 top-0 bottom-0 w-6 lg:w-7 bg-[#3A241C] flex items-center justify-center z-10 shadow-[2px_0_10px_rgba(0,0,0,0.1)] border-r border-[#3A241C]"
+            transition={{ type: "spring", stiffness: 500, damping: 35 }}
+            className="absolute left-0 top-0 bottom-0 w-6 lg:w-7 bg-[#3A241C] flex items-center justify-center z-10 shadow-[2px_0_15px_rgba(0,0,0,0.15)]"
           >
             <span className="text-[#F9F7F4] text-[6px] lg:text-[7px] font-black uppercase tracking-[0.3em] -rotate-90 whitespace-nowrap">Packing</span>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <motion.div ref={textContainerRef} layout="position" className={`flex-1 min-w-0 transition-all duration-300 ${!isTakeaway && item.forPacking ? 'ml-4 lg:ml-5' : 'ml-0'}`}>
-        <h4 className="font-black text-[#3A241C] text-[11px] lg:text-sm leading-snug mb-0.5 truncate tracking-tight flex items-center gap-1.5 lg:gap-2">
-          <span className="truncate">
+      <motion.div ref={textContainerRef} layout="position" className={`flex-1 min-w-0 transition-all duration-300 ${!isTakeaway && item.forPacking ? 'ml-6 lg:ml-7' : 'ml-0'}`}>
+        <div className="flex flex-col min-w-0">
+          <h4 className="font-black text-[#3A241C] text-[11px] lg:text-sm leading-snug mb-0.5 truncate tracking-tight">
             {(() => {
-              if (item.name === "Soft Drinks" && item.variant) return item.variant;
-              let fullFormatted = item.name;
+              const fullName = `${item.name}${item.variant ? ` (${item.variant})` : ""}`;
               
-              // Smart auto-abbreviation based on length
-              const charWidth = 6.8; // Approximate pixel width per character
-              const maxChars = containerWidth > 0 ? Math.floor(containerWidth / charWidth) : 100;
+              // Mobile font is smaller (11px vs 14px), so charWidth is smaller
+              const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+              const charWidth = isMobile ? 5.8 : 7.6; 
               
-              if (fullFormatted.length <= maxChars) return `${fullFormatted}${item.variant ? ` (${item.variant})` : ""}`;
+              const availableWidth = containerWidth > 0 ? (item.forPacking ? containerWidth - 10 : containerWidth) : 200;
+              const maxChars = Math.floor(availableWidth / charWidth);
               
-              // Domain-specific common abbreviation first
-              let current = fullFormatted.replace(/Benne Dosa/gi, 'B.D.');
+              if (item.name.length <= maxChars) return fullName;
+              
+              let current = item.name.replace(/Benne Dosa/gi, 'B.D.');
               if (current.length <= maxChars) return `${current}${item.variant ? ` (${item.variant})` : ""}`;
               
-              // Progressively abbreviate words from the middle-end
               let words = current.split(' ');
-              for (let i = words.length - 1; i >= 1; i--) {
-                const word = words[i];
-                if (word.length > 2 && !word.includes('.')) {
-                  words[i] = word[0].toUpperCase() + '.';
-                  current = words.join(' ');
-                  if (current.length <= maxChars) break;
+              if (words.length > 1) {
+                for (let i = words.length - 1; i >= 1; i--) {
+                  const word = words[i];
+                  if (word.length > 2 && !word.includes('.')) {
+                    words[i] = word[0] + '.';
+                    current = words.join(' ');
+                    if (current.length <= maxChars) break;
+                  }
                 }
               }
               
               return `${current}${item.variant ? ` (${item.variant})` : ""}`;
             })()}
-          </span>
-        </h4>
-        <div className="flex items-center gap-1.5 lg:gap-2">
-          <span className="text-[9px] lg:text-[10px] font-black text-[#3A241C]/40">₹{item.price} × {item.quantity} = </span>
-          <span className="text-[10px] lg:text-[11px] font-black text-[#E76F51]">₹{item.price * item.quantity}</span>
+          </h4>
+          <div className="flex items-center gap-1.5 lg:gap-2">
+            <span className="text-[9px] lg:text-[10px] font-black text-[#3A241C]/40">₹{item.price} × {item.quantity} = </span>
+            <span className="text-[10px] lg:text-[11px] font-black text-[#E76F51]">₹{item.price * item.quantity}</span>
+          </div>
         </div>
       </motion.div>
-      
+
       <div className="flex items-center gap-1.5 lg:gap-2 flex-shrink-0">
         {!isTakeaway && (
-          <motion.button 
+          <motion.button
             whileTap={{ scale: 0.9 }}
-            onClick={() => onTogglePacking(item.id, !!item.forPacking, item.variant)} 
+            onClick={() => onTogglePacking(item.id, !!item.forPacking, item.variant)}
             disabled={disabled}
             className={`w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center rounded-lg transition-all shadow-sm border disabled:opacity-30 disabled:grayscale ${item.forPacking ? 'bg-[#3A241C] text-white border-[#3A241C]' : 'bg-white text-[#3A241C]/40 hover:text-[#3A241C] border-[#3A241C]/10'}`}
             title="Toggle Packing"
@@ -138,21 +134,21 @@ const CartItem = ({
             <Package size={14} className="lg:w-4 lg:h-4" />
           </motion.button>
         )}
-        
+
         <div className={`h-8 lg:h-9 flex items-center bg-white rounded-lg overflow-hidden shadow-sm border border-[#3A241C]/5 ${disabled ? 'opacity-30 grayscale' : ''}`}>
-          <motion.button 
+          <motion.button
             whileTap={{ scale: 0.8 }}
-            onClick={() => onRemove(item.id, !!item.forPacking, item.variant)} 
-            disabled={disabled} 
+            onClick={() => onRemove(item.id, !!item.forPacking, item.variant)}
+            disabled={disabled}
             className="w-7 lg:w-8 h-full flex items-center justify-center text-[#3A241C]/60 hover:text-[#E76F51] transition-all relative overflow-hidden"
           >
             <Minus size={12} className="lg:w-3.5 z-10" />
           </motion.button>
-          
+
           {/* Tactile Quantity Number */}
           <div className="w-5 lg:w-6 h-full relative flex items-center justify-center overflow-hidden">
             <AnimatePresence mode="wait" initial={false}>
-              <motion.span 
+              <motion.span
                 key={item.quantity}
                 initial={{ y: 10, opacity: 0, scale: 0.8 }}
                 animate={{ y: 0, opacity: 1, scale: 1 }}
@@ -164,22 +160,22 @@ const CartItem = ({
               </motion.span>
             </AnimatePresence>
           </div>
-          
-          <motion.button 
+
+          <motion.button
             whileTap={{ scale: 0.8 }}
-            onClick={() => onAdd(item, item.variant)} 
-            disabled={disabled} 
+            onClick={() => onAdd(item, item.variant)}
+            disabled={disabled}
             className="w-7 lg:w-8 h-full flex items-center justify-center text-[#3A241C]/60 hover:text-[#E76F51] transition-all relative overflow-hidden"
           >
             <Plus size={12} className="lg:w-3.5 z-10" />
           </motion.button>
         </div>
 
-        <motion.button 
+        <motion.button
           whileTap={{ scale: 0.9 }}
-          onClick={handleDelete} 
-          disabled={disabled || isDeleting}
-          className={`w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center rounded-lg bg-white border border-[#3A241C]/10 text-[#B71C1C]/60 hover:text-[#B71C1C] hover:bg-[#FDECEA] transition-all disabled:opacity-30 disabled:grayscale shadow-sm ${isDeleting ? 'bg-[#FDECEA] border-[#B71C1C]' : ''}`}
+          onClick={handleDelete}
+          disabled={disabled}
+          className={`w-8 h-8 lg:w-9 lg:h-9 flex items-center justify-center rounded-lg bg-white border border-[#3A241C]/10 text-[#B71C1C]/60 hover:text-[#B71C1C] hover:bg-[#FDECEA] transition-all disabled:opacity-30 disabled:grayscale shadow-sm`}
           title="Remove Item"
         >
           <Trash2 size={14} className="lg:w-4 lg:h-4" />

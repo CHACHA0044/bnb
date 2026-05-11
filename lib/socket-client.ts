@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback, useState } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
 const getApiUrl = () => {
@@ -15,58 +15,66 @@ const getApiUrl = () => {
 };
 const API_URL = getApiUrl();
 
-/**
- * React hook for Socket.IO connection with automatic reconnect
- * and polling fallback.
- */
-export function useSocket() {
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [connected, setConnected] = useState(false);
+// Singleton socket instance
+let sharedSocket: Socket | null = null;
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const s = io(API_URL, {
+const getSocket = () => {
+  if (typeof window === "undefined") return null;
+  if (!sharedSocket) {
+    console.log("[WS] Initializing shared socket instance...");
+    sharedSocket = io(API_URL, {
       transports: ["websocket", "polling"],
       reconnectionAttempts: 10,
       reconnectionDelay: 2000,
+      autoConnect: true,
     });
 
-    s.on("connect", () => {
-      console.log("[WS] Connected:", s.id);
-      setConnected(true);
-    });
+    sharedSocket.on("connect", () => console.log("[WS] Connected:", sharedSocket?.id));
+    sharedSocket.on("disconnect", (reason) => console.log("[WS] Disconnected:", reason));
+    sharedSocket.on("connect_error", (err) => console.warn("[WS] Connection error:", err.message));
+  }
+  return sharedSocket;
+};
 
-    s.on("disconnect", () => {
-      console.log("[WS] Disconnected");
-      setConnected(false);
-    });
+export function useSocket() {
+  const [connected, setConnected] = useState(false);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
-    s.on("connect_error", (err) => {
-      console.warn("[WS] Connection error:", err.message);
-    });
+  useEffect(() => {
+    const s = getSocket();
+    if (!s) return;
 
     setSocket(s);
+    setConnected(s.connected);
+
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
+
+    s.on("connect", onConnect);
+    s.on("disconnect", onDisconnect);
 
     return () => {
-      s.disconnect();
-      setSocket(null);
+      s.off("connect", onConnect);
+      s.off("disconnect", onDisconnect);
     };
   }, []);
 
   const joinSession = useCallback((sessionId: string) => {
-    socket?.emit("join_session", sessionId);
-  }, [socket]);
+    const s = getSocket();
+    s?.emit("join_session", sessionId);
+  }, []);
 
   const joinAdmin = useCallback(() => {
-    socket?.emit("join_admin");
-  }, [socket]);
+    const s = getSocket();
+    s?.emit("join_admin");
+  }, []);
 
-  const on = useCallback((event: string, handler: (...args: unknown[]) => void) => {
-    if (!socket) return () => {};
-    socket.on(event, handler);
-    return () => { socket.off(event, handler); };
-  }, [socket]);
+  const on = useCallback((event: string, handler: (...args: any[]) => void) => {
+    const s = getSocket();
+    if (!s) return () => {};
+    s.on(event, handler);
+    return () => { s.off(event, handler); };
+  }, []);
 
-  return { socket, connected, joinSession, joinAdmin, on };
+  return { socket: socket || getSocket(), connected, joinSession, joinAdmin, on };
 }

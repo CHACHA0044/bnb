@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { motion, AnimatePresence, useDragControls } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, Package, MapPin, ShieldAlert, Lock, CheckCircle2, ChevronDown, Coffee, Bell, X, Star } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -89,10 +89,16 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const instructionsRef = useRef("");
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
 
-  const dragControls = useDragControls();
   const [variantModalItem, setVariantModalItem] = useState<OrderMenuItem | null>(null);
   const [tempVariants, setTempVariants] = useState<{ [key: string]: number }>({});
   const categoryRefs = useRef<{ [key: string]: HTMLElement | null }>({});
+
+  // Touch gesture state for cart drawer swipe-to-close
+  const drawerTouchStart = useRef<{ y: number; time: number } | null>(null);
+  const drawerTranslateY = useRef(0);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const drawerScrollRef = useRef<HTMLDivElement>(null);
+  const isDraggingDrawer = useRef(false);
 
   // Payment
   const [paymentMode, setPaymentMode] = useState<"UPI" | "CASH" | null>(null);
@@ -404,6 +410,24 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       }),
       on("payment_confirmed", (data: any) => {
         if (data.payment) {
+          // Handle REJECTED payments — admin denied the payment
+          if (data.payment.status === "REJECTED") {
+            setSession(prev => {
+              if (!prev) return null;
+              return {
+                ...prev,
+                payments: prev.payments.filter(p => p.id !== data.payment.id)
+              };
+            });
+            setPaymentSuccess(false);
+            setPaymentMode(null);
+            setPayingUPI(false);
+            setPayingCash(false);
+            showToast("Payment was rejected by admin");
+            loadSession();
+            return;
+          }
+
           setSession(prev => {
             if (!prev) return null;
             const exists = prev.payments.some(p => p.id === data.payment.id);
@@ -878,6 +902,53 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     }
   }, [session]);
 
+  // Drawer touch gesture handlers (must be before early returns)
+  const handleDrawerTouchStart = useCallback((e: React.TouchEvent) => {
+    drawerTouchStart.current = { y: e.touches[0].clientY, time: Date.now() };
+    isDraggingDrawer.current = false;
+  }, []);
+
+  const handleDrawerTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!drawerTouchStart.current || !drawerRef.current) return;
+    const deltaY = e.touches[0].clientY - drawerTouchStart.current.y;
+    
+    // Only allow downward drag when at top of scroll
+    const scrollEl = drawerScrollRef.current;
+    const isAtTop = !scrollEl || scrollEl.scrollTop <= 0;
+    
+    if (deltaY > 0 && isAtTop) {
+      isDraggingDrawer.current = true;
+      e.preventDefault();
+      const dampened = deltaY * 0.4;
+      drawerTranslateY.current = dampened;
+      drawerRef.current.style.transform = `translateY(${dampened}px)`;
+      drawerRef.current.style.transition = 'none';
+    }
+  }, []);
+
+  const handleDrawerTouchEnd = useCallback(() => {
+    if (!drawerRef.current || !drawerTouchStart.current) {
+      drawerTouchStart.current = null;
+      return;
+    }
+    
+    const elapsed = Date.now() - drawerTouchStart.current.time;
+    const velocity = drawerTranslateY.current / (elapsed || 1) * 1000;
+    
+    if (drawerTranslateY.current > 80 || velocity > 400) {
+      drawerRef.current.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)';
+      drawerRef.current.style.transform = 'translateY(100%)';
+      setTimeout(() => setShowCartMobile(false), 350);
+    } else {
+      drawerRef.current.style.transition = 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)';
+      drawerRef.current.style.transform = 'translateY(0)';
+    }
+    
+    drawerTranslateY.current = 0;
+    drawerTouchStart.current = null;
+    isDraggingDrawer.current = false;
+  }, []);
+
   // Logic: Show premium welcome screen for all initial loading states
   if (!isMounted || loading || (showWelcome && !welcomeDismissed)) {
     return (
@@ -1003,7 +1074,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     onScrollComplete: () => setPendingHistoryScroll(false)
   };
 
-  const menuTransition: any = { duration: 0.3, ease: [0.22, 1, 0.36, 1] };
+  const menuTransition: any = { duration: 0.4, ease: [0.22, 1, 0.36, 1] };
 
   return (
     <div className="h-screen h-[100dvh] bg-[#F9F7F4] flex flex-col overflow-hidden relative">
@@ -1316,21 +1387,42 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
                 onClick={() => setShowCartMobile(false)}
-                className="lg:hidden fixed inset-0 z-[60] bg-[#3A241C]/40 backdrop-blur-sm transform-gpu translate-z-0"
+                className="lg:hidden fixed inset-0 z-[60] bg-[#3A241C]/40 backdrop-blur-sm transform-gpu"
               />
               <motion.div
-                drag="y" dragListener={false} dragControls={dragControls} dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 0.15 }}
-                onDragEnd={(e, info) => { if (info.offset.y > 100 || info.velocity.y > 500) setShowCartMobile(false) }}
+                ref={drawerRef}
                 initial={{ y: "100%" }}
                 animate={{ y: 0 }}
                 exit={{ y: "100%" }}
                 transition={menuTransition}
-                style={{ willChange: "transform" }}
-                className="lg:hidden fixed bottom-0 left-0 right-0 z-[110] bg-white rounded-t-[3rem] max-h-[92vh] flex flex-col shadow-2xl overflow-hidden transform-gpu translate-z-0"
+                onAnimationComplete={() => {
+                  if (drawerRef.current) {
+                    drawerRef.current.style.transform = '';
+                    drawerRef.current.style.transition = '';
+                  }
+                }}
+                style={{ willChange: "transform", overscrollBehavior: "contain" }}
+                className="lg:hidden fixed bottom-0 left-0 right-0 z-[110] bg-white rounded-t-[3rem] max-h-[92vh] flex flex-col shadow-[0_-10px_60px_rgba(58,36,28,0.15)] overflow-hidden transform-gpu"
               >
-                <div onPointerDown={(e) => dragControls.start(e)} className="flex justify-center py-6 cursor-grab active:cursor-grabbing touch-none z-20"><div className="w-12 h-1.5 bg-[#3A241C]/10 rounded-full" /></div>
-                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                {/* Drag Handle — touch-none prevents browser gestures */}
+                <div 
+                  onTouchStart={handleDrawerTouchStart}
+                  onTouchMove={handleDrawerTouchMove}
+                  onTouchEnd={handleDrawerTouchEnd}
+                  className="flex justify-center py-6 cursor-grab active:cursor-grabbing touch-none z-20 select-none"
+                >
+                  <div className="w-12 h-1.5 bg-[#3A241C]/10 rounded-full" />
+                </div>
+                <div 
+                  ref={drawerScrollRef}
+                  className="flex-1 flex flex-col min-h-0 overflow-hidden"
+                  style={{ overscrollBehavior: "contain" }}
+                  onTouchStart={handleDrawerTouchStart}
+                  onTouchMove={handleDrawerTouchMove}
+                  onTouchEnd={handleDrawerTouchEnd}
+                >
                   <CartContent 
                     {...commonCartProps} 
                     onFeedbackSubmit={handleFeedbackSubmit} 

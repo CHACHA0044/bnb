@@ -42,17 +42,18 @@ export default function AdminPaymentSummary({
     );
   }
 
-  const total = session.orders
-    .filter(o => o.status !== "CANCELLED")
-    .reduce((acc, o) => 
-      acc + o.items.reduce((s, i) => s + i.price * i.quantity, 0) + (o.packingCharges || 0), 0
-    );
-  const paid = session.payments
+  const orders = (session?.orders || []).filter(o => o.status !== "CANCELLED");
+  const total = orders.reduce((acc, o) => 
+    acc + (o.items || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0) + (o.packingCharges || 0), 0
+  );
+  
+  const payments = session?.payments || [];
+  const paid = payments
     .filter(p => p.status === "CONFIRMED")
-    .reduce((acc, p) => acc + p.amount, 0);
+    .reduce((acc, p) => acc + (p.amount || 0), 0);
   const balance = total - paid;
 
-  const methods = new Set(session.payments.map(p => p.method));
+  const methods = new Set(payments.map(p => p.method));
   let paymentMode = "NONE";
   if (methods.size > 1) paymentMode = "MIXED";
   else if (methods.has("UPI")) paymentMode = "UPI";
@@ -191,13 +192,13 @@ export default function AdminPaymentSummary({
       )}
 
       <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3 min-h-0">
-        {session.payments.length === 0 ? (
+        {(session?.payments || []).length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center opacity-20 py-8">
             <CreditCard size={24} className="mb-2" />
             <p className="text-[8px] font-bold uppercase tracking-widest">No Payments Yet</p>
           </div>
         ) : (
-          session.payments.map(p => (
+          (session?.payments || []).map(p => (
             <div key={p.id} className={`flex justify-between items-center p-3 rounded-2xl border transition-all ${
               p.status === 'CONFIRMED' ? 'bg-[#F9F7F4]/30 border-[#3A241C]/5 opacity-60' : 'bg-[#F9F7F4] border-[#3A241C]/10 shadow-sm'
             }`}>
