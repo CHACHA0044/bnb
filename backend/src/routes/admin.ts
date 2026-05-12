@@ -193,10 +193,18 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
       return;
     }
 
-    const session = await prisma.session.update({
-      where: { id: sessionId as string },
-      data: { status: "CLOSED" }
-    });
+    await prisma.$transaction([
+      prisma.session.update({
+        where: { id: sessionId as string },
+        data: { status: "CLOSED" }
+      }),
+      prisma.order.updateMany({
+        where: { sessionId: sessionId as string },
+        data: { estimatedReadyTime: null }
+      })
+    ]);
+
+    const session = await prisma.session.findUnique({ where: { id: sessionId } });
 
     // Trigger history snapshots for all orders in the session
     try {

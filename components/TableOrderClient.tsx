@@ -88,6 +88,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const [isMounted, setIsMounted] = useState(false);
   const instructionsRef = useRef("");
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
+  const [prepTimer, setPrepTimer] = useState<string | null>(null);
 
   const [variantModalItem, setVariantModalItem] = useState<OrderMenuItem | null>(null);
   const [tempVariants, setTempVariants] = useState<{ [key: string]: number }>({});
@@ -132,6 +133,42 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     console.log(`[STATE] showReviewPrompt: ${showReviewPrompt}`);
   }, [session, showReviewPrompt]);
 
+  /* ─── Preparation Timer Logic ─────────── */
+  useEffect(() => {
+    if (!session || !session.orders) {
+      setPrepTimer(null);
+      return;
+    }
+    
+    const updatePrepTimer = () => {
+      const activeTimers = session.orders
+        .filter(o => o.status !== "CANCELLED" && o.status !== "SERVED" && o.estimatedReadyTime)
+        .map(o => new Date(o.estimatedReadyTime!).getTime());
+      
+      if (activeTimers.length === 0) {
+        setPrepTimer(null);
+        return;
+      }
+      
+      const maxReadyTime = Math.max(...activeTimers);
+      const now = Date.now();
+      const diff = maxReadyTime - now;
+      
+      if (diff <= 0) {
+        // Automatically hide if reached 0
+        setPrepTimer(null);
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setPrepTimer(`${mins}:${secs.toString().padStart(2, '0')}`);
+      }
+    };
+    
+    updatePrepTimer();
+    const interval = setInterval(updatePrepTimer, 1000); // Check every 1s for smooth countdown
+    return () => clearInterval(interval);
+  }, [session]);
+
   /* ─── Geolocation Verification ─────────── */
   const tryVerifyLocation = useCallback(async (sid?: string) => {
     if (typeof navigator === "undefined") {
@@ -141,9 +178,9 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
     // DEVELOPMENT BYPASS: Auto-verify on local network IPs or localhost
     const hostname = typeof window !== "undefined" ? window.location.hostname : "";
-    const isLocal = hostname === "localhost" || hostname === "127.0.0.1" || 
-                    hostname.startsWith("192.168.") || hostname.startsWith("10.") || 
-                    hostname.startsWith("172.");
+    const isLocal = hostname === "localhost" || hostname === "127.0.0.1" ||
+      hostname.startsWith("192.168.") || hostname.startsWith("10.") ||
+      hostname.startsWith("172.");
 
     if (isLocal) {
       console.log("[DEV] Local network detected, bypassing location check.");
@@ -333,7 +370,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (locationVerified === null) {
       tryVerifyLocation(session?.id);
     }
-    
+
     // Fetch Order Config
     fetchOrderConfig().then(setOrderConfig).catch(console.error);
   }, [session?.id, tryVerifyLocation, locationVerified]);
@@ -469,7 +506,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (!session) return;
     const confirmedOrders = session.orders.filter(o => o.status !== "UNCONFIRMED" && o.status !== "CANCELLED");
     const newConfirmed = confirmedOrders.filter(o => !notifiedConfirmedIds.current.has(o.id));
-    
+
     if (newConfirmed.length > 0) {
       if (orderPlaced) {
         setShowAdminConfirmed(true);
@@ -786,7 +823,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       localStorage.removeItem(`bnb_cart_${tableId}`);
       // Notification will now be triggered by 'order_confirmed' socket event instead of being shown immediately
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to place order");
+      showToast(err instanceof Error ? err.message : "Failed to place order");
       setIsProcessingOrder(false);
       setOrderPlaced(false);
       if (socket) socket.emit("cart_unlock", { tableId });
@@ -911,11 +948,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const handleDrawerTouchMove = useCallback((e: React.TouchEvent) => {
     if (!drawerTouchStart.current || !drawerRef.current) return;
     const deltaY = e.touches[0].clientY - drawerTouchStart.current.y;
-    
+
     // Only allow downward drag when at top of scroll
     const scrollEl = drawerScrollRef.current;
     const isAtTop = !scrollEl || scrollEl.scrollTop <= 0;
-    
+
     if (deltaY > 0 && isAtTop) {
       isDraggingDrawer.current = true;
       e.preventDefault();
@@ -931,10 +968,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       drawerTouchStart.current = null;
       return;
     }
-    
+
     const elapsed = Date.now() - drawerTouchStart.current.time;
     const velocity = drawerTranslateY.current / (elapsed || 1) * 1000;
-    
+
     if (drawerTranslateY.current > 80 || velocity > 400) {
       drawerRef.current.style.transition = 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)';
       drawerRef.current.style.transform = 'translateY(100%)';
@@ -943,7 +980,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       drawerRef.current.style.transition = 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)';
       drawerRef.current.style.transform = 'translateY(0)';
     }
-    
+
     drawerTranslateY.current = 0;
     drawerTouchStart.current = null;
     isDraggingDrawer.current = false;
@@ -1004,9 +1041,9 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                 <div className="relative w-48 h-1 bg-[#3A241C]/5 rounded-full overflow-hidden">
                   <motion.div
                     initial={{ x: "-100%" }}
-                    animate={(!loading && !menuLoading) ? { x: "0%" } : { 
+                    animate={(!loading && !menuLoading) ? { x: "0%" } : {
                       x: ["-100%", "-20%", "-20%", "0%"],
-                      transition: { 
+                      transition: {
                         times: [0, 0.4, 0.8, 1],
                         duration: 3,
                         ease: "easeInOut",
@@ -1196,8 +1233,8 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           <div className="w-24 h-24 rounded-full bg-[#E76F51]/10 flex items-center justify-center text-[#E76F51] mb-8 border border-[#E76F51]/20"><MapPin size={48} className="animate-pulse" /></div>
           <h2 className="text-3xl font-black text-white mb-4 tracking-tighter uppercase">Remote Orders Restricted</h2>
           <p className="text-[#F9F7F4]/60 text-xs font-bold uppercase tracking-[0.2em] max-w-xs leading-loose mb-8">We only accept orders from users within the restaurant premises (50m range).</p>
-          
-          <button 
+
+          <button
             onClick={() => {
               setLocationVerified(null);
               tryVerifyLocation(session?.id);
@@ -1232,6 +1269,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         connected={connected}
         onCloseTable={handleCloseTable}
         onToggleGlobalTakeaway={handleGlobalTakeawayToggle}
+        prepTimer={prepTimer}
       />
 
 
@@ -1295,9 +1333,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                 key={cat}
                 category={cat}
                 items={filteredMenuItems.filter(m => m.category === cat)}
-                lang={lang}
                 onAdd={addToCart}
-                onToggleLang={() => setLang(l => l === "EN" ? "HI" : "EN")}
                 isRestaurantOpen={restaurantStatus.isOpen || !!restaurantStatus.closingAt}
                 sectionRef={(el) => { categoryRefs.current[cat] = el; }}
               />
@@ -1407,7 +1443,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                 className="lg:hidden fixed bottom-0 left-0 right-0 z-[110] bg-white rounded-t-[3rem] max-h-[92vh] flex flex-col shadow-[0_-10px_60px_rgba(58,36,28,0.15)] overflow-hidden transform-gpu"
               >
                 {/* Drag Handle — touch-none prevents browser gestures */}
-                <div 
+                <div
                   onTouchStart={handleDrawerTouchStart}
                   onTouchMove={handleDrawerTouchMove}
                   onTouchEnd={handleDrawerTouchEnd}
@@ -1415,7 +1451,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                 >
                   <div className="w-12 h-1.5 bg-[#3A241C]/10 rounded-full" />
                 </div>
-                <div 
+                <div
                   ref={drawerScrollRef}
                   className="flex-1 flex flex-col min-h-0 overflow-hidden"
                   style={{ overscrollBehavior: "contain" }}
@@ -1423,9 +1459,9 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                   onTouchMove={handleDrawerTouchMove}
                   onTouchEnd={handleDrawerTouchEnd}
                 >
-                  <CartContent 
-                    {...commonCartProps} 
-                    onFeedbackSubmit={handleFeedbackSubmit} 
+                  <CartContent
+                    {...commonCartProps}
+                    onFeedbackSubmit={handleFeedbackSubmit}
                     mobileFooter={
                       <motion.button
                         whileTap={{ scale: 0.96 }}

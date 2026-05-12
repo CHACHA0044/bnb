@@ -66,10 +66,69 @@ export function AdminProvider({ children, secret, authenticated }: { children: R
     if (authenticated && secret) {
       loadStats();
       const unsubs = [
-        on("order_placed", loadStats),
-        on("order_updated", loadStats),
-        on("payment_confirmed", loadStats),
-        on("session_updated", loadStats),
+        on("order_placed", (data: any) => {
+          if (!data.order) return;
+          setSessions(prev => prev.map(s => {
+            if (s.id === data.sessionId) {
+              const exists = s.orders.some(o => o.id === data.order.id);
+              if (exists) return s;
+              return { ...s, orders: [data.order, ...s.orders] };
+            }
+            return s;
+          }));
+        }),
+        on("order_updated", (data: any) => {
+          if (!data.order) return;
+          setSessions(prev => prev.map(s => {
+            if (s.id === data.sessionId) {
+              return {
+                ...s,
+                orders: s.orders.map(o => o.id === data.order.id ? data.order : o)
+              };
+            }
+            return s;
+          }));
+        }),
+        on("order_deleted", (data: any) => {
+          setSessions(prev => prev.map(s => {
+            if (s.id === data.sessionId) {
+              return { ...s, orders: s.orders.filter(o => o.id !== data.orderId) };
+            }
+            return s;
+          }));
+        }),
+        on("payment_confirmed", (data: any) => {
+          if (!data.payment) return;
+          setSessions(prev => prev.map(s => {
+            if (s.id === data.sessionId) {
+              const exists = s.payments.some(p => p.id === data.payment.id);
+              if (exists) {
+                return {
+                  ...s,
+                  payments: s.payments.map(p => p.id === data.payment.id ? data.payment : p)
+                };
+              }
+              return { ...s, payments: [data.payment, ...s.payments] };
+            }
+            return s;
+          }));
+        }),
+        on("session_updated", (data: any) => {
+          // If full session provided, use it
+          if (data.session) {
+            setSessions(prev => prev.map(s => s.id === data.session.id ? data.session : s));
+            return;
+          }
+          // Otherwise update partial fields
+          if (data.sessionId) {
+            setSessions(prev => prev.map(s => {
+              if (s.id === data.sessionId) {
+                return { ...s, ...data };
+              }
+              return s;
+            }));
+          }
+        }),
         on("menu_updated", loadStats),
       ];
       return () => unsubs.forEach(u => u());

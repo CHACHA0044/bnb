@@ -23,18 +23,14 @@ const plusVariants = {
 
 interface MenuItemProps {
   item: OrderMenuItem;
-  lang: "EN" | "HI";
   onAdd: (item: OrderMenuItem) => void;
-  onToggleLang: () => void;
   isRestaurantOpen: boolean;
   priority?: boolean;
 }
 
 const MenuItem = ({
   item,
-  lang,
   onAdd,
-  onToggleLang,
   isRestaurantOpen,
   priority = false
 }: MenuItemProps) => {
@@ -84,19 +80,19 @@ const MenuItem = ({
       {/* Premium Slanted Corner Ribbon */}
       {hasDiscount && !item.outOfStock && (
         <div className="absolute top-0 left-0 w-20 h-20 overflow-hidden pointer-events-none z-30 rounded-tl-[2rem]">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -10, y: -10 }}
             animate={{ opacity: 1, x: 0, y: 0 }}
             className="absolute top-0 left-0 w-full h-full"
           >
-            <div 
+            <div
               className="absolute top-[18%] left-[-35%] w-[150%] py-1.5 bg-gradient-to-r from-[#6A994E] via-[#85B868] to-[#4F772D] shadow-[0_4px_10px_rgba(0,0,0,0.15)] flex items-center justify-center -rotate-45 border-y border-white/20"
             >
               <span className="text-[10px] lg:text-[11px] font-black text-white uppercase tracking-tighter drop-shadow-md flex items-center gap-1">
                 {item.discountPct ? `${item.discountPct}% OFF` : `₹${item.discountFlat} OFF`}
               </span>
               {/* Shine effect */}
-              <motion.div 
+              <motion.div
                 animate={{ x: ['-100%', '200%'] }}
                 transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
                 className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12"
@@ -135,36 +131,27 @@ const MenuItem = ({
               {item.name}
               {(item as any).volume && <span className="text-[#3A241C]/40 text-[10px] lg:text-xs normal-case tracking-normal ml-1.5 font-bold">({(item as any).volume})</span>}
             </h3>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleLang();
-              }}
-              className="text-[9px] lg:text-[10px] font-black uppercase tracking-widest text-[#E76F51] bg-[#E76F51]/10 px-2 lg:px-3 py-1 rounded-md lg:rounded-lg hover:bg-[#E76F51]/20 transition-all active:scale-95 flex-shrink-0"
-            >
-              {lang === "EN" ? "अ" : "A"}
-            </button>
           </div>
-          {(item.descriptionEn || item.descriptionHi) && (
-            <p className="text-[10px] lg:text-[11px] text-[#3A241C]/50 leading-[1.5] mb-1 font-medium tracking-[0.02em] antialiased line-clamp-2">
-              {lang === "EN" ? item.descriptionEn : item.descriptionHi}
+          {item.descriptionEn && (
+            <p className="text-[10px] lg:text-[11px] text-[#3A241C]/50 leading-relaxed mt-1.5 font-medium tracking-tight line-clamp-2">
+              {item.descriptionEn}
             </p>
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-auto pt-1">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between mt-auto pt-6">
+          <div className="flex items-center gap-2 transform translate-y-1">
             {hasDiscount && (
               <span className="text-[10px] lg:text-xs text-[#3A241C]/30 line-through font-bold">₹{item.price}</span>
             )}
-            <span className="font-black text-lg text-[#E76F51] tracking-tighter">
+            <span className="font-black text-xl text-[#E76F51] tracking-tighter">
               {item.priceLabel ? item.priceLabel : `₹${discountedPrice}`}
             </span>
             {item.rating && item.ratingCount && !["Soft Drinks", "Mineral Water"].includes(item.name) && (
-              <div className="flex items-center gap-1 bg-[#F9F7F4] px-1.5 py-0.5 rounded-md border border-[#3A241C]/5 ml-2">
+              <div className="flex items-center gap-1.5 bg-[#F9F7F4] px-2 py-1 rounded-lg border border-[#3A241C]/5 ml-2">
                 <Star className="w-[10px] h-[10px] lg:w-3 lg:h-3 fill-[#E76F51] text-[#E76F51]" />
-                <span className="text-[9px] lg:text-[10px] font-black text-[#3A241C]/80">
-                  {item.rating}({item.ratingCount})
+                <span className="text-[10px] lg:text-[11px] font-bold text-[#3A241C]">
+                  {item.rating} ({item.ratingCount})
                 </span>
               </div>
             )}

@@ -25,18 +25,19 @@ model Session {
 }
 
 model Order {
-  id             String      @id @default(uuid())
-  sessionId      String
-  status         String      @default("UNCONFIRMED")
-  instructions   String?
-  customerPhone  String?
-  createdAt      DateTime    @default(now())
-  isTakeaway     Boolean     @default(false)
-  packingCharges Int         @default(0)
-  statusTimeline Json?       @default("[]")
-  session        Session     @relation(fields: [sessionId], references: [id])
-  items          OrderItem[]
-  payments       Payment[]
+  id                 String      @id @default(uuid())
+  sessionId          String
+  status             String      @default("UNCONFIRMED")
+  instructions       String?
+  customerPhone      String?
+  createdAt          DateTime    @default(now())
+  estimatedReadyTime DateTime?
+  isTakeaway         Boolean     @default(false)
+  packingCharges     Int         @default(0)
+  statusTimeline     Json?       @default("[]")
+  session            Session     @relation(fields: [sessionId], references: [id])
+  items              OrderItem[]
+  payments           Payment[]
 }
 
 model OrderItem {

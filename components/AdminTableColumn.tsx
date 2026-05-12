@@ -5,7 +5,7 @@ import {
   Clock, CheckCircle2, Coffee, 
   CreditCard, Banknote, RotateCcw,
   QrCode, Download, Plus, Bell, X,
-  Square, CheckSquare, PackageCheck, Check, Shield, Copy, Package, MessageSquare, XCircle, Loader2
+  Square, CheckSquare, PackageCheck, Check, Shield, Copy, Package, MessageSquare, XCircle, Loader2, ChefHat
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { 
@@ -27,6 +27,7 @@ interface AdminTableColumnProps {
   onDeleteOrder: (orderId: string) => Promise<void>;
   onDeletePayment: (paymentId: string) => Promise<void>;
   onToggleReminder: (sessionId: string, reminder: boolean) => Promise<void>;
+  onUpdateTimer: (orderId: string, minutes: number | null) => Promise<void>;
   isTakeaway?: boolean;
   allTakeawaySessions?: SessionData[];
 }
@@ -54,6 +55,7 @@ export default function AdminTableColumn({
   onDeleteOrder,
   onDeletePayment,
   onToggleReminder,
+  onUpdateTimer,
   isTakeaway = false,
   allTakeawaySessions = [],
 }: AdminTableColumnProps) {
@@ -61,6 +63,8 @@ export default function AdminTableColumn({
   const [showPackedNote, setShowPackedNote] = useState(false);
   const [copied, setCopied] = useState(false);
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
+  const [activeTimerOrderId, setActiveTimerOrderId] = useState<string | null>(null);
+  const [customTimerValue, setCustomTimerValue] = useState<string>("");
 
   // Duplicate Detection Logic
   const duplicates = isTakeaway && session && allTakeawaySessions ? allTakeawaySessions.filter(s => {
@@ -299,11 +303,12 @@ export default function AdminTableColumn({
               </div>
             </div>
 
+            <div className="flex gap-3">
               <motion.button 
                 whileTap={{ scale: 0.9 }}
                 whileHover={{ scale: 1.05, backgroundColor: "#E76F51" }}
                 onClick={() => onAddOrder(session.id)}
-                className="py-2.5 bg-[#3A241C] text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-[#3A241C]/10 flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-[#3A241C] text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-lg shadow-[#3A241C]/10 flex items-center justify-center gap-2"
               >
                 <Plus size={14} /> Add Items
               </motion.button>
@@ -318,7 +323,7 @@ export default function AdminTableColumn({
                     onCloseSession(session.id);
                   }
                 }}
-                className={`py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                className={`flex-1 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
                   balance > 0 
                     ? "bg-orange-50 text-orange-600 border border-orange-200 cursor-not-allowed opacity-50" 
                     : "bg-[#6A994E] text-white hover:opacity-90 shadow-lg shadow-[#6A994E]/10"
@@ -334,6 +339,7 @@ export default function AdminTableColumn({
                   </>
                 )}
               </motion.button>
+            </div>
             </div>
           // </div>
         )}
@@ -410,19 +416,28 @@ export default function AdminTableColumn({
                             )}
                             <div className="flex flex-col gap-1">
                               <div className="relative">
-                                <select
-                                  value={status}
-                                  onChange={(e) => onUpdateStatus(order.id, e.target.value)}
-                                  className={`text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-full text-white cursor-pointer outline-none appearance-none border-none transition-colors ${
+                                <motion.button
+                                  whileTap={{ scale: 0.9 }}
+                                  disabled={processingOrder === order.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (processingOrder === order.id) return;
+                                    const nextStatusMap: Record<string, string> = {
+                                      UNCONFIRMED: "PLACED",
+                                      PLACED: "PREPARING",
+                                      PREPARING: "SERVED",
+                                      SERVED: "PLACED",
+                                      CANCELLED: "PLACED"
+                                    };
+                                    onUpdateStatus(order.id, nextStatusMap[status]);
+                                  }}
+                                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white font-black text-[9px] uppercase tracking-widest shadow-lg transition-all ${
                                     allServed ? "bg-[#6A994E]" : config.color
-                                  }`}
+                                  } ${processingOrder === order.id ? "opacity-50 cursor-not-allowed" : ""}`}
                                 >
-                                  {status === "UNCONFIRMED" && <option value="UNCONFIRMED">New Order</option>}
-                                  <option value="PLACED">Placed</option>
-                                  <option value="PREPARING">Preparing</option>
-                                  <option value="SERVED">Served</option>
-                                  <option value="CANCELLED">Cancelled</option>
-                                </select>
+                                  {processingOrder === order.id ? <Loader2 size={12} className="animate-spin" /> : config.icon}
+                                  {config.label}
+                                </motion.button>
                               </div>
                               <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">
                                 {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -470,24 +485,35 @@ export default function AdminTableColumn({
                               <>
                                 <motion.button
                                   whileTap={{ scale: 0.8 }}
-                                  onClick={() => onUpdateStatus(order.id, status === "PREPARING" ? "PLACED" : "PREPARING")}
+                                  disabled={processingOrder === order.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateStatus(order.id, status === "PREPARING" ? "PLACED" : "PREPARING");
+                                  }}
                                   className={`p-2 rounded-xl transition-all ${
                                     status === "PREPARING" 
                                       ? "bg-[#F4A261] text-white shadow-lg shadow-[#F4A261]/20" 
                                       : "bg-white text-[#F4A261] border border-[#F4A261]/20 hover:bg-[#F4A261]/5"
-                                  }`}
+                                  } ${processingOrder === order.id ? "opacity-50 cursor-not-allowed" : ""}`}
                                   title={status === "PREPARING" ? "Revert to Placed" : "Start Preparing"}
                                 >
-                                  <Clock size={16} className={status === "PREPARING" ? "animate-spin-slow" : ""} />
+                                  <ChefHat size={16} className={status === "PREPARING" ? "animate-spin-slow" : ""} />
                                 </motion.button>
+                                
+
+
                                 <motion.button
                                   whileTap={{ scale: 0.8 }}
-                                  onClick={() => onUpdateStatus(order.id, "SERVED")}
+                                  disabled={processingOrder === order.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateStatus(order.id, "SERVED");
+                                  }}
                                   className={`p-2 rounded-xl transition-all ${
                                     allServed 
                                       ? "bg-[#6A994E] text-white shadow-lg shadow-[#6A994E]/20" 
                                       : "bg-white text-[#6A994E] border border-[#6A994E]/20 hover:bg-[#6A994E]/5"
-                                  }`}
+                                  } ${processingOrder === order.id ? "opacity-50 cursor-not-allowed" : ""}`}
                                   title="Mark Served"
                                 >
                                   <Check size={16} />
@@ -495,14 +521,18 @@ export default function AdminTableColumn({
                               </>
                             ) : (
                               <motion.button
-                                whileTap={{ scale: 0.8 }}
-                                onClick={() => onUpdateStatus(order.id, "PLACED")}
-                                className="p-2 bg-[#6A994E]/10 text-[#6A994E] rounded-xl hover:bg-[#B71C1C]/10 hover:text-[#B71C1C] transition-all group"
-                                title="Revert to Placed"
-                              >
-                                <CheckCircle2 size={16} className="group-hover:hidden" />
-                                <X size={16} className="hidden group-hover:block" />
-                              </motion.button>
+                                  whileTap={{ scale: 0.8 }}
+                                  disabled={processingOrder === order.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onUpdateStatus(order.id, "PLACED");
+                                  }}
+                                  className={`p-2 bg-[#6A994E]/10 text-[#6A994E] rounded-xl hover:bg-[#B71C1C]/10 hover:text-[#B71C1C] transition-all group ${processingOrder === order.id ? "opacity-50 cursor-not-allowed" : ""}`}
+                                  title="Revert to Placed"
+                                >
+                                  <CheckCircle2 size={16} className="group-hover:hidden" />
+                                  <X size={16} className="hidden group-hover:block" />
+                                </motion.button>
                             )}
                           </div>
                       </div>

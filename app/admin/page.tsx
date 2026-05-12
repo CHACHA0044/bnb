@@ -15,6 +15,7 @@ import {
   adminCreateSession,
   adminAddManualOrder,
   adminUpdateOrder,
+  adminUpdateOrderTimer,
   adminToggleReviewRequest,
   type SessionData,
 } from "@/lib/api";
@@ -67,12 +68,22 @@ export default function DashboardPage() {
     const previousSessions = [...sessions];
     setSessions(prev => prev.map(s => ({
       ...s,
-      orders: s.orders.map(o => o.id === orderId ? { ...o, status } : o)
+      orders: s.orders.map(o => {
+        if (o.id === orderId) {
+          const updatedItems = status === "SERVED" 
+            ? (o.items || []).map(item => ({ ...item, isServed: true })) 
+            : status === "PLACED"
+              ? (o.items || []).map(item => ({ ...item, isServed: false }))
+              : o.items;
+          return { ...o, status, items: updatedItems };
+        }
+        return o;
+      })
     })));
 
     try {
       await adminUpdateOrder(orderId, status, secret);
-      loadStats();
+      // loadStats() removed to prevent jumpy UI; socket.io 'order_updated' will handle real sync
     } catch (err) {
       console.error(err);
       setSessions(previousSessions);
@@ -83,7 +94,6 @@ export default function DashboardPage() {
     if (!secret) return;
     try { 
       await adminConfirmPayment(paymentId, secret); 
-      loadStats(); 
     } catch (err) { 
       console.error(err);
     }
@@ -100,7 +110,6 @@ export default function DashboardPage() {
         setConfirmModal(prev => ({ ...prev, loading: true }));
         try { 
           await adminDeletePayment(paymentId, secret); 
-          loadStats(); 
         } catch (err) { console.error(err); }
         setConfirmModal(prev => ({ ...prev, show: false, loading: false }));
       }
@@ -111,7 +120,6 @@ export default function DashboardPage() {
     if (!secret) return;
     try { 
       await adminToggleReminder(sessionId, reminder, secret); 
-      loadStats(); 
     } catch (err) { 
       console.error(err);
     }
@@ -121,7 +129,6 @@ export default function DashboardPage() {
     if (!secret) return;
     try {
       await adminDeleteOrder(orderId, secret);
-      loadStats();
     } catch (err) {
       console.error(err);
     }
@@ -135,8 +142,6 @@ export default function DashboardPage() {
     
     try {
       await adminCloseSession(sessionId, secret);
-      // loadStats will eventually sync with server
-      loadStats();
     } catch (err) {
       console.error(err);
       // Rollback on error
@@ -146,21 +151,43 @@ export default function DashboardPage() {
 
   const handleToggleItemServed = async (itemId: string, isServed: boolean) => {
     if (!secret) return;
+    
+    // Optimistic Update
+    const previousSessions = [...sessions];
+    setSessions(prev => prev.map(s => ({
+      ...s,
+      orders: s.orders.map(o => ({
+        ...o,
+        items: (o.items || []).map(i => i.id === itemId ? { ...i, isServed } : i)
+      }))
+    })));
+
     try {
       await adminToggleItemServed(secret, itemId, isServed);
-      loadStats();
     } catch (err) {
       console.error(err);
+      setSessions(previousSessions);
     }
   };
 
   const handleToggleOrderItems = async (orderId: string, isServed: boolean) => {
     if (!secret) return;
+    
+    // Optimistic Update
+    const previousSessions = [...sessions];
+    setSessions(prev => prev.map(s => ({
+      ...s,
+      orders: s.orders.map(o => o.id === orderId ? {
+        ...o,
+        items: (o.items || []).map(i => ({ ...i, isServed }))
+      } : o)
+    })));
+
     try {
       await adminToggleOrderItemsServed(secret, orderId, isServed);
-      loadStats();
     } catch (err) {
       console.error(err);
+      setSessions(previousSessions);
     }
   };
 
@@ -182,6 +209,30 @@ export default function DashboardPage() {
       loadStats();
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const handleUpdateTimer = async (orderId: string, minutes: number | null) => {
+    if (!secret) return;
+
+    // Optimistic Update
+    const previousSessions = [...sessions];
+    const estimatedReadyTime = minutes !== null 
+      ? new Date(Date.now() + minutes * 60 * 1000).toISOString() 
+      : null;
+    
+    setSessions(prev => prev.map(s => ({
+      ...s,
+      orders: s.orders.map(o => o.id === orderId ? { ...o, estimatedReadyTime } : o)
+    })));
+
+    try {
+      await adminUpdateOrderTimer(orderId, minutes, secret);
+      // We don't call loadStats() here to avoid jumping; 
+      // Socket.io 'order_updated' will eventually sync the real state
+    } catch (err) {
+      console.error(err);
+      setSessions(previousSessions);
     }
   };
 
@@ -252,6 +303,7 @@ export default function DashboardPage() {
                   onDeletePayment={handleDeletePayment}
                   onToggleReminder={handleToggleReminder}
                   onRecordPayment={handleRecordPayment}
+                  onUpdateTimer={handleUpdateTimer}
                   onSendReviewRequest={handleSendReviewRequest}
                 />
               );
@@ -264,6 +316,7 @@ export default function DashboardPage() {
               onDeletePayment={handleDeletePayment}
               onToggleReminder={handleToggleReminder}
               onRecordPayment={handleRecordPayment}
+              onUpdateTimer={handleUpdateTimer}
               onSendReviewRequest={handleSendReviewRequest}
               isTakeaway
             />
@@ -292,6 +345,7 @@ export default function DashboardPage() {
                   onDeleteOrder={handleDeleteOrder}
                   onDeletePayment={handleDeletePayment}
                   onToggleReminder={handleToggleReminder}
+                  onUpdateTimer={handleUpdateTimer}
                 />
               );
             })}
@@ -308,6 +362,7 @@ export default function DashboardPage() {
               onDeleteOrder={handleDeleteOrder}
               onDeletePayment={handleDeletePayment}
               onToggleReminder={handleToggleReminder}
+              onUpdateTimer={handleUpdateTimer}
               isTakeaway
               allTakeawaySessions={takeawaySessions}
             />

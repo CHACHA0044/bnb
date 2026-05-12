@@ -387,19 +387,23 @@ const CartContent = ({
                 <div className="space-y-6">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-2">Phone Number</label>
-                    <div className={`flex items-center gap-4 bg-white p-4 rounded-2xl border-2 transition-all ${phoneError ? 'border-red-200' : 'border-[#3A241C]/5 focus-within:border-[#3A241C]/20'}`}>
-                      <Phone size={20} className="text-[#3A241C]/20" />
-                      <input
-                        type="tel"
-                        value={phoneNumber}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 10);
-                          setPhoneNumber(val);
-                          if (val.length === 10) setPhoneError('');
-                        }}
-                        placeholder="Enter 10 digit number"
-                        className="flex-1 bg-transparent border-none outline-none focus:ring-0 font-bold text-[#3A241C] placeholder:text-[#3A241C]/20"
-                      />
+                    <div className={`flex items-center gap-4 bg-white p-4 rounded-2xl border transition-all ${phoneError ? 'border-red-500' : 'border-[#3A241C]/5 focus-within:border-[#3A241C]/20'}`}>
+                      <Phone size={20} className="text-[#3A241C]/20 flex-shrink-0" />
+                      <div className="flex items-center flex-1">
+                        <span className="text-sm font-black text-[#3A241C]/40 mr-2">+91</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={phoneNumber}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                            setPhoneNumber(val);
+                            if (val.length === 10) setPhoneError('');
+                          }}
+                          placeholder="00000 00000"
+                          className="flex-1 bg-transparent border-none !border-0 p-0 m-0 outline-none !outline-none focus:ring-0 !ring-0 font-black text-base text-[#3A241C] placeholder:text-[#3A241C]/10 shadow-none appearance-none"
+                        />
+                      </div>
                     </div>
                     {phoneError && (
                       <p className="text-[9px] font-black text-red-500 uppercase tracking-widest ml-2">{phoneError}</p>
@@ -420,7 +424,11 @@ const CartContent = ({
                     }}
                     className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all ${ordering ? 'bg-[#3A241C]/50 cursor-not-allowed' : 'bg-[#3A241C] text-white shadow-[#3A241C]/20'}`}
                   >
-                    Confirm Cash Order <ArrowRight size={18} />
+                    {ordering ? (
+                      <Loader2 size={18} className="animate-spin" />
+                    ) : (
+                      <>Confirm Cash Order <ArrowRight size={18} /></>
+                    )}
                   </motion.button>
                 </div>
               </motion.div>
@@ -561,26 +569,26 @@ const CartContent = ({
                         className="overflow-hidden w-full py-1"
                       >
                         <div className="flex overflow-x-auto gap-2 pb-2 pt-1 px-0.5 custom-scrollbar">
-                        {presets.map((p, idx) => {
-                          const lowerInstr = localInstructions.toLowerCase();
-                          const isSelected = lowerInstr.split(/,\s*/).some(part => part.trim() === p.toLowerCase());
-                          const contra = contradictions[p];
-                          const isContradicting = contra && lowerInstr.split(/,\s*/).some(part => part.trim() === contra.toLowerCase());
-                          
-                          return (
-                            <motion.button
-                              key={p}
-                              whileTap={{ scale: 0.95 }}
-                              animate={isSelected ? { scale: 1.02 } : { scale: 1 }}
-                              disabled={!!isContradicting}
-                              onClick={() => handlePresetClick(p)}
-                              className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${isSelected ? 'bg-[#E76F51]/10 text-[#E76F51] border-[#E76F51]/30 shadow-sm' : isContradicting ? 'bg-[#3A241C]/5 text-[#3A241C]/30 border-transparent opacity-50 cursor-not-allowed' : 'bg-[#3A241C]/5 text-[#3A241C]/60 border-transparent hover:bg-[#3A241C]/10'}`}
-                            >
-                              {isSelected && <Check size={12} className="stroke-[3]" />}
-                              {p}
-                            </motion.button>
-                          );
-                        })}
+                          {presets.map((p, idx) => {
+                            const lowerInstr = localInstructions.toLowerCase();
+                            const isSelected = lowerInstr.split(/,\s*/).some(part => part.trim() === p.toLowerCase());
+                            const contra = contradictions[p];
+                            const isContradicting = contra && lowerInstr.split(/,\s*/).some(part => part.trim() === contra.toLowerCase());
+
+                            return (
+                              <motion.button
+                                key={p}
+                                whileTap={{ scale: 0.95 }}
+                                animate={isSelected ? { scale: 1.02 } : { scale: 1 }}
+                                disabled={!!isContradicting}
+                                onClick={() => handlePresetClick(p)}
+                                className={`flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${isSelected ? 'bg-[#E76F51]/10 text-[#E76F51] border-[#E76F51]/30 shadow-sm' : isContradicting ? 'bg-[#3A241C]/5 text-[#3A241C]/30 border-transparent opacity-50 cursor-not-allowed' : 'bg-[#3A241C]/5 text-[#3A241C]/60 border-transparent hover:bg-[#3A241C]/10'}`}
+                              >
+                                {isSelected && <Check size={12} className="stroke-[3]" />}
+                                {p}
+                              </motion.button>
+                            );
+                          })}
                         </div>
                       </motion.div>
                     )}

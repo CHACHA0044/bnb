@@ -861,11 +861,9 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                                 <h3 className="font-black text-[#3A241C] text-[11px] tracking-tight line-clamp-2 leading-tight">
                                   {editingItem.name || "Item Name"}
                                 </h3>
-                                {(editingItem.descriptionEn || editingItem.descriptionHi || !editingItem.name) && (
-                                  <p className="text-[9px] text-[#3A241C]/50 leading-[1.3] mt-1 font-medium tracking-[0.02em] line-clamp-2">
-                                    {editingItem.descriptionEn || editingItem.descriptionHi || "Item description will appear here"}
-                                  </p>
-                                )}
+                                <p className="text-[9px] text-[#3A241C]/50 leading-[1.3] mt-1 font-medium tracking-[0.02em] line-clamp-2">
+                                  {editingItem.descriptionEn || "Item description will appear here"}
+                                </p>
                               </div>
                               <div className="mt-auto">
                                 <span className="font-black text-xs text-[#E76F51] tracking-tight">
@@ -948,28 +946,13 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
 
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Description (English)</label>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Description</label>
                     <textarea 
-                      rows={2}
+                      rows={3}
                       value={editingItem.descriptionEn || ""}
-                      onChange={e => {
-                        const val = e.target.value;
-                        const nextItem = { ...editingItem, descriptionEn: val };
-                        if ((!editingItem.descriptionHi || editingItem.descriptionHi === editingItem.descriptionEn) && editingItem.id === "NEW") {
-                          nextItem.descriptionHi = val;
-                        }
-                        setEditingItem(nextItem);
-                      }}
+                      onChange={e => setEditingItem({ ...editingItem, descriptionEn: e.target.value })}
+                      placeholder="Describe this item..."
                       className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-medium outline-none focus:ring-2 focus:ring-[#E76F51] resize-none"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-1">Description (Hindi)</label>
-                    <textarea 
-                      rows={2}
-                      value={editingItem.descriptionHi || ""}
-                      onChange={e => setEditingItem({...editingItem, descriptionHi: e.target.value})}
-                      className="w-full bg-[#F9F7F4] border-none rounded-2xl py-4 px-6 text-[#3A241C] font-medium outline-none focus:ring-2 focus:ring-[#E76F51] resize-none font-hindi"
                     />
                   </div>
                 </div>
@@ -1153,7 +1136,7 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
               initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
               className="relative bg-white w-full max-w-sm rounded-[3rem] p-10 shadow-2xl flex flex-col"
             >
-              <h3 className="text-2xl font-black text-[#3A241C] tracking-tight mb-8 font-hindi">{editingCategory.id === "NEW" ? "नई कैटेगरी" : "कैटेगरी संपादित करें"}</h3>
+              <h3 className="text-2xl font-black text-[#3A241C] tracking-tight mb-8">{editingCategory.id === "NEW" ? "New Category" : "Edit Category"}</h3>
               
               <div className="space-y-6 mb-10">
                 <div className="space-y-2">
@@ -1183,9 +1166,9 @@ export default function AdminMenuManager({ secret }: AdminMenuManagerProps) {
                   className="w-full py-5 bg-[#3A241C] text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-[#3A241C]/10 hover:bg-[#E76F51] transition-all flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   {savingCategory ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                  {savingCategory ? "इंतज़ार करें..." : "सेव करें / Save"}
+                  {savingCategory ? "Saving..." : "Save"}
                 </button>
-                <button type="button" disabled={savingCategory} onClick={() => setEditingCategory(null)} className="py-4 text-[#3A241C]/20 font-black text-[10px] uppercase tracking-widest hover:text-[#3A241C] transition-all">रद्द करें / Cancel</button>
+                <button type="button" disabled={savingCategory} onClick={() => setEditingCategory(null)} className="py-4 text-[#3A241C]/20 font-black text-[10px] uppercase tracking-widest hover:text-[#3A241C] transition-all">Cancel</button>
               </div>
             </motion.form>
           </div>

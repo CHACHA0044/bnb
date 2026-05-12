@@ -7,9 +7,7 @@ import { type OrderMenuItem } from "@/lib/menu";
 interface MenuSectionProps {
   category: string;
   items: OrderMenuItem[];
-  lang: "EN" | "HI";
   onAdd: (item: OrderMenuItem) => void;
-  onToggleLang: () => void;
   isRestaurantOpen: boolean;
   sectionRef: (el: HTMLElement | null) => void;
 }
@@ -17,9 +15,7 @@ interface MenuSectionProps {
 const MenuSection = ({
   category,
   items,
-  lang,
   onAdd,
-  onToggleLang,
   isRestaurantOpen,
   sectionRef
 }: MenuSectionProps) => {
@@ -39,9 +35,7 @@ const MenuSection = ({
           <MenuItem 
             key={item.id}
             item={item}
-            lang={lang}
             onAdd={onAdd}
-            onToggleLang={onToggleLang}
             isRestaurantOpen={isRestaurantOpen}
             priority={idx < 4} // Priority for top items in each category
           />

@@ -4,7 +4,6 @@ export interface OrderMenuItem {
   price: number;
   category: string;
   descriptionEn?: string;
-  descriptionHi?: string;
   image?: string;
   priceLabel?: string;
   tags?: string[];

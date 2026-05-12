@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { motion } from "framer-motion";
-import { CreditCard, Banknote, Bell, X, Check, Plus, Loader2, Star } from "lucide-react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { CreditCard, Banknote, Bell, X, Check, Plus, Loader2, Star, Clock } from "lucide-react";
 import { SessionData } from "@/lib/api";
 
 interface AdminPaymentSummaryProps {
@@ -12,6 +12,7 @@ interface AdminPaymentSummaryProps {
   onDeletePayment: (paymentId: string) => Promise<void>;
   onToggleReminder: (sessionId: string, reminder: boolean) => Promise<void>;
   onRecordPayment: (sessionId: string, method: "CASH" | "UPI", amount: number) => Promise<void>;
+  onUpdateTimer?: (orderId: string, minutes: number | null) => Promise<void>;
   onSendReviewRequest?: (sessionId: string, requested: boolean) => void;
   isTakeaway?: boolean;
 }
@@ -23,12 +24,74 @@ export default function AdminPaymentSummary({
   onDeletePayment,
   onToggleReminder,
   onRecordPayment,
+  onUpdateTimer,
   onSendReviewRequest,
   isTakeaway = false,
 }: AdminPaymentSummaryProps) {
   const [recordAmount, setRecordAmount] = useState<string>("");
   const [recordMethod, setRecordMethod] = useState<"CASH" | "UPI">("CASH");
   const [isRecording, setIsRecording] = useState(false);
+  const [showTimer, setShowTimer] = useState(false);
+  const [customTimerValue, setCustomTimerValue] = useState("");
+  const [countdown, setCountdown] = useState<string | null>(null);
+  const [selectedPresets, setSelectedPresets] = useState<Set<number>>(new Set());
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+
+  // Initialize selectedPresets only when a NEW active order is found
+  useEffect(() => {
+    const currentActiveOrder = session?.orders.find(o => 
+      o.status !== "CANCELLED" && o.status !== "SERVED" && o.estimatedReadyTime
+    );
+    
+    // If the active order ID changed, or we have no active order, reset/re-sync
+    if (currentActiveOrder?.id !== activeOrderId) {
+      setActiveOrderId(currentActiveOrder?.id || null);
+      
+      if (!currentActiveOrder?.estimatedReadyTime) {
+        setSelectedPresets(new Set());
+      } else {
+        const diffMins = Math.round((new Date(currentActiveOrder.estimatedReadyTime).getTime() - Date.now()) / 60000);
+        let remaining = diffMins;
+        const newPresets = new Set<number>();
+        // Greedy fit for presets
+        if (remaining >= 15) { newPresets.add(15); remaining -= 15; }
+        if (remaining >= 10) { newPresets.add(10); remaining -= 10; }
+        if (remaining >= 5) { newPresets.add(5); remaining -= 5; }
+        setSelectedPresets(newPresets);
+      }
+    }
+  }, [session?.id, session?.orders.length]); // Only re-sync on session change or order count change
+
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const orders = session?.orders || [];
+      const activeTimers = orders
+        .filter(o => o.status !== "CANCELLED" && o.status !== "SERVED" && o.estimatedReadyTime)
+        .map(o => new Date(o.estimatedReadyTime!).getTime());
+      
+      if (activeTimers.length === 0) {
+        setCountdown(null);
+        return;
+      }
+      
+      const maxReadyTime = Math.max(...activeTimers);
+      const now = Date.now();
+      const diff = maxReadyTime - now;
+      
+      if (diff <= 0) {
+        setCountdown("READY");
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setCountdown(`${mins}:${secs.toString().padStart(2, '0')}`);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [session?.orders]);
 
   if (!session) {
     return (
@@ -92,6 +155,17 @@ export default function AdminPaymentSummary({
           <p className="text-[8px] font-bold text-[#3A241C]/30 uppercase tracking-widest">Payment History</p>
         </div>
         <div className="flex items-center gap-2">
+          {countdown && (
+            <motion.span 
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-[10px] font-black text-[#E76F51] bg-[#E76F51]/5 px-2 py-1 rounded-lg border border-[#E76F51]/10 flex items-center gap-1.5"
+            >
+              <div className="w-1.5 h-1.5 rounded-full bg-[#E76F51] animate-pulse" />
+              {countdown}
+            </motion.span>
+          )}
+
           <motion.button 
             whileTap={{ scale: 0.9 }}
             whileHover={{ scale: 1.1 }}
@@ -125,6 +199,99 @@ export default function AdminPaymentSummary({
           >
             <Star size={16} className={session.reviewRequested ? "animate-bounce" : ""} />
           </motion.button>
+
+          {/* Preparation Timer Button */}
+          <div className="relative flex items-center">
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.1 }}
+              onClick={() => setShowTimer(!showTimer)}
+              className={`p-2 rounded-xl transition-all border cursor-pointer relative z-10 ${
+                orders.some(o => o.estimatedReadyTime) 
+                  ? "bg-[#E76F51] text-white border-[#E76F51] shadow-lg shadow-[#E76F51]/20" 
+                  : "bg-[#E76F51]/5 text-[#E76F51] border-[#E76F51]/10 hover:bg-[#E76F51]/10"
+              }`}
+              title="Set Preparation Time"
+            >
+              <Clock size={16} className={orders.some(o => o.estimatedReadyTime) ? "animate-bounce" : ""} />
+            </motion.button>
+
+            <AnimatePresence>
+              {showTimer && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute right-0 top-full mt-3 p-4 bg-white rounded-[1.5rem] shadow-2xl border border-gray-100 z-[100] min-w-[200px]"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-[9px] font-black uppercase tracking-widest text-[#3A241C]/40">Active Orders Timer</h4>
+                    {orders.some(o => o.estimatedReadyTime) && (
+                      <button 
+                        onClick={() => {
+                          orders.forEach(o => onUpdateTimer?.(o.id, null));
+                          setShowTimer(false);
+                        }}
+                        className="text-[8px] font-black text-[#B71C1C] uppercase tracking-widest hover:underline"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    {[5, 10, 15].map(m => {
+                      const isActive = selectedPresets.has(m);
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => {
+                            const newPresets = new Set(selectedPresets);
+                            if (newPresets.has(m)) newPresets.delete(m);
+                            else newPresets.add(m);
+                            setSelectedPresets(newPresets);
+                            
+                            const totalMins = Array.from(newPresets).reduce((s, v) => s + v, 0);
+                            const activeOrder = orders.find(o => o.status === "PLACED" || o.status === "PREPARING");
+                            if (activeOrder) onUpdateTimer?.(activeOrder.id, totalMins === 0 ? null : totalMins);
+                          }}
+                          className={`py-2 rounded-xl text-[10px] font-black transition-all ${
+                            isActive 
+                              ? "bg-[#E76F51] text-white shadow-md shadow-[#E76F51]/20" 
+                              : "bg-gray-50 hover:bg-[#E76F51]/10 hover:text-[#E76F51]"
+                          }`}
+                        >
+                          {m}m
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex gap-2">
+                    <input 
+                      type="number"
+                      value={customTimerValue}
+                      onChange={(e) => setCustomTimerValue(e.target.value)}
+                      placeholder="Custom"
+                      className="flex-1 min-w-0 bg-gray-50 border-none rounded-xl px-3 py-2 text-[10px] font-bold outline-none focus:ring-1 focus:ring-[#E76F51]/20"
+                    />
+                    <button
+                      onClick={() => {
+                        const mins = parseInt(customTimerValue);
+                        if (mins > 0) {
+                          const activeOrder = orders.find(o => o.status === "PLACED" || o.status === "PREPARING");
+                          if (activeOrder) onUpdateTimer?.(activeOrder.id, mins);
+                          setCustomTimerValue("");
+                          setShowTimer(false);
+                        }
+                      }}
+                      className="p-2 bg-[#3A241C] text-white rounded-xl hover:bg-[#E76F51] transition-all"
+                    >
+                      <Check size={14} />
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 

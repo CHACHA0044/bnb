@@ -71,6 +71,7 @@ export interface OrderData {
   isTakeaway: boolean;
   packingCharges: number;
   createdAt: string;
+  estimatedReadyTime?: string;
   instructions?: string;
   customerPhone?: string;
   items: OrderItemData[];
@@ -242,6 +243,15 @@ export function adminUpdateOrder(orderId: string, status: string, secret: string
   return apiFetch<OrderData>(`/api/order/${orderId}`, {
     method: "PATCH",
     body: JSON.stringify({ status }),
+    adminSecret: secret,
+  });
+}
+
+/** Admin: Update preparation timer */
+export function adminUpdateOrderTimer(orderId: string, minutes: number | null, secret: string) {
+  return apiFetch<OrderData>(`/api/order/${orderId}/timer`, {
+    method: "PATCH",
+    body: JSON.stringify({ minutes }),
     adminSecret: secret,
   });
 }
@@ -561,3 +571,4 @@ export function submitFeedback(sessionId: string, feedback: string) {
     body: JSON.stringify({ sessionId, feedback }),
   });
 }
+

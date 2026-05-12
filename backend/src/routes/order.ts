@@ -249,10 +249,26 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
     }
 
     const timeline = Array.isArray(order.statusTimeline) ? order.statusTimeline : [];
+    
+    // If marking as served, also mark all items as served
+    if (status === "SERVED") {
+      await prisma.orderItem.updateMany({
+        where: { orderId },
+        data: { isServed: true }
+      });
+    } else if (status === "PLACED") {
+      // If reverting to placed, mark items as unserved
+      await prisma.orderItem.updateMany({
+        where: { orderId },
+        data: { isServed: false }
+      });
+    }
+
     const updatedOrder = (await prisma.order.update({
       where: { id: orderId },
       data: { 
         status,
+        estimatedReadyTime: status === "SERVED" ? null : order.estimatedReadyTime,
         statusTimeline: [...timeline, { status, timestamp: new Date().toISOString() }]
       } as any,
       include: { items: true, session: true },
@@ -299,8 +315,17 @@ router.patch("/item/:itemId/served", requireAdmin, async (req: Request, res: Res
     const item = await prisma.orderItem.update({
       where: { id: itemId },
       data: { isServed },
-      include: { order: { include: { session: true } } },
+      include: { order: { include: { session: true, items: true } } },
     }) as any;
+
+    // If all items served, clear order timer
+    const allServed = item.order.items.every((i: any) => i.id === itemId ? isServed : i.isServed);
+    if (allServed && item.order.estimatedReadyTime) {
+      await prisma.order.update({
+        where: { id: item.orderId },
+        data: { estimatedReadyTime: null }
+      });
+    }
 
     try {
       const io = getIO();
@@ -346,6 +371,13 @@ router.patch("/:orderId/items/served", requireAdmin, async (req: Request, res: R
       where: { orderId },
       data: { isServed }
     });
+
+    if (isServed) {
+      await prisma.order.update({
+        where: { id: orderId },
+        data: { estimatedReadyTime: null }
+      });
+    }
 
     const order = await prisma.order.findUnique({
       where: { id: orderId },
@@ -437,6 +469,43 @@ router.delete("/:orderId", requireAdmin, async (req: Request, res: Response): Pr
   } catch (err) {
     console.error("[ORDER] Delete error:", err);
     res.status(500).json({ error: "Failed to delete order" });
+  }
+});
+
+/**
+ * PATCH /api/order/:orderId/timer
+ * Set or update preparation timer. Admin only.
+ * Body: { minutes: number | null }
+ */
+router.patch("/:orderId/timer", requireAdmin, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orderId } = req.params as { orderId: string };
+    const { minutes } = req.body as { minutes: number | null };
+
+    let estimatedReadyTime: Date | null = null;
+    if (minutes !== null) {
+      estimatedReadyTime = new Date(Date.now() + minutes * 60 * 1000);
+    }
+
+    const order = await prisma.order.update({
+      where: { id: orderId },
+      data: { estimatedReadyTime },
+      include: { items: true, session: true }
+    }) as any;
+
+    try {
+      const io = getIO();
+      io.to(`session:${order.sessionId}`).to("admin").emit("order_updated", {
+        order,
+        sessionId: order.sessionId,
+        tableId: order.session.tableId,
+      });
+    } catch { /* skip */ }
+
+    res.json(order);
+  } catch (err) {
+    console.error("[ORDER] Timer update error:", err);
+    res.status(500).json({ error: "Failed to update timer" });
   }
 });
 
