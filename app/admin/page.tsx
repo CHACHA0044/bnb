@@ -219,7 +219,7 @@ export default function DashboardPage() {
     const previousSessions = [...sessions];
     const estimatedReadyTime = minutes !== null 
       ? new Date(Date.now() + minutes * 60 * 1000).toISOString() 
-      : null;
+      : undefined;
     
     setSessions(prev => prev.map(s => ({
       ...s,

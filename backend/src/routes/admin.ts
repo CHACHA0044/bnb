@@ -205,6 +205,11 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
     ]);
 
     const session = await prisma.session.findUnique({ where: { id: sessionId } });
+    if (!session) {
+      res.status(404).json({ error: "Session not found" });
+      return;
+    }
+
 
     // Trigger history snapshots for all orders in the session
     try {
@@ -220,9 +225,11 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
 
     try {
       const io = getIO();
-      io.to(`session:${sessionId}`).to("admin").emit("session_updated", {
-        session,
-        tableId: session.tableId,
+      io.to(`session:${sessionId}`).to("admin").emit("session_closed", {
+        sessionId,
+        tableId: sessionData.tableId,
+        closedAt: new Date().toISOString(),
+        isTakeaway: sessionData.tableId === "TAKEAWAY",
       });
     } catch { /* skip */ }
 
@@ -318,6 +325,11 @@ router.post("/orders/new", async (req: Request, res: Response): Promise<void> =>
       session = await prisma.session.create({
         data: { tableId, status: "OPEN", sessionNumber }
       });
+    }
+
+    if (!session) {
+      res.status(500).json({ error: "Failed to create/find session" });
+      return;
     }
 
     // 2. Create order

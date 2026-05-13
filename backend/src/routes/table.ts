@@ -130,4 +130,34 @@ router.patch("/session/:sessionId/review-dismiss", async (req: Request, res: Res
   }
 });
 
+/**
+ * POST /api/table/session/start
+ * Creates a NEW session for a table (primarily for Takeaway isolation).
+ */
+router.post("/session/start", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { tableId } = req.body as { tableId: string };
+    if (!VALID_TABLES.includes(tableId)) {
+      res.status(400).json({ error: `Invalid table: ${tableId}` });
+      return;
+    }
+
+    const session = await prisma.session.create({
+      data: { 
+        tableId, 
+        status: "OPEN"
+      },
+      include: {
+        orders: { include: { items: true } },
+        payments: true
+      }
+    });
+
+    res.json(session);
+  } catch (err) {
+    console.error("[TABLE] Session start error:", err);
+    res.status(500).json({ error: "Failed to start session" });
+  }
+});
+
 export default router;

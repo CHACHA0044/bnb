@@ -71,7 +71,10 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     });
 
     if (!session || session.status !== "OPEN") {
-      res.status(400).json({ error: "Session not found or already closed" });
+      const reason = session?.status === "CLOSED" 
+        ? "Session has been closed by admin. Please scan QR to start a new order."
+        : "Session not found or already closed";
+      res.status(400).json({ error: reason });
       return;
     }
 

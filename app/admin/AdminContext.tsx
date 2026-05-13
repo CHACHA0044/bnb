@@ -113,6 +113,10 @@ export function AdminProvider({ children, secret, authenticated }: { children: R
             return s;
           }));
         }),
+        on("session_closed", (data: any) => {
+          console.log("[SOCKET] session_closed received:", data);
+          setSessions(prev => prev.filter(s => s.id !== data.sessionId));
+        }),
         on("session_updated", (data: any) => {
           // If full session provided, use it
           if (data.session) {

@@ -141,26 +141,7 @@ const OrderSuccess = ({
 
   const hasActiveOrders = preparingItems.length > 0 || servedItems.length > 0;
   
-  // SESSION CLOSED SCREEN
-  if (sessionClosed) {
-    return (
-      <div className="p-8 lg:p-12 flex flex-col items-center text-center h-full justify-center bg-[#F9F7F4]">
-        <motion.div 
-          initial={{ scale: 0.5, opacity: 0 }} 
-          animate={{ scale: 1, opacity: 1 }}
-          className="w-24 h-24 rounded-full bg-[#3A241C] flex items-center justify-center mb-8 shadow-2xl"
-        >
-          <Package size={40} className="text-[#E76F51]" />
-        </motion.div>
-        <h2 className="text-3xl font-black text-[#3A241C] mb-4 uppercase tracking-tighter">Thank You!</h2>
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/40 mb-10 leading-loose">
-          Your session has been closed.<br/>We hope you enjoyed your meal!
-        </p>
-        <div className="w-full h-px bg-[#3A241C]/5 mb-10" />
-        <p className="text-[8px] font-black uppercase tracking-[0.4em] text-[#E76F51] animate-pulse">Visit Again Soon</p>
-      </div>
-    );
-  }
+
 
   // PAYMENT SUCCESS SCREEN
   if (paymentSuccess && !hasUnconfirmed) {

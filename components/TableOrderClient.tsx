@@ -21,6 +21,7 @@ import CategoryBar from "./order/CategoryBar";
 import MenuSection from "./order/MenuSection";
 import CartContent from "./order/CartContent";
 import { AnimatedAmount } from "./order/OrderSummary";
+import SessionClosedScreen from "./order/SessionClosedScreen";
 
 // Lazy load modals for better initial load performance
 const VariantModal = dynamic(() => import("./order/VariantModal"), { ssr: false });
@@ -117,6 +118,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const [showConfirmed, setShowConfirmed] = useState(false);
   const [showAdminConfirmed, setShowAdminConfirmed] = useState(false);
   const notifiedConfirmedIds = useRef(new Set<string>());
+  const [closedAt, setClosedAt] = useState<string | null>(null);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
@@ -296,10 +298,19 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
       if (isTakeawayMode) {
         sidToFetch = localStorage.getItem("bnb_takeaway_session_id") || undefined;
+        
+        // AUTO-CREATE Takeaway Session if missing
         if (!sidToFetch) {
-          setLoading(false);
-          loadStatus();
-          return;
+          const response = await fetch("/api/table/session/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tableId: "TAKEAWAY" })
+          });
+          const newSession = await response.json();
+          if (newSession?.id) {
+            sidToFetch = newSession.id;
+            localStorage.setItem("bnb_takeaway_session_id", newSession.id);
+          }
         }
       }
 
@@ -313,13 +324,13 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       localStorage.setItem(sessionKey, JSON.stringify(sessionData));
 
       if (sessionData?.status === "CLOSED") {
-        if (isTakeawayMode) localStorage.removeItem("bnb_takeaway_session_id");
-        localStorage.removeItem(sessionKey);
         setSessionClosed(true);
-        setOrderPlaced(true); // Show the thank you screen
+        // For takeaway, we keep the session ID to allow 24h rating
+        if (!isTakeawayMode) {
+          localStorage.removeItem(`bnb_cached_session_${tableId}`);
+        }
       }
     } catch (err) {
-      if (isTakeawayMode) localStorage.removeItem("bnb_takeaway_session_id");
       setError(err instanceof Error ? err.message : "Failed to load session");
     } finally {
       setLoading(false);
@@ -488,7 +499,21 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       }),
       on("session_updated", (data: any) => {
         console.log("[SOCKET] session_updated received:", data);
-        loadSession();
+        if (data.sessionId === session?.id) {
+           setSession(prev => prev ? { ...prev, ...data } : null);
+        }
+      }),
+      on("session_closed", (data: any) => {
+        console.log("[SOCKET] session_closed received:", data);
+        if (data.sessionId === session?.id) {
+          setSessionClosed(true);
+          setClosedAt(data.closedAt);
+          // Clear non-essential caches
+          const sessionKey = isTakeawayMode ? "bnb_cached_session_takeaway" : `bnb_cached_session_${tableId}`;
+          if (!isTakeawayMode) {
+            localStorage.removeItem(sessionKey);
+          }
+        }
       }),
     ];
     return () => unsubs.forEach((u) => u());
@@ -1249,6 +1274,18 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       )}
 
       {/* CLOSED OVERLAY */}
+      {sessionClosed && session && (
+        <SessionClosedScreen 
+          session={session}
+          isTakeaway={isTakeawayMode}
+          closedAt={closedAt || session.updatedAt || new Date().toISOString()}
+          ratings={ratings}
+          ratedItems={ratedItems}
+          onRateItem={handleRateItem}
+          onFeedbackSubmit={handleFeedbackSubmit}
+        />
+      )}
+
       {!restaurantStatus.isOpen && !session && (
         <div className="absolute inset-0 z-[100] bg-[#3A241C] flex items-center justify-center p-6 text-center">
           <div className="max-w-md">
