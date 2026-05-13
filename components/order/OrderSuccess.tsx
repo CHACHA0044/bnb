@@ -2,7 +2,7 @@
 
 import React, { memo, useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, CheckCircle2, Plus, Bell, Package, CreditCard, Banknote, Star, ShieldAlert, XCircle, X, MessageSquare } from "lucide-react";
+import { Loader2, CheckCircle2, Plus, Bell, Package, CreditCard, Banknote, Star, ShieldAlert, XCircle, X, MessageSquare, ArrowLeft, Phone, ArrowRight } from "lucide-react";
 import Image from "next/image";
 
 interface OrderSuccessProps {
@@ -12,7 +12,7 @@ interface OrderSuccessProps {
   onPaymentModeChange: (mode: "UPI" | "CASH" | null) => void;
   paymentMode: "UPI" | "CASH" | null;
   onUPIPayment: () => void;
-  onCashPayment: () => void;
+  onCashPayment: (phone?: string) => void;
   payingUPI: boolean;
   payingCash: boolean;
   onRateItem: (name: string, rating: number) => void;
@@ -58,64 +58,18 @@ const OrderSuccess = ({
   const [upiView, setUpiView] = useState<'CHOICE' | 'QR'>('CHOICE');
   const [hasPaid, setHasPaid] = useState(payingUPI);
   const [payDelay, setPayDelay] = useState(10);
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [copySuccess, setCopySuccess] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   const upiId = orderConfig?.upiId || process.env.NEXT_PUBLIC_UPI_ID || "hemadembla505@okicici";
   const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent("Benne n Beans")}&am=${remaining.toFixed(2)}&cu=INR&tn=${encodeURIComponent("Order at Benne n Beans")}`;
 
-  useEffect(() => {
-    setMounted(true);
-    setIsMobile(/Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 1024);
-  }, []);
-
-  useEffect(() => {
-    if (mounted) {
-      setUpiView(isMobile ? 'CHOICE' : 'QR');
-    }
-  }, [isMobile, mounted]);
-
-  useEffect(() => {
-    if (paymentMode === 'UPI' && !hasPaid) {
-      const timer = setInterval(() => {
-        setPayDelay(prev => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [paymentMode, hasPaid]);
-
-  useEffect(() => {
-    if (session?.feedback !== undefined && session.feedback !== localFeedback) {
-      setLocalFeedback(session.feedback || "");
-    }
-  }, [session?.feedback]);
-
-  // Reset UPI/payment state on rejection
-  useEffect(() => {
-    if (!paymentSuccess && hasPaid) {
-      setHasPaid(false);
-      setPayDelay(10);
-      if (mounted && isMobile) setUpiView('CHOICE');
-    }
-  }, [paymentSuccess]);
-  const notifiedCancelledIds = React.useRef<Set<string>>(new Set());
-
   const cancelledOrders = [
     ...(session?.orders ?? []).filter((o: any) => o.status === "CANCELLED"),
     ...deletedOrders
   ];
-
-  useEffect(() => {
-    const currentIds = cancelledOrders.map((o: any) => o.id);
-    const newIds = currentIds.filter(id => !notifiedCancelledIds.current.has(id));
-
-    if (newIds.length > 0) {
-      setShowCancellation(true);
-      newIds.forEach(id => notifiedCancelledIds.current.add(id));
-      const timer = setTimeout(() => setShowCancellation(false), 60000); // Hide after 1 min
-      return () => clearTimeout(timer);
-    }
-  }, [cancelledOrders.length]);
 
   const allOrderedItems = (session?.orders ?? []).flatMap((o: any) => o.items)
     .filter((i: any) => {
@@ -133,13 +87,67 @@ const OrderSuccess = ({
     return i.isServed && order?.status !== "CANCELLED";
   });
 
-  
   const ratingEligibleItems = allOrderedItems.filter((i: any) => !i.name.toLowerCase().includes("soft drink"));
   const hasPendingPayment = (session?.payments ?? []).some((p: any) => p.status === "PENDING" || p.status === "UNPAID");
   const hasUnconfirmed = isProcessingOrder || (session?.orders ?? []).some((o: any) => o.status === "UNCONFIRMED");
   const hasConfirmed = (session?.orders ?? []).some((o: any) => o.status !== "UNCONFIRMED" && o.status !== "CANCELLED");
-
   const hasActiveOrders = preparingItems.length > 0 || servedItems.length > 0;
+
+  useEffect(() => {
+    setMounted(true);
+    setIsMobile(/Android|iPhone/i.test(navigator.userAgent) || window.innerWidth < 1024);
+  }, []);
+
+  useEffect(() => {
+    if (mounted) {
+      setUpiView(isMobile ? 'CHOICE' : 'QR');
+    }
+  }, [isMobile, mounted]);
+
+  useEffect(() => {
+    // If a payment already exists in the session, don't wait
+    if (hasPendingPayment && payDelay > 0) {
+      setPayDelay(0);
+      return;
+    }
+
+    if (paymentMode === 'UPI' && !hasPaid) {
+      const timer = setInterval(() => {
+        setPayDelay(prev => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+      return () => clearInterval(timer);
+    }
+  }, [paymentMode, hasPaid, hasPendingPayment]);
+
+  useEffect(() => {
+    if (session?.feedback !== undefined && session.feedback !== localFeedback) {
+      setLocalFeedback(session.feedback || "");
+    }
+  }, [session?.feedback]);
+
+  // Reset UPI/payment state on rejection
+  useEffect(() => {
+    if (!paymentSuccess && hasPaid) {
+      setHasPaid(false);
+      setPayDelay(10);
+      if (mounted && isMobile) setUpiView('CHOICE');
+    }
+  }, [paymentSuccess]);
+  const notifiedCancelledIds = React.useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const currentIds = cancelledOrders.map((o: any) => o.id);
+    const newIds = currentIds.filter(id => !notifiedCancelledIds.current.has(id));
+
+    if (newIds.length > 0) {
+      setShowCancellation(true);
+      newIds.forEach(id => notifiedCancelledIds.current.add(id));
+      const timer = setTimeout(() => setShowCancellation(false), 60000); // Hide after 1 min
+      return () => clearTimeout(timer);
+    }
+  }, [cancelledOrders.length]);
+
+
   
 
 
@@ -185,7 +193,21 @@ const OrderSuccess = ({
   const showOrdered = hasConfirmed && !hasUnconfirmed && !isProcessingOrder;
 
   return (
-    <div className="px-8 pb-8 pt-12 lg:p-10 flex flex-col items-center text-center h-full overflow-y-auto scrollbar-hide">
+    <div className="relative px-8 pb-8 pt-4 lg:p-10 flex flex-col items-center text-center h-full overflow-y-auto scrollbar-hide">
+      <motion.button
+        initial={{ opacity: 0, x: -10 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ type: "spring", damping: 25, stiffness: 400 }}
+        whileHover={{ scale: 1.15, x: -2 }}
+        whileTap={{ scale: 0.85, x: -5 }}
+        onClick={() => {
+          if (paymentMode) onPaymentModeChange(null);
+          else onAddMore();
+        }}
+        className="absolute left-5 top-6 w-10 h-10 flex items-center justify-center transition-all z-[100] text-[#3A241C] active:bg-[#3A241C]/5 rounded-full"
+      >
+        <ArrowLeft size={22} className="stroke-[3]" />
+      </motion.button>
       <div className="w-full space-y-3 mb-6 hidden lg:block">
 
         {(() => {
@@ -217,95 +239,140 @@ const OrderSuccess = ({
         <p className="text-[10px] font-black uppercase tracking-widest text-[#B71C1C]/40 mb-4">Staff has rejected your request</p>
       ) : showProcessing && (
           <div className="flex flex-col items-center gap-8 w-full max-w-[400px] mx-auto px-2">
-            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#3A241C]/40 animate-pulse">Waiting for Admin Confirmation</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#3A241C]/40 animate-pulse">Waiting for Confirmation</p>
             
-            {paymentMode === "UPI" && (
-              <div className="w-full space-y-8">
-                {hasPaid ? (
-                  <motion.div 
-                    initial={{ scale: 0.9, opacity: 0 }} 
-                    animate={{ scale: 1, opacity: 1 }} 
-                    className="bg-white rounded-[2.5rem] p-8 border-2 border-[#E76F51] shadow-2xl w-full"
-                  >
-                    <div className="py-8 space-y-6">
-                      <div className="w-24 h-24 bg-[#6A994E]/10 rounded-full flex items-center justify-center mx-auto border-2 border-dashed border-[#6A994E]/30">
-                        <Loader2 className="animate-spin text-[#6A994E]" size={40} />
+            {!paymentMode && !hasPaid && !hasPendingPayment && (
+              <div className="w-full space-y-6">
+                <div className="w-full h-px bg-[#3A241C]/5" />
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/30">You can pay while waiting</p>
+                  <div className="grid grid-cols-2 gap-4 w-full">
+                    <motion.button 
+                      whileHover={{ scale: 1.02, y: -2 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => onPaymentModeChange("UPI")} 
+                      className="h-24 bg-[#3A241C] text-white rounded-[1.5rem] flex flex-col items-center justify-center gap-1.5 shadow-[0_15px_30px_-12px_rgba(58,36,28,0.35)] transition-all border-2 border-[#3A241C]"
+                    >
+                      <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center mb-0.5">
+                        <CreditCard size={18} />
                       </div>
-                      <div className="space-y-2">
-                        <h4 className="font-black text-[#3A241C] text-xl uppercase tracking-tight">Verifying Payment</h4>
-                        <p className="text-[11px] font-black uppercase tracking-[0.2em] text-[#3A241C]/40 leading-relaxed">
-                          Waiting for payment confirmation<br/>from admin
-                        </p>
+                      <div className="flex flex-col items-center leading-none">
+                        <span className="text-[10px] font-black uppercase tracking-widest">Pay Now</span>
+                        <span className="text-[6px] font-bold text-white/40 tracking-[0.2em] mt-1">UPI</span>
                       </div>
+                    </motion.button>
+                    
+                    <motion.button 
+                      whileHover={{ scale: 1.02, y: -2, backgroundColor: "#F9F7F4" }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => onPaymentModeChange("CASH")} 
+                      className="h-24 bg-white text-[#3A241C] rounded-[1.5rem] flex flex-col items-center justify-center gap-1.5 border-2 border-[#3A241C]/5 shadow-sm transition-all"
+                    >
+                      <div className="w-8 h-8 bg-[#3A241C]/5 rounded-xl flex items-center justify-center mb-0.5">
+                        <Banknote size={18} />
+                      </div>
+                      <div className="flex flex-col items-center leading-none">
+                        <span className="text-[9px] font-black uppercase tracking-tight">Pay After Eating</span>
+                        <span className="text-[6px] font-bold text-[#3A241C]/40 tracking-[0.2em] mt-1">CASH</span>
+                      </div>
+                    </motion.button>
+                  </div>
+              </div>
+            )}
+
+            {(paymentMode || hasPaid || hasPendingPayment) && (
+              <div className="w-full space-y-4 lg:space-y-6 mt-2">
+                <div className="bg-[#F9F7F4] rounded-[2rem] py-6 px-12 border-2 border-[#E76F51]/10 flex flex-col items-center mx-auto shadow-sm max-w-max">
+                  <span className="text-[9px] font-black text-[#3A241C]/30 uppercase tracking-[0.4em] mb-1">Current Bill</span>
+                  <p className="text-3xl font-black text-[#3A241C] tracking-tighter">₹ {remaining}</p>
+                </div>
+
+                {hasPendingPayment || payingUPI || hasPaid ? (
+                  <div className="bg-[#F9F7F4] rounded-[2rem] p-8 border-2 border-dashed border-[#3A241C]/10 flex flex-col items-center gap-4 w-full">
+                    <div className="w-12 h-12 bg-white/50 rounded-full flex items-center justify-center border-2 border-dashed border-[#3A241C]/10">
+                      <Loader2 className="animate-spin text-[#3A241C]/20" size={24} />
                     </div>
-                  </motion.div>
-                ) : (
-                  <div className="w-full space-y-10">
-                    {mounted && isMobile && upiView === 'CHOICE' ? (
-                      <div className="space-y-4">
-                        <a 
-                          href={upiLink}
-                          className="w-full h-20 bg-[#3A241C] text-white rounded-3xl font-black text-sm uppercase tracking-[0.2em] flex items-center justify-center gap-4 shadow-2xl shadow-[#3A241C]/30 active:scale-[0.98] transition-all"
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Waiting for payment confirmation...</p>
+                  </div>
+                ) : paymentMode === "UPI" ? (
+                  <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[2rem] p-6 border-2 border-[#E76F51] shadow-2xl w-full">
+                    <div className="relative w-full aspect-square mx-auto mb-4 border-2 border-[#F9F7F4] p-0 rounded-2xl overflow-hidden bg-[#F9F7F4] shadow-inner">
+                      <Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-contain scale-110" />
+                    </div>
+                    <p className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3A241C]/30 mb-6">Scan to pay directly</p>
+                    
+                    <AnimatePresence>
+                      {payDelay === 0 ? (
+                        <motion.button 
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          whileHover={{ scale: 1.02, backgroundColor: "#5d8a44" }}
+                          onClick={() => {
+                            setHasPaid(true);
+                            onUPIPayment();
+                          }} 
+                          disabled={payingUPI} 
+                          className="w-full py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all bg-[#6A994E] text-white shadow-[0_20px_50px_rgba(106,153,78,0.3)] active:scale-95 border-2 border-[#6A994E] flex items-center justify-center gap-3"
                         >
-                          <CreditCard size={20} /> Pay with UPI App
-                        </a>
-                        <div className="grid grid-cols-2 gap-4">
-                          <button 
-                            onClick={() => setUpiView('QR')}
-                            className="w-full py-5 border-2 border-[#3A241C]/10 text-[#3A241C]/60 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#3A241C]/5 transition-all"
-                          >
-                            Show QR Instead
-                          </button>
-                          <button 
-                            onClick={onCashPayment}
-                            className="w-full py-5 border-2 border-[#3A241C]/10 text-[#3A241C]/60 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#3A241C]/5 transition-all"
-                          >
-                            Cash Payment
-                          </button>
+                          {payingUPI ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} className="stroke-[3]" />} I Have Paid
+                        </motion.button>
+                      ) : (
+                        <div className="py-4 text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/20 animate-pulse">
+                          Waiting for UPI session... {payDelay}s
+                        </div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                ) : paymentMode === "CASH" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="w-full space-y-6"
+                  >
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-2">Phone Number</label>
+                      <div className={`flex items-center gap-4 bg-white p-4 rounded-2xl border transition-all ${phoneError ? 'border-red-500' : 'border-[#3A241C]/5 focus-within:border-[#3A241C]/20'}`}>
+                        <Phone size={20} className="text-[#3A241C]/20 flex-shrink-0" />
+                        <div className="flex items-center flex-1">
+                          <span className="text-sm font-black text-[#3A241C]/40 mr-2">+91</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={phoneNumber}
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                              setPhoneNumber(val);
+                              if (val.length === 10) setPhoneError('');
+                            }}
+                            placeholder="00000 00000"
+                            className="flex-1 bg-transparent border-none !border-0 p-0 m-0 outline-none !outline-none focus:ring-0 !ring-0 font-black text-base text-[#3A241C] placeholder:text-[#3A241C]/10 shadow-none appearance-none"
+                          />
                         </div>
                       </div>
-                    ) : (
-                      <div className="space-y-8">
-                        <motion.div 
-                          initial={{ scale: 0.95, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          className="relative w-full aspect-square mx-auto rounded-[3rem] overflow-hidden bg-white border-2 border-[#E76F51] shadow-[0_30px_80px_-15px_rgba(231,111,81,0.25)] p-4"
-                        >
-                          <div className="relative w-full h-full rounded-[2rem] overflow-hidden">
-                            <Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-cover" priority />
-                          </div>
-                        </motion.div>
-                        
-                        <p className="text-[12px] font-black uppercase tracking-[0.4em] text-[#3A241C] opacity-80">Scan to pay now</p>
-                      </div>
-                    )}
-
-                    <div className="space-y-6">
-                      <AnimatePresence>
-                        {payDelay === 0 ? (
-                          <motion.button 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            onClick={() => {
-                              setHasPaid(true);
-                              onUPIPayment();
-                            }}
-                            className="w-full py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all bg-[#6A994E] text-white shadow-[0_20px_50px_rgba(106,153,78,0.3)] active:scale-95 border-2 border-[#6A994E]"
-                          >
-                            I Have Paid
-                          </motion.button>
-                        ) : (
-                          <div className="py-4 text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/20 animate-pulse">
-                            Processing UPI Session... {payDelay}s
-                          </div>
-                        )}
-                      </AnimatePresence>
-
-                      <div className="flex items-center justify-center gap-3 text-[#6A994E] font-black text-[11px] uppercase tracking-[0.2em] opacity-80">
-                        <CheckCircle2 size={16} /> Real-time confirmation
-                      </div>
+                      {phoneError && (
+                        <p className="text-[9px] font-black text-red-500 uppercase tracking-widest ml-2">{phoneError}</p>
+                      )}
                     </div>
-                  </div>
+
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      disabled={payingCash}
+                      onClick={() => {
+                        if (phoneNumber.length !== 10) {
+                          setPhoneError('Please enter a valid 10-digit number');
+                          return;
+                        }
+                        onCashPayment(phoneNumber);
+                      }}
+                      className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all ${payingCash ? 'bg-[#3A241C]/50 cursor-not-allowed' : 'bg-[#3A241C] text-white shadow-[#3A241C]/20'}`}
+                    >
+                      {payingCash ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <>Confirm Cash Order <ArrowRight size={18} /></>
+                      )}
+                    </motion.button>
+                  </motion.div>
                 )}
               </div>
             )}
@@ -321,9 +388,9 @@ const OrderSuccess = ({
 
       {!isFullyCancelled && !hasUnconfirmed && remaining > 0 ? (
         <div className="w-full space-y-4 lg:space-y-6 mt-6 mb-10">
-          <div className="bg-[#F9F7F4] rounded-[1.5rem] p-4 shadow-inner border-2 border-[#E76F51]/10">
-            <span className="text-[8px] font-black text-[#3A241C]/30 uppercase tracking-[0.4em]">Pending Bill</span>
-            <p className="text-2xl font-black text-[#3A241C] mt-1 tracking-tighter">₹ {remaining}</p>
+          <div className="bg-[#F9F7F4] rounded-[2rem] py-6 px-12 border-2 border-[#E76F51]/10 flex flex-col items-center mx-auto shadow-sm max-w-max">
+            <span className="text-[9px] font-black text-[#3A241C]/30 uppercase tracking-[0.4em] mb-1">Pending Bill</span>
+            <p className="text-3xl font-black text-[#3A241C] tracking-tighter">₹ {remaining}</p>
           </div>
           
           {hasPendingPayment || payingUPI || hasPaid ? (
@@ -331,20 +398,45 @@ const OrderSuccess = ({
               <div className="w-12 h-12 bg-white/50 rounded-full flex items-center justify-center border-2 border-dashed border-[#3A241C]/10">
                 <Loader2 className="animate-spin text-[#3A241C]/20" size={24} />
               </div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Waiting for admin confirmation...</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40">Waiting for confirmation...</p>
             </div>
           ) : !paymentMode ? (
-            <div className="grid grid-cols-2 gap-3">
-              <button disabled={payingUPI || payingCash} onClick={() => onPaymentModeChange("UPI")} className="py-4 bg-[#3A241C] text-white rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-[#3A241C]/20 active:scale-95 transition-all">
-                <CreditCard size={14} /> Pay UPI
-              </button>
-              <button disabled={payingUPI || payingCash} onClick={onCashPayment} className="py-4 border-2 border-[#3A241C] text-[#3A241C] rounded-xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all">
-                {payingCash ? <Loader2 className="animate-spin" size={14} /> : <Banknote size={14} />} Pay Cash
-              </button>
+            <div className="grid grid-cols-2 gap-4 w-full">
+              <motion.button 
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={payingUPI || payingCash} 
+                onClick={() => onPaymentModeChange("UPI")} 
+                className="h-24 bg-[#3A241C] text-white rounded-[1.5rem] flex flex-col items-center justify-center gap-1.5 shadow-[0_15px_30px_-12px_rgba(58,36,28,0.35)] transition-all border-2 border-[#3A241C]"
+              >
+                <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center mb-0.5">
+                  <CreditCard size={18} />
+                </div>
+                <div className="flex flex-col items-center leading-none">
+                  <span className="text-[10px] font-black uppercase tracking-widest">Pay Now</span>
+                  <span className="text-[6px] font-bold text-white/40 tracking-[0.2em] mt-1">UPI</span>
+                </div>
+              </motion.button>
+              
+              <motion.button 
+                whileHover={{ scale: 1.02, y: -2, backgroundColor: "#F9F7F4" }}
+                whileTap={{ scale: 0.98 }}
+                disabled={payingUPI || payingCash} 
+                onClick={() => onPaymentModeChange("CASH")} 
+                className="h-24 bg-white text-[#3A241C] rounded-[1.5rem] flex flex-col items-center justify-center gap-1.5 border-2 border-[#3A241C]/5 shadow-sm transition-all"
+              >
+                <div className="w-8 h-8 bg-[#3A241C]/5 rounded-xl flex items-center justify-center mb-0.5">
+                  <Banknote size={18} />
+                </div>
+                <div className="flex flex-col items-center leading-none">
+                  <span className="text-[9px] font-black uppercase tracking-tight">Pay After Eating</span>
+                  <span className="text-[6px] font-bold text-[#3A241C]/40 tracking-[0.2em] mt-1">CASH</span>
+                </div>
+              </motion.button>
             </div>
           ) : paymentMode === "UPI" ? (
             <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[2rem] p-6 border-2 border-[#E76F51] shadow-2xl">
-              <div className="relative w-44 h-44 mx-auto mb-4 border-2 border-[#F9F7F4] p-2 rounded-2xl overflow-hidden bg-[#F9F7F4]"><Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-contain" /></div>
+              <div className="relative w-44 h-44 mx-auto mb-4 border-2 border-[#F9F7F4] p-0 rounded-2xl overflow-hidden bg-[#F9F7F4]"><Image src="/images/qr/payment_qr.jpeg" alt="QR" fill className="object-contain scale-110" /></div>
               <p className="text-[8px] font-black uppercase tracking-[0.3em] text-[#3A241C]/30 mb-6">Scan to pay directly</p>
               
               <AnimatePresence>
@@ -352,14 +444,15 @@ const OrderSuccess = ({
                   <motion.button 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
+                    whileHover={{ scale: 1.02, backgroundColor: "#5d8a44" }}
                     onClick={() => {
                       setHasPaid(true);
                       onUPIPayment();
                     }} 
                     disabled={payingUPI} 
-                    className="w-full py-5 bg-[#6A994E] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-[#6A994E]/20 active:scale-95 transition-all"
+                    className="w-full py-6 rounded-[2.5rem] font-black text-xs uppercase tracking-[0.2em] transition-all bg-[#6A994E] text-white shadow-[0_20px_50px_rgba(106,153,78,0.3)] active:scale-95 border-2 border-[#6A994E] flex items-center justify-center gap-3"
                   >
-                    {payingUPI ? <Loader2 className="animate-spin" size={14} /> : <CheckCircle2 size={14} />} I Have Paid
+                    {payingUPI ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} className="stroke-[3]" />} I Have Paid
                   </motion.button>
                 ) : (
                   <div className="py-4 text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/20 animate-pulse">
@@ -367,6 +460,57 @@ const OrderSuccess = ({
                   </div>
                 )}
               </AnimatePresence>
+            </motion.div>
+          ) : paymentMode === "CASH" ? (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full space-y-6"
+            >
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-[#3A241C]/40 ml-2">Phone Number</label>
+                <div className={`flex items-center gap-4 bg-white p-4 rounded-2xl border transition-all ${phoneError ? 'border-red-500' : 'border-[#3A241C]/5 focus-within:border-[#3A241C]/20'}`}>
+                  <Phone size={20} className="text-[#3A241C]/20 flex-shrink-0" />
+                  <div className="flex items-center flex-1">
+                    <span className="text-sm font-black text-[#3A241C]/40 mr-2">+91</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={phoneNumber}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                        setPhoneNumber(val);
+                        if (val.length === 10) setPhoneError('');
+                      }}
+                      placeholder="00000 00000"
+                      className="flex-1 bg-transparent border-none !border-0 p-0 m-0 outline-none !outline-none focus:ring-0 !ring-0 font-black text-base text-[#3A241C] placeholder:text-[#3A241C]/10 shadow-none appearance-none"
+                    />
+                  </div>
+                </div>
+                {phoneError && (
+                  <p className="text-[9px] font-black text-red-500 uppercase tracking-widest ml-2">{phoneError}</p>
+                )}
+              </div>
+
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                disabled={payingCash}
+                onClick={() => {
+                  if (phoneNumber.length !== 10) {
+                    setPhoneError('Please enter a valid 10-digit number');
+                    return;
+                  }
+                  onCashPayment(phoneNumber);
+                }}
+                className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all ${payingCash ? 'bg-[#3A241C]/50 cursor-not-allowed' : 'bg-[#3A241C] text-white shadow-[#3A241C]/20'}`}
+              >
+                {payingCash ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <>Confirm Cash Order <ArrowRight size={18} /></>
+                )}
+              </motion.button>
             </motion.div>
           ) : null}
         </div>
@@ -377,7 +521,7 @@ const OrderSuccess = ({
       ) : null}
 
       <div className="w-full space-y-6 mb-10">
-        {(preparingItems.length > 0 || servedItems.length > 0) && (
+        {(hasConfirmed && (preparingItems.length > 0 || servedItems.length > 0)) && (
           <div className="bg-[#F9F7F4] rounded-[2rem] p-6 border border-[#3A241C]/5">
             <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[#3A241C]/40 mb-4 text-left">Live Status</p>
             {preparingItems.length > 0 && (

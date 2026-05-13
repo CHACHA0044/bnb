@@ -280,6 +280,9 @@ const CartContent = ({
               >
                 <p className="text-[7px] font-black text-[#E76F51]/80 uppercase tracking-[0.2em] mb-1">Balance</p>
                 <p className="text-sm lg:text-base font-black text-[#3A241C]">₹{remaining}</p>
+                {remaining > 0 && (
+                  <p className="text-[6px] font-bold text-[#E76F51] uppercase tracking-widest mt-0.5 group-hover:underline">Click to Pay</p>
+                )}
               </div>
             </div>
           </div>

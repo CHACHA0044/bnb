@@ -323,6 +323,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       const sessionKey = isTakeawayMode ? "bnb_cached_session_takeaway" : `bnb_cached_session_${tableId}`;
       localStorage.setItem(sessionKey, JSON.stringify(sessionData));
 
+      // Restore payment mode if there's a pending payment
+      if (sessionData?.payments) {
+        const pending = sessionData.payments.find(p => p.status === "PENDING");
+        if (pending) {
+          setPaymentMode(pending.method as "UPI" | "CASH");
+        }
+      }
+
       if (sessionData?.status === "CLOSED") {
         setSessionClosed(true);
         // For takeaway, we keep the session ID to allow 24h rating
@@ -884,7 +892,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     }
   }, [session, remaining, loadSession]);
 
-  const handleCashPayment = useCallback(async () => {
+  const handleCashPayment = useCallback(async (phone?: string) => {
     if (!session || remaining <= 0 || payingCash) return;
     setPayingCash(true);
     try {
@@ -892,11 +900,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       setPaymentMode(null);
       await loadSession();
     } catch (err) {
-      setError("Failed to record cash");
+      showToast("Failed to record cash payment");
     } finally {
       setPayingCash(false);
     }
-  }, [session, remaining, payingCash, loadSession]);
+  }, [session, remaining, payingCash, loadSession, showToast]);
 
   const handleCloseTable = useCallback(() => {
     if (!session) return;

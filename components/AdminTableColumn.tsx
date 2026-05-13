@@ -453,7 +453,7 @@ export default function AdminTableColumn({
                           {/* Quick Action Button Set */}
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {status === "UNCONFIRMED" ? (
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1">
                                 <motion.button
                                   whileTap={{ scale: 0.95 }}
                                   disabled={processingOrder === order.id}
@@ -462,9 +462,9 @@ export default function AdminTableColumn({
                                     try { await onUpdateStatus(order.id, "PLACED"); }
                                     finally { setProcessingOrder(null); }
                                   }}
-                                  className="px-3 py-2 bg-blue-600 text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-1 disabled:opacity-50"
+                                  className="px-2 py-1.5 bg-blue-600 text-white rounded-xl font-black text-[8px] uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all flex items-center gap-1 disabled:opacity-50"
                                 >
-                                  {processingOrder === order.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />} 
+                                  {processingOrder === order.id ? <Loader2 size={10} className="animate-spin" /> : <CheckCircle2 size={10} />} 
                                   Confirm
                                 </motion.button>
                                 <motion.button
@@ -475,9 +475,9 @@ export default function AdminTableColumn({
                                     try { await onUpdateStatus(order.id, "CANCELLED"); }
                                     finally { setProcessingOrder(null); }
                                   }}
-                                  className="px-3 py-2 bg-[#B71C1C] text-white rounded-xl font-black text-[9px] uppercase tracking-widest shadow-lg hover:bg-red-700 transition-all flex items-center gap-1 disabled:opacity-50"
+                                  className="px-2 py-1.5 bg-[#B71C1C] text-white rounded-xl font-black text-[8px] uppercase tracking-widest shadow-lg hover:bg-red-700 transition-all flex items-center gap-1 disabled:opacity-50"
                                 >
-                                  {processingOrder === order.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />} 
+                                  {processingOrder === order.id ? <Loader2 size={10} className="animate-spin" /> : <X size={10} />} 
                                   Reject
                                 </motion.button>
                               </div>
@@ -577,6 +577,7 @@ export default function AdminTableColumn({
                             key={item.id} 
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (status === "UNCONFIRMED") return;
                               handleToggleItem(item, !item.isServed);
                             }}
                             className={`flex justify-between items-center p-3 rounded-xl cursor-pointer transition-all ${

@@ -107,11 +107,26 @@ export default function DashboardPage() {
       danger: true,
       onConfirm: async () => {
         if (!secret) return;
-        setConfirmModal(prev => ({ ...prev, loading: true }));
+        
+        // Optimistic Update: Remove payment immediately
+        const previousSessions = [...sessions];
+        setSessions(prev => prev.map(s => ({
+          ...s,
+          payments: s.payments.filter(p => p.id !== paymentId)
+        })));
+        
+        // Close modal instantly
+        setConfirmModal(prev => ({ ...prev, show: false }));
+        
         try { 
           await adminDeletePayment(paymentId, secret); 
-        } catch (err) { console.error(err); }
-        setConfirmModal(prev => ({ ...prev, show: false, loading: false }));
+          showToast("Payment rejected");
+        } catch (err) { 
+          console.error(err);
+          // Rollback on failure
+          setSessions(previousSessions);
+          showToast("Failed to reject payment");
+        }
       }
     });
   };
@@ -251,12 +266,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-10">
+    <>
       <AnimatePresence>
         {toast && (
           <motion.div
             initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-            className="fixed top-10 left-1/2 -translate-x-1/2 z-[100] bg-[#3A241C] text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10"
+            className="fixed top-10 left-1/2 -translate-x-1/2 z-[150] bg-[#3A241C] text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/10"
           >
             <div className="w-6 h-6 bg-[#6A994E] rounded-full flex items-center justify-center">
               <Check size={14} className="text-white" />
@@ -268,9 +283,9 @@ export default function DashboardPage() {
 
       <AnimatePresence>
         {confirmModal.show && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !confirmModal.loading && setConfirmModal(prev => ({ ...prev, show: false }))} className="absolute inset-0 bg-[#3A241C]/60 backdrop-blur-md" />
-            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl border border-[#3A241C]/5">
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-6">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => !confirmModal.loading && setConfirmModal(prev => ({ ...prev, show: false }))} className="absolute inset-0 bg-[#3A241C]/40 backdrop-blur-md" />
+            <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative w-full max-w-md bg-white rounded-[2.5rem] p-10 shadow-2xl border border-[#3A241C]/5 z-10">
               <h3 className={`text-2xl font-black tracking-tight mb-4 ${confirmModal.danger ? 'text-[#B71C1C]' : 'text-[#3A241C]'}`}>{confirmModal.title}</h3>
               <p className="text-[#3A241C]/60 font-medium leading-relaxed mb-10">{confirmModal.message}</p>
               <div className="flex gap-4">
@@ -284,88 +299,90 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      <div className="space-y-12">
-        {/* Top Row: Payment Activity */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between px-2">
-            <h4 className="text-[10px] font-black text-[#3A241C]/40 uppercase tracking-[0.2em]">Payment Activity</h4>
-            <span className="text-[9px] font-bold text-[#E76F51] bg-[#E76F51]/10 px-2 py-0.5 rounded-full">{sessions.filter(s => s.status === "OPEN" && s.payments.length > 0).length} Active</span>
+      <div className={`space-y-10 transition-all duration-700 ease-in-out ${confirmModal.show || addOrderData ? 'blur-xl scale-[0.98] opacity-60' : ''}`}>
+        <div className="space-y-12">
+          {/* Top Row: Payment Activity */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between px-2">
+              <h4 className="text-[10px] font-black text-[#3A241C]/40 uppercase tracking-[0.2em]">Payment Activity</h4>
+              <span className="text-[9px] font-bold text-[#E76F51] bg-[#E76F51]/10 px-2 py-0.5 rounded-full">{sessions.filter(s => s.status === "OPEN" && s.payments.length > 0).length} Active</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {TABLE_COLUMNS.map(tableId => {
+                const session = sessions.find(s => s.tableId === tableId && s.status === "OPEN");
+                return (
+                  <AdminPaymentSummary
+                    key={`pay-${tableId}`}
+                    tableId={tableId}
+                    session={session || null}
+                    onConfirmPayment={handleConfirmPayment}
+                    onDeletePayment={handleDeletePayment}
+                    onToggleReminder={handleToggleReminder}
+                    onRecordPayment={handleRecordPayment}
+                    onUpdateTimer={handleUpdateTimer}
+                    onSendReviewRequest={handleSendReviewRequest}
+                  />
+                );
+              })}
+              
+              <AdminPaymentSummary
+                tableId="Takeaway"
+                session={takeawaySessions[0] || null}
+                onConfirmPayment={handleConfirmPayment}
+                onDeletePayment={handleDeletePayment}
+                onToggleReminder={handleToggleReminder}
+                onRecordPayment={handleRecordPayment}
+                onUpdateTimer={handleUpdateTimer}
+                onSendReviewRequest={handleSendReviewRequest}
+                isTakeaway
+              />
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {TABLE_COLUMNS.map(tableId => {
-              const session = sessions.find(s => s.tableId === tableId && s.status === "OPEN");
-              return (
-                <AdminPaymentSummary
-                  key={`pay-${tableId}`}
-                  tableId={tableId}
-                  session={session || null}
-                  onConfirmPayment={handleConfirmPayment}
-                  onDeletePayment={handleDeletePayment}
-                  onToggleReminder={handleToggleReminder}
-                  onRecordPayment={handleRecordPayment}
-                  onUpdateTimer={handleUpdateTimer}
-                  onSendReviewRequest={handleSendReviewRequest}
-                />
-              );
-            })}
-            
-            <AdminPaymentSummary
-              tableId="Takeaway"
-              session={takeawaySessions[0] || null}
-              onConfirmPayment={handleConfirmPayment}
-              onDeletePayment={handleDeletePayment}
-              onToggleReminder={handleToggleReminder}
-              onRecordPayment={handleRecordPayment}
-              onUpdateTimer={handleUpdateTimer}
-              onSendReviewRequest={handleSendReviewRequest}
-              isTakeaway
-            />
-          </div>
-        </div>
 
-        {/* Bottom Row: Tables and Takeaway */}
-        <div className="space-y-6">
-          <div className="flex items-center justify-between px-2">
-            <h4 className="text-[10px] font-black text-[#3A241C]/40 uppercase tracking-[0.2em]">Tables & Takeaway</h4>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {TABLE_COLUMNS.map(tableId => {
-              const session = tableSessions.find(s => s.tableId === tableId);
-              return (
-                <AdminTableColumn
-                  key={tableId}
-                  tableId={tableId}
-                  session={session || null}
-                  onUpdateStatus={handleUpdateStatus}
-                  onConfirmPayment={handleConfirmPayment}
-                  onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId })}
-                  onCloseSession={handleCloseSession}
-                  onToggleItemServed={handleToggleItemServed}
-                  onToggleOrderItems={handleToggleOrderItems}
-                  onDeleteOrder={handleDeleteOrder}
-                  onDeletePayment={handleDeletePayment}
-                  onToggleReminder={handleToggleReminder}
-                  onUpdateTimer={handleUpdateTimer}
-                />
-              );
-            })}
-            
-            <AdminTableColumn
-              tableId="Takeaway"
-              session={takeawaySessions[0] || null}
-              onUpdateStatus={handleUpdateStatus}
-              onConfirmPayment={handleConfirmPayment}
-              onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: TAKEAWAY_ID })}
-              onCloseSession={handleCloseSession}
-              onToggleItemServed={handleToggleItemServed}
-              onToggleOrderItems={handleToggleOrderItems}
-              onDeleteOrder={handleDeleteOrder}
-              onDeletePayment={handleDeletePayment}
-              onToggleReminder={handleToggleReminder}
-              onUpdateTimer={handleUpdateTimer}
-              isTakeaway
-              allTakeawaySessions={takeawaySessions}
-            />
+          {/* Bottom Row: Tables and Takeaway */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between px-2">
+              <h4 className="text-[10px] font-black text-[#3A241C]/40 uppercase tracking-[0.2em]">Tables & Takeaway</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {TABLE_COLUMNS.map(tableId => {
+                const session = tableSessions.find(s => s.tableId === tableId);
+                return (
+                  <AdminTableColumn
+                    key={tableId}
+                    tableId={tableId}
+                    session={session || null}
+                    onUpdateStatus={handleUpdateStatus}
+                    onConfirmPayment={handleConfirmPayment}
+                    onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId })}
+                    onCloseSession={handleCloseSession}
+                    onToggleItemServed={handleToggleItemServed}
+                    onToggleOrderItems={handleToggleOrderItems}
+                    onDeleteOrder={handleDeleteOrder}
+                    onDeletePayment={handleDeletePayment}
+                    onToggleReminder={handleToggleReminder}
+                    onUpdateTimer={handleUpdateTimer}
+                  />
+                );
+              })}
+              
+              <AdminTableColumn
+                tableId="Takeaway"
+                session={takeawaySessions[0] || null}
+                onUpdateStatus={handleUpdateStatus}
+                onConfirmPayment={handleConfirmPayment}
+                onAddOrder={(sid) => setAddOrderData({ sessionId: sid, tableId: TAKEAWAY_ID })}
+                onCloseSession={handleCloseSession}
+                onToggleItemServed={handleToggleItemServed}
+                onToggleOrderItems={handleToggleOrderItems}
+                onDeleteOrder={handleDeleteOrder}
+                onDeletePayment={handleDeletePayment}
+                onToggleReminder={handleToggleReminder}
+                onUpdateTimer={handleUpdateTimer}
+                isTakeaway
+                allTakeawaySessions={takeawaySessions}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -390,6 +407,6 @@ export default function DashboardPage() {
           />
         )}
       </AnimatePresence>
-    </div>
+    </>
   );
 }

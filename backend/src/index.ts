@@ -115,16 +115,35 @@ setInterval(async () => {
       const timeReference = latestOrder ? latestOrder.createdAt : session.createdAt;
       const minutesSinceActivity = (now.getTime() - timeReference.getTime()) / (1000 * 60);
       
+      // We consider "active" orders to be PLACED or PREPARING. 
+      // If an order is just UNCONFIRMED, it doesn't prevent auto-closure if time expires.
       const hasActiveOrders = session.orders.some((o: any) => o.status === "PLACED" || o.status === "PREPARING");
       
-      if (!hasActiveOrders && minutesSinceActivity > 90) {
+      if (minutesSinceActivity > 90) {
+        // If there are truly active orders (PLACED/PREPARING), we might want to keep it open longer,
+        // but if they've been inactive for > 90 mins even in those states, it's likely a zombie session.
+        // The user specifically wants to close it if admin hasn't confirmed/rejected (UNCONFIRMED).
+        
         await prisma.session.update({
           where: { id: session.id },
           data: { status: "CLOSED" }
         });
-        console.log(`[JOB] Auto-closed session ${session.id} (inactive for ${Math.round(minutesSinceActivity)} mins)`);
-        io.to(`session:${session.id}`).emit("session_updated");
-        io.to("admin").emit("session_updated");
+
+        // Clean up in-memory pending orders for this session
+        try {
+          const { pendingOrders } = require("./routes/order");
+          if (pendingOrders) {
+            for (const [orderId, order] of pendingOrders.entries()) {
+              if (order.sessionId === session.id) {
+                pendingOrders.delete(orderId);
+                console.log(`[JOB] Removed stale pending order ${orderId} for expired session ${session.id}`);
+              }
+            }
+          }
+        } catch (e) { /* skip */ }
+
+        console.log(`[JOB] Auto-closed session ${session.id} (expired after ${Math.round(minutesSinceActivity)} mins)`);
+        io.to(`session:${session.id}`).to("admin").emit("session_closed", { sessionId: session.id });
       }
     }
   } catch (err) {
