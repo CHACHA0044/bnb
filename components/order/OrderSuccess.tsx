@@ -20,6 +20,7 @@ interface OrderSuccessProps {
   ratedItems: Set<string>;
   isTakeaway: boolean;
   isProcessingOrder?: boolean;
+  pendingAmount?: number;
   deletedOrders?: any[];
   paymentSuccess?: boolean;
   sessionClosed?: boolean;
@@ -44,6 +45,7 @@ const OrderSuccess = ({
   ratedItems,
   isTakeaway,
   isProcessingOrder,
+  pendingAmount = 0,
   deletedOrders = [],
   paymentSuccess = false,
   sessionClosed = false,
@@ -62,6 +64,12 @@ const OrderSuccess = ({
   const [phoneError, setPhoneError] = useState("");
   const [copySuccess, setCopySuccess] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [stickyAmount, setStickyAmount] = useState(pendingAmount || remaining || 0);
+
+  useEffect(() => {
+    const current = remaining > 0 ? remaining : (pendingAmount || 0);
+    if (current > 0) setStickyAmount(current);
+  }, [remaining, pendingAmount]);
 
   const upiId = orderConfig?.upiId || process.env.NEXT_PUBLIC_UPI_ID || "hemadembla505@okicici";
   const upiLink = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent("Benne n Beans")}&am=${remaining.toFixed(2)}&cu=INR&tn=${encodeURIComponent("Order at Benne n Beans")}`;
@@ -168,7 +176,10 @@ const OrderSuccess = ({
         </p>
         <motion.button
           whileTap={{ scale: 0.95 }}
-          onClick={onAddMore}
+          onClick={() => {
+             onAddMore();
+             window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
           className="px-8 py-4 bg-[#3A241C] text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl"
         >
           View Order History
@@ -236,7 +247,16 @@ const OrderSuccess = ({
         {isFullyCancelled ? "Cancelled" : showProcessing ? "Confirming Order..." : "Ordered!"}
       </h2>
       {isFullyCancelled ? (
-        <p className="text-[10px] font-black uppercase tracking-widest text-[#B71C1C]/40 mb-4">Staff has rejected your request</p>
+        <div className="flex flex-col items-center gap-6">
+          <p className="text-[10px] font-black uppercase tracking-widest text-[#B71C1C]/40 mb-4 text-center max-w-[240px]">Staff has rejected your request or it was cancelled</p>
+          <motion.button
+            whileTap={{ scale: 0.95 }}
+            onClick={onAddMore}
+            className="px-8 py-4 bg-[#3A241C] text-white rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl flex items-center gap-2"
+          >
+            <ArrowLeft size={16} /> Back to Menu
+          </motion.button>
+        </div>
       ) : showProcessing && (
           <div className="flex flex-col items-center gap-8 w-full max-w-[400px] mx-auto px-2">
             <p className="text-[11px] font-black uppercase tracking-[0.3em] text-[#3A241C]/40 animate-pulse">Waiting for Confirmation</p>
@@ -247,32 +267,44 @@ const OrderSuccess = ({
                 <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3A241C]/30">You can pay while waiting</p>
                   <div className="grid grid-cols-2 gap-4 w-full">
                     <motion.button 
-                      whileHover={{ scale: 1.02, y: -2 }}
-                      whileTap={{ scale: 0.98 }}
+                      whileHover={{ scale: 1.03, y: -4 }}
+                      whileTap={{ scale: 0.96 }}
                       onClick={() => onPaymentModeChange("UPI")} 
-                      className="h-24 bg-[#3A241C] text-white rounded-[1.5rem] flex flex-col items-center justify-center gap-1.5 shadow-[0_15px_30px_-12px_rgba(58,36,28,0.35)] transition-all border-2 border-[#3A241C]"
+                      className="h-28 bg-gradient-to-b from-[#3A241C] to-[#2A1A14] text-white rounded-2xl flex flex-col items-center justify-center gap-2 transition-all border border-white/15 shadow-[0_2px_8px_rgba(0,0,0,0.3),0_12px_28px_-8px_rgba(0,0,0,0.4),inset_0_1px_2px_rgba(255,255,255,0.1)] hover:shadow-[0_2px_12px_rgba(0,0,0,0.35),0_16px_36px_-10px_rgba(0,0,0,0.45),inset_0_1px_3px_rgba(255,255,255,0.15)] relative overflow-hidden group"
                     >
-                      <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center mb-0.5">
-                        <CreditCard size={18} />
+                      {/* Premium inner highlight */}
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/8 via-transparent to-transparent pointer-events-none rounded-2xl" />
+                      
+                      {/* Ambient glow on hover */}
+                      <div className="absolute -inset-px bg-gradient-to-r from-[#E76F51] via-transparent to-[#E76F51] opacity-0 group-hover:opacity-20 blur-lg transition-opacity duration-300 rounded-2xl -z-10" />
+                      
+                      <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center mb-0.5 border border-white/20 backdrop-blur-sm shadow-inner">
+                        <CreditCard size={20} className="text-white drop-shadow-md" />
                       </div>
-                      <div className="flex flex-col items-center leading-none">
-                        <span className="text-[10px] font-black uppercase tracking-widest">Pay Now</span>
-                        <span className="text-[6px] font-bold text-white/40 tracking-[0.2em] mt-1">UPI</span>
+                      <div className="flex flex-col items-center leading-tight">
+                        <span className="text-[10.5px] font-black uppercase tracking-wider">Pay Now</span>
+                        <span className="text-[6.5px] font-bold text-white/50 tracking-[0.15em] mt-1.5">UPI</span>
                       </div>
                     </motion.button>
                     
                     <motion.button 
-                      whileHover={{ scale: 1.02, y: -2, backgroundColor: "#F9F7F4" }}
-                      whileTap={{ scale: 0.98 }}
+                      whileHover={{ scale: 1.03, y: -4 }}
+                      whileTap={{ scale: 0.96 }}
                       onClick={() => onPaymentModeChange("CASH")} 
-                      className="h-24 bg-white text-[#3A241C] rounded-[1.5rem] flex flex-col items-center justify-center gap-1.5 border-2 border-[#3A241C]/5 shadow-sm transition-all"
+                      className="h-28 bg-gradient-to-b from-white to-[#F9F7F4] text-[#3A241C] rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#3A241C]/12 shadow-[0_2px_8px_rgba(58,36,28,0.08),0_12px_28px_-8px_rgba(58,36,28,0.12),inset_0_1px_2px_rgba(255,255,255,0.6)] hover:shadow-[0_2px_12px_rgba(58,36,28,0.12),0_16px_36px_-10px_rgba(58,36,28,0.16),inset_0_1px_3px_rgba(255,255,255,0.8)] transition-all relative overflow-hidden group"
                     >
-                      <div className="w-8 h-8 bg-[#3A241C]/5 rounded-xl flex items-center justify-center mb-0.5">
-                        <Banknote size={18} />
+                      {/* Premium inner highlight */}
+                      <div className="absolute inset-0 bg-gradient-to-b from-white/40 via-white/10 to-transparent pointer-events-none rounded-2xl" />
+                      
+                      {/* Subtle glow on hover */}
+                      <div className="absolute -inset-px bg-gradient-to-r from-[#3A241C] via-transparent to-[#3A241C] opacity-0 group-hover:opacity-8 blur-lg transition-opacity duration-300 rounded-2xl -z-10" />
+                      
+                      <div className="w-9 h-9 bg-[#3A241C]/10 rounded-xl flex items-center justify-center mb-0.5 border border-[#3A241C]/15 backdrop-blur-sm shadow-inner">
+                        <Banknote size={20} className="text-[#3A241C]/70 drop-shadow-sm" />
                       </div>
-                      <div className="flex flex-col items-center leading-none">
-                        <span className="text-[9px] font-black uppercase tracking-tight">Pay After Eating</span>
-                        <span className="text-[6px] font-bold text-[#3A241C]/40 tracking-[0.2em] mt-1">CASH</span>
+                      <div className="flex flex-col items-center leading-tight">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-[#3A241C]">Pay After</span>
+                        <span className="text-[6.5px] font-bold text-[#3A241C]/50 tracking-[0.15em] mt-1.5">CASH</span>
                       </div>
                     </motion.button>
                   </div>
@@ -283,7 +315,7 @@ const OrderSuccess = ({
               <div className="w-full space-y-4 lg:space-y-6 mt-2">
                 <div className="bg-[#F9F7F4] rounded-[2rem] py-6 px-12 border-2 border-[#E76F51]/10 flex flex-col items-center mx-auto shadow-sm max-w-max">
                   <span className="text-[9px] font-black text-[#3A241C]/30 uppercase tracking-[0.4em] mb-1">Current Bill</span>
-                  <p className="text-3xl font-black text-[#3A241C] tracking-tighter">₹ {remaining}</p>
+                  <p className="text-3xl font-black text-[#3A241C] tracking-tighter">₹ {stickyAmount}</p>
                 </div>
 
                 {hasPendingPayment || payingUPI || hasPaid ? (
@@ -403,34 +435,46 @@ const OrderSuccess = ({
           ) : !paymentMode ? (
             <div className="grid grid-cols-2 gap-4 w-full">
               <motion.button 
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.03, y: -4 }}
+                whileTap={{ scale: 0.96 }}
                 disabled={payingUPI || payingCash} 
                 onClick={() => onPaymentModeChange("UPI")} 
-                className="h-24 bg-[#3A241C] text-white rounded-[1.5rem] flex flex-col items-center justify-center gap-1.5 shadow-[0_15px_30px_-12px_rgba(58,36,28,0.35)] transition-all border-2 border-[#3A241C]"
+                className="h-28 bg-gradient-to-b from-[#3A241C] to-[#2A1A14] text-white rounded-2xl flex flex-col items-center justify-center gap-2 transition-all border border-white/15 shadow-[0_2px_8px_rgba(0,0,0,0.3),0_12px_28px_-8px_rgba(0,0,0,0.4),inset_0_1px_2px_rgba(255,255,255,0.1)] hover:shadow-[0_2px_12px_rgba(0,0,0,0.35),0_16px_36px_-10px_rgba(0,0,0,0.45),inset_0_1px_3px_rgba(255,255,255,0.15)] disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
               >
-                <div className="w-8 h-8 bg-white/10 rounded-xl flex items-center justify-center mb-0.5">
-                  <CreditCard size={18} />
+                {/* Premium inner highlight */}
+                <div className="absolute inset-0 bg-gradient-to-b from-white/8 via-transparent to-transparent pointer-events-none rounded-2xl" />
+                
+                {/* Ambient glow on hover */}
+                <div className="absolute -inset-px bg-gradient-to-r from-[#E76F51] via-transparent to-[#E76F51] opacity-0 group-hover:opacity-20 blur-lg transition-opacity duration-300 rounded-2xl -z-10" />
+                
+                <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center mb-0.5 border border-white/20 backdrop-blur-sm shadow-inner">
+                  <CreditCard size={20} className="text-white drop-shadow-md" />
                 </div>
-                <div className="flex flex-col items-center leading-none">
-                  <span className="text-[10px] font-black uppercase tracking-widest">Pay Now</span>
-                  <span className="text-[6px] font-bold text-white/40 tracking-[0.2em] mt-1">UPI</span>
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[10.5px] font-black uppercase tracking-wider">Pay Now</span>
+                  <span className="text-[6.5px] font-bold text-white/50 tracking-[0.15em] mt-1.5">UPI</span>
                 </div>
               </motion.button>
               
               <motion.button 
-                whileHover={{ scale: 1.02, y: -2, backgroundColor: "#F9F7F4" }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={{ scale: 1.03, y: -4 }}
+                whileTap={{ scale: 0.96 }}
                 disabled={payingUPI || payingCash} 
                 onClick={() => onPaymentModeChange("CASH")} 
-                className="h-24 bg-white text-[#3A241C] rounded-[1.5rem] flex flex-col items-center justify-center gap-1.5 border-2 border-[#3A241C]/5 shadow-sm transition-all"
+                className="h-28 bg-gradient-to-b from-white to-[#F9F7F4] text-[#3A241C] rounded-2xl flex flex-col items-center justify-center gap-2 border border-[#3A241C]/12 shadow-[0_2px_8px_rgba(58,36,28,0.08),0_12px_28px_-8px_rgba(58,36,28,0.12),inset_0_1px_2px_rgba(255,255,255,0.6)] hover:shadow-[0_2px_12px_rgba(58,36,28,0.12),0_16px_36px_-10px_rgba(58,36,28,0.16),inset_0_1px_3px_rgba(255,255,255,0.8)] disabled:opacity-50 disabled:cursor-not-allowed transition-all relative overflow-hidden group"
               >
-                <div className="w-8 h-8 bg-[#3A241C]/5 rounded-xl flex items-center justify-center mb-0.5">
-                  <Banknote size={18} />
+                {/* Premium inner highlight */}
+                <div className="absolute inset-0 bg-gradient-to-b from-white/40 via-white/10 to-transparent pointer-events-none rounded-2xl" />
+                
+                {/* Subtle glow on hover */}
+                <div className="absolute -inset-px bg-gradient-to-r from-[#3A241C] via-transparent to-[#3A241C] opacity-0 group-hover:opacity-8 blur-lg transition-opacity duration-300 rounded-2xl -z-10" />
+                
+                <div className="w-9 h-9 bg-[#3A241C]/10 rounded-xl flex items-center justify-center mb-0.5 border border-[#3A241C]/15 backdrop-blur-sm shadow-inner">
+                  <Banknote size={20} className="text-[#3A241C]/70 drop-shadow-sm" />
                 </div>
-                <div className="flex flex-col items-center leading-none">
-                  <span className="text-[9px] font-black uppercase tracking-tight">Pay After Eating</span>
-                  <span className="text-[6px] font-bold text-[#3A241C]/40 tracking-[0.2em] mt-1">CASH</span>
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[#3A241C]">Pay After</span>
+                  <span className="text-[6.5px] font-bold text-[#3A241C]/50 tracking-[0.15em] mt-1.5">CASH</span>
                 </div>
               </motion.button>
             </div>

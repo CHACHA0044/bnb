@@ -14,6 +14,8 @@ import {
 } from "@/lib/api";
 import { QRCodeSVG } from "qrcode.react";
 import { useAdmin } from "../app/admin/AdminContext";
+import { useClock } from "@/hooks/useClock";
+import { memo, useMemo } from "react";
 
 interface AdminTableColumnProps {
   tableId: string;
@@ -43,7 +45,7 @@ const COLORS = {
   background: "#F9F7F4",
 };
 
-export default function AdminTableColumn({
+const AdminTableColumn = memo(({
   tableId,
   session,
   onUpdateStatus,
@@ -58,21 +60,30 @@ export default function AdminTableColumn({
   onUpdateTimer,
   isTakeaway = false,
   allTakeawaySessions = [],
-}: AdminTableColumnProps) {
+}: AdminTableColumnProps) => {
   const { secret } = useAdmin();
   const [showPackedNote, setShowPackedNote] = useState(false);
   const [copied, setCopied] = useState(false);
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [activeTimerOrderId, setActiveTimerOrderId] = useState<string | null>(null);
   const [customTimerValue, setCustomTimerValue] = useState<string>("");
+  const [isMounted, setIsMounted] = useState(false);
 
-  // Duplicate Detection Logic
-  const duplicates = isTakeaway && session && allTakeawaySessions ? allTakeawaySessions.filter(s => {
-    if (s.id === session.id) return false;
-    const currentItems = (session.orders || []).flatMap(o => (o.items || []).map(i => `${i.name}-${i.quantity}`)).sort().join('|');
-    const otherItems = (s.orders || []).flatMap(o => (o.items || []).map(i => `${i.name}-${i.quantity}`)).sort().join('|');
-    return currentItems === otherItems && currentItems.length > 0;
-  }) : [];
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Duplicate Detection Logic (Memoized)
+  const duplicates = useMemo(() => {
+    if (!isTakeaway || !session || !allTakeawaySessions) return [];
+    
+    return allTakeawaySessions.filter(s => {
+      if (s.id === session.id) return false;
+      const currentItems = (session.orders || []).flatMap(o => (o.items || []).map(i => `${i.name}-${i.quantity}`)).sort().join('|');
+      const otherItems = (s.orders || []).flatMap(o => (o.items || []).map(i => `${i.name}-${i.quantity}`)).sort().join('|');
+      return currentItems === otherItems && currentItems.length > 0;
+    });
+  }, [isTakeaway, session, allTakeawaySessions]);
 
   useEffect(() => {
     if (showPackedNote) {
@@ -88,7 +99,7 @@ export default function AdminTableColumn({
     }
   };
   
-  const getSessionStats = () => {
+  const stats = useMemo(() => {
     if (!session) return { total: 0, paid: 0, balance: 0, paymentMode: "NONE" };
     
     const total = (session.orders || [])
@@ -107,37 +118,32 @@ export default function AdminTableColumn({
     else if (methods.has("CASH")) paymentMode = "CASH";
 
     return { total, paid, balance: total - paid, paymentMode };
-  };
+  }, [session]);
 
-  const [timeLeft, setTimeLeft] = useState<string>("");
+  const { total, paid, balance, paymentMode } = stats;
+
+  const now = useClock();
+
+  const timeLeft = useMemo(() => {
+    if (!session || now === 0) return "";
+    const start = new Date(session.createdAt).getTime();
+    const end = start + 90 * 60 * 1000;
+    const diff = end - now;
+    
+    if (diff <= 0) return "00:00";
+    
+    const mins = Math.floor(diff / (1000 * 60));
+    const secs = Math.floor((diff % (1000 * 60)) / 1000);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }, [session, now]);
 
   useEffect(() => {
-    if (!session) return;
-    const updateTimer = () => {
-      const start = new Date(session.createdAt).getTime();
-      const end = start + 90 * 60 * 1000;
-      const now = new Date().getTime();
-      const diff = end - now;
-      
-      if (diff <= 0) {
-        setTimeLeft("00:00");
-        // Auto-reminder if balance exists and not already sent
-        const { balance } = getSessionStats();
-        if (balance > 0 && !session.paymentReminder) {
-          onToggleReminder(session.id, true);
-        }
-        return;
+    if (session && timeLeft === "00:00") {
+      if (balance > 0 && !session.paymentReminder) {
+        onToggleReminder(session.id, true);
       }
-      const mins = Math.floor(diff / (1000 * 60));
-      const secs = Math.floor((diff % (1000 * 60)) / 1000);
-      setTimeLeft(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
-    };
-    updateTimer();
-    const interval = setInterval(updateTimer, 1000);
-    return () => clearInterval(interval);
-  }, [session, onToggleReminder]);
-
-  const { total, paid, balance, paymentMode } = getSessionStats();
+    }
+  }, [timeLeft, session, balance, onToggleReminder]);
 
   const allOrders = [...(session?.orders || [])]
     .filter(o => o.status !== "CANCELLED")
@@ -175,6 +181,8 @@ export default function AdminTableColumn({
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  if (!isMounted) return null;
 
   return (
     <div className="flex flex-col h-full bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
@@ -643,4 +651,6 @@ export default function AdminTableColumn({
 
     </div>
   );
-}
+});
+
+export default AdminTableColumn;

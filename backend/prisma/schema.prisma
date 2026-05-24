@@ -22,6 +22,12 @@ model Session {
   feedback          String?
   orders            Order[]
   payments          Payment[]
+
+  @@index([tableId])
+  @@index([createdAt])
+  @@index([status])
+  @@index([tableId, status])
+  @@index([createdAt, status])
 }
 
 model Order {
@@ -38,6 +44,12 @@ model Order {
   session            Session     @relation(fields: [sessionId], references: [id])
   items              OrderItem[]
   payments           Payment[]
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([status])
+  @@index([sessionId, status])
+  @@index([createdAt, status])
 }
 
 model OrderItem {
@@ -49,6 +61,8 @@ model OrderItem {
   type     String  @default("DINE_IN")
   isServed Boolean @default(false)
   order    Order   @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
 }
 
 model Payment {
@@ -62,6 +76,13 @@ model Payment {
   updatedAt DateTime @default(now()) @updatedAt
   order     Order?   @relation(fields: [orderId], references: [id])
   session   Session  @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@index([orderId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([sessionId, status])
+  @@index([createdAt, status])
 }
 
 model QrToken {
@@ -71,6 +92,9 @@ model QrToken {
   expiresAt DateTime
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
+
+  @@index([expiresAt])
+  @@index([tableId])
 }
 
 model Category {
@@ -143,10 +167,31 @@ model AnalyticsLog {
   locationVerified Boolean  @default(false)
   sessionNumber    Int      @default(0)
   rating           Int?
+  
+  // New deep analytics fields
+  deviceType       String?
+  browserName      String?
+  osName           String?
+  preparationTime  Int?     // duration in seconds from confirm to serve
+  confirmationTime Int?     // duration in seconds from place to confirm
+  totalDuration    Int?     // duration in seconds from place to serve
+  cancellationReason String?
+  adminAction      Boolean  @default(false)
+  adminId          String?
+  
+  createdAt        DateTime @default(now())
 
   @@index([date])
   @@index([orderId])
   @@index([sessionId])
+  @@index([tableId])
+  @@index([createdAt])
+  @@index([timestamp])
+  @@index([itemName])
+  @@index([orderStatus])
+  @@index([paymentStatus])
+  @@index([date, orderStatus])
+  @@index([sessionId, paymentStatus])
 }
 
 model DailySummary {
@@ -184,5 +229,39 @@ model Report {
   createdAt DateTime @default(now())
 
   @@unique([type, date])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  eventType String   // PAYMENT_CREATED, PAYMENT_CONFIRMED, FRAUD_ATTEMPT, etc.
+  sessionId String?
+  paymentId String?
+  orderId   String?
+  userId    String?  // Admin user ID
+  ipAddress String?
+  userAgent String?
+  details   Json     // Event-specific details (amounts, reasons, etc.)
+  severity  String   // INFO, WARNING, CRITICAL
+  timestamp DateTime @default(now())
+
+  @@index([eventType])
+  @@index([sessionId])
+  @@index([paymentId])
+  @@index([severity])
+  @@index([timestamp])
+}
+
+model SessionCounter {
+  key   String @id
+  count Int    @default(0)
+}
+
+model PendingOrder {
+  id        String   @id
+  data      Json
+  sessionId String
+  createdAt DateTime @default(now())
+
+  @@index([sessionId])
 }
 

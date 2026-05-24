@@ -1,10 +1,10 @@
 "use client";
 
 import AdminMenuManager from "@/components/AdminMenuManager";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useAdmin } from "../AdminContext";
 
 export default function MenuPage() {
-  const { secret, authenticated } = useAdminAuth();
+  const { secret, authenticated } = useAdmin();
 
   if (!authenticated || !secret) return null;
 

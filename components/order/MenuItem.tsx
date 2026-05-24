@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { memo, useCallback, useState } from "react";
@@ -92,10 +93,8 @@ const MenuItem = ({
                 {item.discountPct ? `${item.discountPct}% OFF` : `₹${item.discountFlat} OFF`}
               </span>
               {/* Shine effect */}
-              <motion.div
-                animate={{ x: ['-100%', '200%'] }}
-                transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
-                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12"
+              <div
+                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-css-shine"
               />
             </div>
           </motion.div>
@@ -124,7 +123,7 @@ const MenuItem = ({
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col justify-between h-full py-1 min-w-0 z-20">
+      <div className="flex-1 flex flex-col justify-between h-[104px] lg:h-[124px] min-w-0 z-20">
         <div className="min-w-0">
           <div className="flex justify-between items-start mb-1 gap-2">
             <h3 className="font-black text-[#3A241C] text-sm lg:text-base group-hover:text-[#E76F51] transition-colors tracking-tight line-clamp-2 leading-tight flex-1">
@@ -139,7 +138,7 @@ const MenuItem = ({
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-auto pt-6">
+        <div className="flex items-center justify-between mt-auto">
           <div className="flex items-center gap-2 transform translate-y-1">
             {hasDiscount && (
               <span className="text-[10px] lg:text-xs text-[#3A241C]/30 line-through font-bold">₹{item.price}</span>

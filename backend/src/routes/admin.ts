@@ -7,7 +7,7 @@ import { logOrderAnalytics } from "../lib/analytics";
 
 const router = Router();
 
-import { pendingOrders } from "./order";
+import { getAllPendingOrders } from "../lib/pending-orders";
 
 // All admin routes require auth
 router.use(requireAdmin);
@@ -44,33 +44,45 @@ router.get("/sessions", async (req: Request, res: Response): Promise<void> => {
 
     const sessions = await prisma.session.findMany({
       where: whereClause,
-      include: {
-        orders: {
-          include: { items: true },
-          orderBy: { createdAt: "desc" },
-        },
-        payments: { orderBy: { createdAt: "desc" } },
-      },
       orderBy: [{ status: "asc" }, { updatedAt: "desc" }],
     });
 
-    // Convert to plain objects to avoid Prisma internal circularities and allow modification
-    const sessionsJson = JSON.parse(JSON.stringify(sessions));
+    const sessionIds = sessions.map(s => s.id);
 
-    // Merge in-memory pending orders safely
-    try {
-      if (typeof pendingOrders !== 'undefined' && pendingOrders.values) {
-        sessionsJson.forEach((session: any) => {
-          const pendingForSession = Array.from(pendingOrders.values()).filter((po: any) => po.sessionId === session.id);
-          if (pendingForSession.length > 0) {
-            session.orders = session.orders || [];
-            session.orders.unshift(...pendingForSession);
-          }
-        });
+    // Fetch orders and payments in parallel
+    const [orders, payments, pendingOrders] = await Promise.all([
+      prisma.order.findMany({
+        where: { sessionId: { in: sessionIds } },
+        include: { items: true },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.payment.findMany({
+        where: { sessionId: { in: sessionIds } },
+        orderBy: { createdAt: "desc" },
+      }),
+      getAllPendingOrders().catch(() => [])
+    ]);
+
+    // Map them back to sessions in JS (O(N) instead of nested DB queries)
+    const sessionsJson = sessions.map(session => {
+      const sJson = { ...session } as any;
+      
+      // DB Orders
+      sJson.orders = orders.filter(o => o.sessionId === session.id);
+      
+      // Pending Orders
+      if (pendingOrders && pendingOrders.length > 0) {
+        const pendingForSession = pendingOrders.filter((po: any) => po.sessionId === session.id);
+        if (pendingForSession.length > 0) {
+          sJson.orders = [...pendingForSession, ...sJson.orders];
+        }
       }
-    } catch (mergeErr) {
-      console.error("[ADMIN] Pending orders merge error:", mergeErr);
-    }
+      
+      // Payments
+      sJson.payments = payments.filter(p => p.sessionId === session.id);
+      
+      return sJson;
+    });
 
     res.json(sessionsJson);
   } catch (err: any) {
@@ -175,7 +187,12 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
     });
 
     if (!sessionData) {
-      res.status(404).json({ error: "Session not found" });
+      // If session not in DB, it might be a ghost session in Redis. Clear it.
+      try {
+        const { removePendingOrder } = require("../lib/pending-orders");
+        await removePendingOrder(sessionId);
+      } catch (e) {}
+      res.json({ success: true, message: "Ghost session cleared" });
       return;
     }
 
@@ -209,6 +226,12 @@ router.patch("/sessions/:sessionId/close", async (req: Request, res: Response): 
       res.status(404).json({ error: "Session not found" });
       return;
     }
+
+    // Clear any pending orders in Redis for this session
+    try {
+      const { removePendingOrder } = require("../lib/pending-orders");
+      await removePendingOrder(sessionId);
+    } catch (e) { console.error("[ADMIN] Redis clear error:", e); }
 
 
     // Trigger history snapshots for all orders in the session
@@ -317,7 +340,8 @@ router.post("/orders/new", async (req: Request, res: Response): Promise<void> =>
 
     // 1. Find or create session
     let session = await prisma.session.findFirst({
-      where: { tableId, status: "OPEN" }
+      where: { tableId, status: "OPEN" },
+      orderBy: { createdAt: "desc" }
     });
 
     if (!session) {
@@ -384,6 +408,35 @@ router.post("/payments/record", async (req: Request, res: Response): Promise<voi
     
     if (!sessionId || !amount || !method) {
       res.status(400).json({ error: "sessionId, amount, and method required" });
+      return;
+    }
+
+    const session = await prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { orders: { include: { items: true } }, payments: true }
+    });
+
+    if (!session || session.status !== "OPEN") {
+      res.status(400).json({ error: "Session not found or closed" });
+      return;
+    }
+
+    const nonCancelledOrders = session.orders.filter(o => o.status !== "CANCELLED");
+    let total = 0;
+    for (const order of nonCancelledOrders) {
+      const subtotal = order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const packing = order.packingCharges || 0;
+      const taxes = Math.round(subtotal * 0.05); // 5% GST
+      total += subtotal + packing + taxes;
+    }
+
+    const paid = session.payments
+      .filter(p => p.status === "CONFIRMED")
+      .reduce((acc, p) => acc + p.amount, 0);
+    const remaining = total - paid;
+
+    if (Number(amount) > remaining + 1) { // +1 for rounding tolerance
+      res.status(400).json({ error: `Amount ₹${amount} exceeds remaining balance ₹${remaining}` });
       return;
     }
 

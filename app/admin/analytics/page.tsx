@@ -8,12 +8,12 @@ import {
   TrendingDown, Info, LayoutDashboard, Coffee, Layers
 } from "lucide-react";
 import ReactECharts from "echarts-for-react";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useAdmin } from "../AdminContext";
 import { adminFetchAnalyticsData } from "@/lib/api";
 import CustomDatePicker from "@/components/admin/CustomDatePicker";
 
 export default function AnalyticsPage() {
-  const { secret, authenticated } = useAdminAuth();
+  const { secret, authenticated } = useAdmin();
   const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState("2025-01-01");
   const [toDate, setToDate] = useState(new Date().toISOString().split("T")[0]);

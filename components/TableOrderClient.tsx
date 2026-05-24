@@ -14,6 +14,9 @@ import {
 } from "@/lib/api";
 import { useSocket } from "@/lib/socket-client";
 import { type OrderMenuItem } from "@/lib/menu";
+import { useClock } from "@/hooks/useClock";
+import { useDebounce } from "@/hooks/useDebounce";
+import { useSafeTimeout } from "@/hooks/useSafeTimeout";
 
 // Import modular components
 import MenuHeader from "./order/MenuHeader";
@@ -34,6 +37,9 @@ interface CartItem extends OrderMenuItem {
   addedBy?: string;
   addedByName?: string;
 }
+
+/* ─── Constants ─────────────────────────────── */
+const MENU_TRANSITION = { duration: 0.4, ease: [0.22, 1, 0.36, 1] } as const;
 
 /* ─── Component ────────────────────────────── */
 export default function TableOrderClient({ tableId, mode = "table" }: { tableId: string; mode?: "table" | "takeaway" }) {
@@ -70,6 +76,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const [deletedOrders, setDeletedOrders] = useState<any[]>([]);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [sessionClosed, setSessionClosed] = useState(false);
+  const [lastConfirmedTotal, setLastConfirmedTotal] = useState(0);
 
   // Global Notification States
   const [showCancellation, setShowCancellation] = useState(false);
@@ -93,7 +100,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
   const [variantModalItem, setVariantModalItem] = useState<OrderMenuItem | null>(null);
   const [tempVariants, setTempVariants] = useState<{ [key: string]: number }>({});
+  const [lastServerUpdate, setLastServerUpdate] = useState(0);
   const categoryRefs = useRef<{ [key: string]: HTMLElement | null }>({});
+  const initialCategorySet = useRef(false);
+  const scrollObserverRef = useRef<IntersectionObserver | null>(null);
 
   // Touch gesture state for cart drawer swipe-to-close
   const drawerTouchStart = useRef<{ y: number; time: number } | null>(null);
@@ -120,13 +130,27 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const notifiedConfirmedIds = useRef(new Set<string>());
   const [closedAt, setClosedAt] = useState<string | null>(null);
 
+  const sessionIdRef = useRef<string | undefined>(session?.id);
+  useEffect(() => {
+    sessionIdRef.current = session?.id;
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (session?.id) {
+      joinSession(session.id);
+    }
+  }, [session?.id, joinSession]);
+
   // Search State
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const debouncedSearchQuery = useDebounce(searchQuery, 400);
+  const { setTimeout: safeSetTimeout } = useSafeTimeout();
 
   useEffect(() => {
     setShowReviewPrompt(!!session?.reviewRequested);
   }, [session?.reviewRequested]);
+  const now = useClock();
 
   useEffect(() => {
     if (session) {
@@ -135,41 +159,31 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     console.log(`[STATE] showReviewPrompt: ${showReviewPrompt}`);
   }, [session, showReviewPrompt]);
 
-  /* ─── Preparation Timer Logic ─────────── */
+  /* ─── Preparation Timer Logic (Derived from useClock) ─── */
+  const currentPrepTimer = useMemo(() => {
+    if (!session || !session.orders || now === 0) return null;
+
+    const activeTimers = session.orders
+      .filter(o => o.status !== "CANCELLED" && o.status !== "SERVED" && o.estimatedReadyTime)
+      .map(o => new Date(o.estimatedReadyTime!).getTime());
+
+    if (activeTimers.length === 0) return null;
+
+    const maxReadyTime = Math.max(...activeTimers);
+    const diff = maxReadyTime - now;
+
+    if (diff <= 0) return null;
+
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, [session, now]);
+
+  // Keep compatibility with existing code using setPrepTimer if any, 
+  // though we should prefer the derived one.
   useEffect(() => {
-    if (!session || !session.orders) {
-      setPrepTimer(null);
-      return;
-    }
-    
-    const updatePrepTimer = () => {
-      const activeTimers = session.orders
-        .filter(o => o.status !== "CANCELLED" && o.status !== "SERVED" && o.estimatedReadyTime)
-        .map(o => new Date(o.estimatedReadyTime!).getTime());
-      
-      if (activeTimers.length === 0) {
-        setPrepTimer(null);
-        return;
-      }
-      
-      const maxReadyTime = Math.max(...activeTimers);
-      const now = Date.now();
-      const diff = maxReadyTime - now;
-      
-      if (diff <= 0) {
-        // Automatically hide if reached 0
-        setPrepTimer(null);
-      } else {
-        const mins = Math.floor(diff / 60000);
-        const secs = Math.floor((diff % 60000) / 1000);
-        setPrepTimer(`${mins}:${secs.toString().padStart(2, '0')}`);
-      }
-    };
-    
-    updatePrepTimer();
-    const interval = setInterval(updatePrepTimer, 1000); // Check every 1s for smooth countdown
-    return () => clearInterval(interval);
-  }, [session]);
+    setPrepTimer(currentPrepTimer);
+  }, [currentPrepTimer]);
 
   /* ─── Geolocation Verification ─────────── */
   const tryVerifyLocation = useCallback(async (sid?: string) => {
@@ -238,6 +252,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
   // Hydrate from cache for instant load
   useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('clear') === 'true') {
+      localStorage.removeItem("bnb_cached_menu");
+      const sessionKey = isTakeawayMode ? "bnb_cached_session_takeaway" : `bnb_cached_session_${tableId}`;
+      localStorage.removeItem(sessionKey);
+      console.log("[CACHE] Table cache cleared via URL");
+    }
+
     const cachedMenu = localStorage.getItem("bnb_cached_menu");
     const sessionKey = isTakeawayMode ? "bnb_cached_session_takeaway" : `bnb_cached_session_${tableId}`;
     const cachedSession = localStorage.getItem(sessionKey);
@@ -352,7 +374,8 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       setMenuItems(data.items);
       setCategories(data.categories);
       localStorage.setItem("bnb_cached_menu", JSON.stringify(data));
-      if (data.categories.length > 0 && !activeCategory) {
+      if (data.categories.length > 0 && !initialCategorySet.current) {
+        initialCategorySet.current = true;
         setActiveCategory(data.categories[0]);
       }
     } catch (err) {
@@ -360,7 +383,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     } finally {
       setMenuLoading(false);
     }
-  }, [activeCategory]);
+  }, []);
 
   useEffect(() => {
     loadMenuData();
@@ -369,21 +392,39 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
   /* ─── Search Filtering Logic ───────────── */
   const filteredMenuItems = useMemo(() => {
-    if (!searchQuery.trim()) return menuItems;
-    const q = searchQuery.toLowerCase().trim();
+    if (!debouncedSearchQuery.trim()) return menuItems;
+    const q = debouncedSearchQuery.toLowerCase().trim();
     return menuItems.filter(item =>
       item.name.toLowerCase().includes(q) ||
       item.category.toLowerCase().includes(q) ||
       (item.descriptionEn && item.descriptionEn.toLowerCase().includes(q))
     );
-  }, [menuItems, searchQuery]);
+  }, [menuItems, debouncedSearchQuery]);
 
   const filteredCategories = useMemo(() => {
-    if (!searchQuery.trim()) return categories;
+    if (!debouncedSearchQuery.trim()) return categories;
     // Only show categories that have items matching the search
     const activeCats = new Set(filteredMenuItems.map(m => m.category));
     return categories.filter(c => activeCats.has(c));
-  }, [categories, filteredMenuItems, searchQuery]);
+  }, [categories, filteredMenuItems, debouncedSearchQuery]);
+
+  const menuItemsByCategory = useMemo(() => {
+    const map: Record<string, OrderMenuItem[]> = {};
+    categories.forEach(cat => {
+      map[cat] = filteredMenuItems.filter(m => m.category === cat);
+    });
+    return map;
+  }, [categories, filteredMenuItems]);
+
+  const sectionRefCallbacks = useMemo(() => {
+    const callbacks: Record<string, (el: HTMLElement | null) => void> = {};
+    categories.forEach(cat => {
+      callbacks[cat] = (el: HTMLElement | null) => {
+        categoryRefs.current[cat] = el;
+      };
+    });
+    return callbacks;
+  }, [categories]);
 
   useEffect(() => {
     if (locationVerified === null) {
@@ -396,8 +437,8 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+    safeSetTimeout(() => setToast(null), 3000);
+  }, [safeSetTimeout]);
 
   useEffect(() => {
     if (!socket || !connected) return;
@@ -419,22 +460,25 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   }, [socket, connected, on, loadMenuData, loadStatus]);
 
   useEffect(() => {
-    if (!session) {
-      loadStatus();
-      return;
-    }
-    joinSession(session.id);
+    if (!socket || !connected) return;
     const unsubs = [
-      on("order_placed", () => loadSession()),
+      on("order_placed", (data: any) => {
+        if (!data.order) return;
+        setSession(prev => {
+          if (!prev || prev.id !== data.sessionId) return prev;
+          const exists = prev.orders.some(o => o.id === data.order.id);
+          if (exists) return prev;
+          return { ...prev, orders: [data.order, ...prev.orders] };
+        });
+      }),
       on("order_updated", (data: any) => {
         console.log("[SOCKET] order_updated received:", data.order?.id, data.order?.status);
         setIsProcessingOrder(false);
         if (data.order) {
           setSession(prev => {
-            if (!prev) return null;
+            if (!prev || prev.id !== data.sessionId) return prev;
             const updatedOrders = prev.orders.map(o => {
               if (o.id === data.order.id || o.id === data.tempOrderId) {
-                // Deep merge items to preserve local state if necessary
                 return { ...o, ...data.order, items: data.order.items || o.items };
               }
               return o;
@@ -442,14 +486,12 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             return { ...prev, orders: updatedOrders };
           });
         }
-        // Force a re-fetch to be absolutely sure we have latest state
-        loadSession();
       }),
       on("order_deleted", (data: any) => {
         setIsProcessingOrder(false);
         if (data.orderId) {
           setSession(prev => {
-            if (!prev) return null;
+            if (!prev || prev.id !== data.sessionId) return prev;
             return { ...prev, orders: prev.orders.filter(o => o.id !== data.orderId) };
           });
         }
@@ -461,15 +503,13 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             setDeletedOrders(prev => prev.filter(o => o.id !== data.order.id));
           }, 90000);
         }
-
-        loadSession();
       }),
       on("payment_confirmed", (data: any) => {
         if (data.payment) {
           // Handle REJECTED payments — admin denied the payment
           if (data.payment.status === "REJECTED") {
             setSession(prev => {
-              if (!prev) return null;
+              if (!prev || prev.id !== data.sessionId) return prev;
               return {
                 ...prev,
                 payments: prev.payments.filter(p => p.id !== data.payment.id)
@@ -480,12 +520,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             setPayingUPI(false);
             setPayingCash(false);
             showToast("Payment was rejected by admin");
-            loadSession();
             return;
           }
 
           setSession(prev => {
-            if (!prev) return null;
+            if (!prev || prev.id !== data.sessionId) return prev;
             const exists = prev.payments.some(p => p.id === data.payment.id);
             if (exists) {
               return {
@@ -496,7 +535,6 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
             return { ...prev, payments: [data.payment, ...prev.payments] };
           });
         }
-        loadSession();
         setPaymentSuccess(true);
         setOrderPlaced(true);
         setTimeout(() => setPaymentSuccess(false), 90000);
@@ -507,13 +545,13 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       }),
       on("session_updated", (data: any) => {
         console.log("[SOCKET] session_updated received:", data);
-        if (data.sessionId === session?.id) {
+        if (data.sessionId === sessionIdRef.current) {
            setSession(prev => prev ? { ...prev, ...data } : null);
         }
       }),
       on("session_closed", (data: any) => {
         console.log("[SOCKET] session_closed received:", data);
-        if (data.sessionId === session?.id) {
+        if (data.sessionId === sessionIdRef.current) {
           setSessionClosed(true);
           setClosedAt(data.closedAt);
           // Clear non-essential caches
@@ -525,7 +563,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       }),
     ];
     return () => unsubs.forEach((u) => u());
-  }, [session?.id, joinSession, on, loadSession, loadStatus, showToast]);
+  }, [socket, connected, on, loadSession, loadStatus, showToast, isTakeawayMode, tableId]);
 
   // Auto-reset orderPlaced if session becomes empty AND no active notifications
   useEffect(() => {
@@ -568,31 +606,26 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   }, [cancelledOrders]);
 
 
-  // Countdown timer logic
+  /* ─── Restaurant Closing Countdown (Derived from useClock) ─── */
+  const currentTimeLeft = useMemo(() => {
+    if (!restaurantStatus.closingAt || now === 0) return null;
+
+    const closingDate = new Date(restaurantStatus.closingAt!);
+    const diff = closingDate.getTime() - now;
+
+    if (diff <= 0) return "00:00";
+
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }, [restaurantStatus.closingAt, now]);
+
   useEffect(() => {
-    if (!restaurantStatus.closingAt) {
-      setTimeLeft(null);
-      return;
+    setTimeLeft(currentTimeLeft);
+    if (currentTimeLeft === "00:00") {
+      loadStatus();
     }
-
-    const interval = setInterval(() => {
-      const closingDate = new Date(restaurantStatus.closingAt!);
-      const now = new Date();
-      const diff = closingDate.getTime() - now.getTime();
-
-      if (diff <= 0) {
-        setTimeLeft("00:00");
-        clearInterval(interval);
-        loadStatus();
-      } else {
-        const mins = Math.floor(diff / 60000);
-        const secs = Math.floor((diff % 60000) / 1000);
-        setTimeLeft(`${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [restaurantStatus.closingAt, loadStatus]);
+  }, [currentTimeLeft, loadStatus]);
 
   /* ─── Multiplayer Sync ─────────────────── */
   useEffect(() => {
@@ -602,7 +635,6 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
     const unsubs = [
       on("cart_sync", (sharedCart: any) => {
-        // Smart merge: keep MY items local, sync OTHER users' items from server
         setCart(prev => {
           const myItems = prev.filter(item => item.addedBy === clientId);
           const otherItems = (sharedCart.items || []).filter((item: any) => item.addedBy !== clientId);
@@ -612,13 +644,37 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
         setLockedBy(sharedCart.lockedBy);
         setCartUsers(sharedCart.users);
       }),
+      on("cart_item_added", ({ item, clientId: senderId, fullCart }: any) => {
+        if (senderId === clientId) return; // Already handled locally
+        setCart(prev => {
+          const others = prev.filter(i => !(i.id === item.id && i.addedBy === senderId));
+          return [...others, item];
+        });
+        if (fullCart) {
+          setCartLocked(fullCart.isLocked);
+          setCartUsers(fullCart.users);
+        }
+      }),
+      on("cart_item_removed", ({ itemId, clientId: senderId, fullCart }: any) => {
+        if (senderId === clientId) return;
+        setCart(prev => prev.filter(i => !(i.id === itemId && i.addedBy === senderId)));
+        if (fullCart) {
+          setCartLocked(fullCart.isLocked);
+          setCartUsers(fullCart.users);
+        }
+      }),
+      on("cart_item_updated", ({ itemId, quantity, clientId: senderId, fullCart }: any) => {
+        if (senderId === clientId) return;
+        setCart(prev => prev.map(i => (i.id === itemId && i.addedBy === senderId) ? { ...i, quantity } : i));
+        if (fullCart) {
+          setCartLocked(fullCart.isLocked);
+          setCartUsers(fullCart.users);
+        }
+      }),
       on("cart_toast", (msg: any) => {
         setToast(msg);
         setTimeout(() => setToast(null), 3000);
       }),
-      on("order_updated", () => loadSession()),
-      on("session_updated", () => loadSession()),
-      on("order_placed", () => loadSession()),
     ];
     return () => unsubs.forEach(u => u());
   }, [clientId, connected, socket, tableId, on]);
@@ -647,7 +703,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       const rootEl = menuContainerRef.current;
       if (!rootEl) return;
 
-      const observer = new IntersectionObserver(
+      // Disconnect previous observer
+      scrollObserverRef.current?.disconnect();
+
+      scrollObserverRef.current = new IntersectionObserver(
         (entries) => {
           const visible = entries.filter((e) => e.isIntersecting);
           if (visible.length > 0) {
@@ -688,13 +747,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
       categories.forEach((cat) => {
         const el = categoryRefs.current[cat];
-        if (el) observer.observe(el);
+        if (el) scrollObserverRef.current!.observe(el);
       });
-
-      return () => observer.disconnect();
     }, 100);
 
-    return () => clearTimeout(timeout);
+    return () => {
+      clearTimeout(timeout);
+      scrollObserverRef.current?.disconnect();
+    };
   }, [categories, visibleCategoriesCount]);
 
   /* ─── Lazy Load Categories ─────────── */
@@ -745,10 +805,20 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     syncCart((prev) => {
       const packingState = isTakeawayGlobal;
       const existing = prev.find((c) => c.id === item.id && c.forPacking === packingState && c.variant === variant && c.addedBy === clientId);
-      if (existing) return prev.map((c) => (c.id === item.id && c.forPacking === packingState && c.variant === variant && c.addedBy === clientId) ? { ...c, quantity: c.quantity + qty } : c);
-      return [...prev, { ...item, price: actualPrice, quantity: qty, forPacking: packingState, variant, addedBy: clientId, addedByName: me?.friendlyName || "You", cartItemId: Math.random().toString(36).substring(7) }];
+      if (existing) {
+        const newQty = existing.quantity + qty;
+        if (socket && connected) {
+          socket.emit("cart_update_quantity", { tableId, clientId, itemId: existing.id, quantity: newQty });
+        }
+        return prev.map((c) => (c.id === item.id && c.forPacking === packingState && c.variant === variant && c.addedBy === clientId) ? { ...c, quantity: newQty } : c);
+      }
+      const newItem = { ...item, price: actualPrice, quantity: qty, forPacking: packingState, variant, addedBy: clientId, addedByName: me?.friendlyName || "You", cartItemId: Math.random().toString(36).substring(7) };
+      if (socket && connected) {
+        socket.emit("cart_add_item", { tableId, clientId, item: newItem });
+      }
+      return [...prev, newItem];
     });
-  }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cartLocked, cartUsers, clientId, isTakeawayGlobal, syncCart, showToast]);
+  }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cartLocked, cartUsers, clientId, isTakeawayGlobal, syncCart, showToast, socket, connected, tableId]);
 
   const handleAddTempVariants = useCallback(() => {
     if (!variantModalItem) return;
@@ -765,11 +835,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       const existing = prev.find((c) => c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId);
       if (!existing) return prev;
       if (existing.quantity <= 1) {
+        if (socket && connected) socket.emit("cart_remove_item", { tableId, clientId, itemId });
         return prev.filter((c) => !(c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId));
       }
-      return prev.map((c) => (c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId) ? { ...c, quantity: c.quantity - 1 } : c);
+      const newQty = existing.quantity - 1;
+      if (socket && connected) socket.emit("cart_update_quantity", { tableId, clientId, itemId, quantity: newQty });
+      return prev.map((c) => (c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId) ? { ...c, quantity: newQty } : c);
     });
-  }, [cartLocked, clientId, syncCart, showToast]);
+  }, [cartLocked, clientId, syncCart, showToast, socket, connected, tableId]);
 
   const toggleItemPacking = useCallback((itemId: string, currentPacking: boolean, variant?: string) => {
     if (cartLocked) return showToast("Cart is locked for checkout!");
@@ -787,16 +860,21 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       } else {
         newCart[idx] = item;
       }
+      // For toggle packing, we still emit a full sync or implement a granular one?
+      // Let's emit a cart_update (full) for complex state changes like toggle packing
+      if (socket && connected) socket.emit("cart_update", { tableId, clientId, items: newCart });
       return newCart;
     });
-  }, [cartLocked, clientId, syncCart, showToast]);
+  }, [cartLocked, clientId, syncCart, showToast, socket, connected, tableId]);
 
   const deleteFromCart = useCallback((itemId: string, forPacking?: boolean, variant?: string) => {
     if (cartLocked) return showToast("Cart is locked for checkout!");
     syncCart((prev) => {
-      return prev.filter((c) => !(c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId));
+      const newCart = prev.filter((c) => !(c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId));
+      if (socket && connected) socket.emit("cart_remove_item", { tableId, clientId, itemId });
+      return newCart;
     });
-  }, [cartLocked, clientId, syncCart, showToast]);
+  }, [cartLocked, clientId, syncCart, showToast, socket, connected, tableId]);
 
   const handleGlobalTakeawayToggle = useCallback((isTakeaway: boolean) => {
     if (isTakeawayMode) return;
@@ -822,6 +900,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const cartTotal = cartSubtotal + packingCharges;
   const cartCount = useMemo(() => cart.reduce((sum, c) => sum + c.quantity, 0), [cart]);
 
+  // Track pending order submission to prevent duplicates
+  const pendingOrderRef = useRef<Promise<void> | null>(null);
+  const lastOrderTimeRef = useRef<number>(0);
+  const ORDER_COOLDOWN_MS = 2000; // 2 second cooldown between order submissions
+
   /* ─── Order Action ─────────────────────── */
   const handlePlaceOrder = useCallback(async (customerPhone?: string) => {
     if (!restaurantStatus.isOpen && !restaurantStatus.closingAt) {
@@ -830,39 +913,77 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (cart.length === 0) return;
     if (cartLocked && lockedBy !== clientId) return showToast("Someone else is placing the order!");
 
-    setOrdering(true);
+    // If order is already being submitted, don't submit again
+    if (pendingOrderRef.current) {
+      return;
+    }
+
+    // Enforce cooldown to prevent rate limiting
+    const now = Date.now();
+    const timeSinceLastOrder = now - lastOrderTimeRef.current;
+    if (timeSinceLastOrder < ORDER_COOLDOWN_MS) {
+      showToast(`Please wait ${Math.ceil((ORDER_COOLDOWN_MS - timeSinceLastOrder) / 1000)}s before placing another order`);
+      return;
+    }
+    
+    // Show processing state while order confirms in background
     setIsProcessingOrder(true);
-    // Don't hide mobile cart yet — let the animation play first
+    
+    // Update last order time to enforce cooldown
+    lastOrderTimeRef.current = now;
+    
+    // Save full cart for potential restoration on error
+    const fullCartBackup = [...cart];
+    
+    // Clear cart and update UI IMMEDIATELY (don't wait for backend)
+    const itemsToKitchen = cart.map((c) => ({
+      id: c.id,
+      quantity: c.quantity
+    }));
+    const savedInstructions = instructionsRef.current;
+    
+    // Reset UI immediately - user can now proceed to payment
+    instructionsRef.current = "";
+    setLastConfirmedTotal(cartTotal);
+    setCart([]);
+    setOrderPlaced(true);  // Show payment screen immediately
+    localStorage.removeItem(`bnb_cart_${tableId}`);
 
-    try {
-      const itemsToKitchen = cart.map((c) => ({
-        name: `${c.name}${c.variant ? ` (${c.variant})` : ""}${c.forPacking ? " (Packing)" : ""}`,
-        price: c.price,
-        quantity: c.quantity
-      }));
-
-      const response = await placeOrder(session?.id || "", itemsToKitchen, isTakeawayGlobal, tableId, packingCharges, instructionsRef.current, customerPhone);
-
+    // Send order to backend in background
+    pendingOrderRef.current = placeOrder(
+      session?.id || "", 
+      itemsToKitchen, 
+      isTakeawayGlobal, 
+      tableId, 
+      savedInstructions, 
+      customerPhone
+    ).then((response) => {
       if (isTakeawayMode && response.order.sessionId) {
         localStorage.setItem("bnb_takeaway_session_id", response.order.sessionId);
       }
-
-      // Backend route already emits to admin — no client emission needed
-      instructionsRef.current = "";
       setSession(response.session);
       setIsProcessingOrder(false);
-      setOrderPlaced(true); // Ensure success screen shows immediately
-      setCart([]);
-      localStorage.removeItem(`bnb_cart_${tableId}`);
-      // Notification will now be triggered by 'order_confirmed' socket event instead of being shown immediately
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Failed to place order");
+    }).catch((err) => {
+      const errorMsg = err instanceof Error ? err.message : "Failed to place order";
+      
+      // If rate limited, reset cooldown to allow retry sooner
+      if (errorMsg.includes("Too many orders")) {
+        lastOrderTimeRef.current = 0;
+        showToast("Too many orders - please try again in a moment");
+      } else {
+        showToast(errorMsg);
+      }
+      
       setIsProcessingOrder(false);
       setOrderPlaced(false);
+      
+      // Restore cart on error
+      setCart(fullCartBackup);
+      
       if (socket) socket.emit("cart_unlock", { tableId });
-    } finally {
-      setOrdering(false);
-    }
+    }).finally(() => {
+      pendingOrderRef.current = null;
+    });
   }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cart, cartLocked, lockedBy, clientId, socket, tableId, session?.id, isTakeawayGlobal, packingCharges, isTakeawayMode, syncCart, showToast]);
 
   /* ─── Payment Actions ──────────────────── */
@@ -882,7 +1003,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (!session || remaining <= 0) return;
     setPayingUPI(true);
     try {
-      await createPayment(session.id, "UPI", remaining);
+      await createPayment(session.id, "UPI");
       setPaymentMode(null);
       await loadSession();
     } catch (err) {
@@ -896,7 +1017,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (!session || remaining <= 0 || payingCash) return;
     setPayingCash(true);
     try {
-      await createPayment(session.id, "CASH", remaining);
+      await createPayment(session.id, "CASH");
       setPaymentMode(null);
       await loadSession();
     } catch (err) {
@@ -1019,6 +1140,25 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     isDraggingDrawer.current = false;
   }, []);
 
+  // Debounce connection banner — only show after 3s of sustained disconnection
+  const [showDisconnected, setShowDisconnected] = useState(false);
+  const disconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!isMounted) return;
+    if (connected) {
+      if (disconnectTimerRef.current) {
+        clearTimeout(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+      setShowDisconnected(false);
+    } else {
+      disconnectTimerRef.current = setTimeout(() => setShowDisconnected(true), 3000);
+    }
+    return () => {
+      if (disconnectTimerRef.current) clearTimeout(disconnectTimerRef.current);
+    };
+  }, [connected, isMounted]);
+
   // Logic: Show premium welcome screen for all initial loading states
   if (!isMounted || loading || (showWelcome && !welcomeDismissed)) {
     return (
@@ -1103,7 +1243,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   }
 
   // If welcome is already seen but data is still loading
-  if (loading) {
+  if (loading || !isMounted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F9F7F4]">
         <div className="flex flex-col items-center gap-4">
@@ -1116,7 +1256,15 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
   const commonCartProps = {
     cart, cartSubtotal, cartTotal, packingCharges, session,
-    ordering, orderPlaced, setOrderPlaced,
+    ordering, orderPlaced, 
+    setOrderPlaced: (val: boolean) => {
+      setOrderPlaced(val);
+      if (!val) {
+        setIsProcessingOrder(false);
+        setPaymentMode(null);
+        setCart([]);
+      }
+    },
     orderConfig,
     onPlaceOrder: handlePlaceOrder,
     onRemove: removeFromCart,
@@ -1131,6 +1279,13 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     isTakeaway: isTakeawayMode,
     instructionsRef,
     isProcessingOrder,
+    pendingAmount: lastConfirmedTotal || cartTotal,
+    onAddMore: () => {
+      setOrderPlaced(false);
+      setPaymentMode(null);
+      setIsProcessingOrder(false);
+      setCart([]);
+    },
     deletedOrders,
     paymentSuccess,
     sessionClosed,
@@ -1144,10 +1299,17 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     onScrollComplete: () => setPendingHistoryScroll(false)
   };
 
-  const menuTransition: any = { duration: 0.4, ease: [0.22, 1, 0.36, 1] };
+  const menuTransition = MENU_TRANSITION;
+
 
   return (
     <div className="h-screen h-[100dvh] bg-[#F9F7F4] flex flex-col overflow-hidden relative">
+      {/* Connection status banner — only after 3s sustained disconnect */}
+      {showDisconnected && (
+        <div className="fixed top-0 left-0 right-0 z-[999] bg-amber-500 text-white text-center py-2 text-sm font-medium animate-pulse">
+          ⚠️ Connection lost — reconnecting...
+        </div>
+      )}
       {/* GLOBAL NOTIFICATIONS */}
       <div className="fixed top-24 left-6 right-6 z-[150] space-y-4 pointer-events-none">
         <AnimatePresence mode="popLayout">
@@ -1377,10 +1539,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
               <MenuSection
                 key={cat}
                 category={cat}
-                items={filteredMenuItems.filter(m => m.category === cat)}
+                items={menuItemsByCategory[cat] || []}
                 onAdd={addToCart}
                 isRestaurantOpen={restaurantStatus.isOpen || !!restaurantStatus.closingAt}
-                sectionRef={(el) => { categoryRefs.current[cat] = el; }}
+                sectionRef={sectionRefCallbacks[cat]}
               />
             ))}
 
@@ -1463,47 +1625,50 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
           )}
 
           {showCartMobile && (
-            <div key="cart-drawer-container">
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                onClick={() => setShowCartMobile(false)}
-                className="lg:hidden fixed inset-0 z-[60] bg-[#3A241C]/40 backdrop-blur-sm transform-gpu"
-              />
-              <motion.div
-                ref={drawerRef}
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={menuTransition}
-                onAnimationComplete={() => {
-                  if (drawerRef.current) {
-                    drawerRef.current.style.transform = '';
-                    drawerRef.current.style.transition = '';
-                  }
-                }}
-                style={{ willChange: "transform", overscrollBehavior: "contain" }}
-                className="lg:hidden fixed bottom-0 left-0 right-0 z-[110] bg-white rounded-t-[3rem] max-h-[92vh] flex flex-col shadow-[0_-10px_60px_rgba(58,36,28,0.15)] overflow-hidden transform-gpu"
+            <motion.div
+              key="cart-drawer-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              onClick={() => setShowCartMobile(false)}
+              className="lg:hidden fixed inset-0 z-[60] bg-[#3A241C]/40 backdrop-blur-sm transform-gpu"
+            />
+          )}
+          {showCartMobile && (
+            <motion.div
+              key="cart-drawer-content"
+              ref={drawerRef}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={menuTransition}
+              onAnimationComplete={(definition: any) => {
+                if (drawerRef.current && definition && definition.y === 0) {
+                  drawerRef.current.style.transform = '';
+                  drawerRef.current.style.transition = '';
+                }
+              }}
+              style={{ willChange: "transform", overscrollBehavior: "contain" }}
+              className="lg:hidden fixed bottom-0 left-0 right-0 z-[110] bg-white rounded-t-[3rem] max-h-[92vh] flex flex-col shadow-[0_-10px_60px_rgba(58,36,28,0.15)] overflow-hidden transform-gpu"
+            >
+              {/* Drag Handle — touch-none prevents browser gestures */}
+              <div
+                onTouchStart={handleDrawerTouchStart}
+                onTouchMove={handleDrawerTouchMove}
+                onTouchEnd={handleDrawerTouchEnd}
+                className="flex justify-center py-6 cursor-grab active:cursor-grabbing touch-none z-20 select-none"
               >
-                {/* Drag Handle — touch-none prevents browser gestures */}
-                <div
-                  onTouchStart={handleDrawerTouchStart}
-                  onTouchMove={handleDrawerTouchMove}
-                  onTouchEnd={handleDrawerTouchEnd}
-                  className="flex justify-center py-6 cursor-grab active:cursor-grabbing touch-none z-20 select-none"
-                >
-                  <div className="w-12 h-1.5 bg-[#3A241C]/10 rounded-full" />
-                </div>
-                <div
-                  ref={drawerScrollRef}
-                  className="flex-1 flex flex-col min-h-0 overflow-hidden"
-                  style={{ overscrollBehavior: "contain" }}
-                  onTouchStart={handleDrawerTouchStart}
-                  onTouchMove={handleDrawerTouchMove}
-                  onTouchEnd={handleDrawerTouchEnd}
-                >
+                <div className="w-12 h-1.5 bg-[#3A241C]/10 rounded-full" />
+              </div>
+              <div
+                ref={drawerScrollRef}
+                className="flex-1 flex flex-col min-h-0 overflow-hidden"
+                style={{ overscrollBehavior: "contain" }}
+                onTouchStart={handleDrawerTouchStart}
+                onTouchMove={handleDrawerTouchMove}
+                onTouchEnd={handleDrawerTouchEnd}
+              >
                   <CartContent
                     {...commonCartProps}
                     onFeedbackSubmit={handleFeedbackSubmit}
@@ -1522,7 +1687,6 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
                   />
                 </div>
               </motion.div>
-            </div>
           )}
         </AnimatePresence>
 

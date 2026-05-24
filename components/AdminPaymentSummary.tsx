@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditCard, Banknote, Bell, X, Check, Plus, Loader2, Star, Clock } from "lucide-react";
 import { SessionData } from "@/lib/api";
+import { useClock } from "@/hooks/useClock";
+import { memo, useMemo } from "react";
 
 interface AdminPaymentSummaryProps {
   tableId: string;
@@ -17,7 +19,7 @@ interface AdminPaymentSummaryProps {
   isTakeaway?: boolean;
 }
 
-export default function AdminPaymentSummary({
+const AdminPaymentSummary = memo(({
   tableId,
   session,
   onConfirmPayment,
@@ -27,23 +29,22 @@ export default function AdminPaymentSummary({
   onUpdateTimer,
   onSendReviewRequest,
   isTakeaway = false,
-}: AdminPaymentSummaryProps) {
+}: AdminPaymentSummaryProps) => {
   const [recordAmount, setRecordAmount] = useState<string>("");
   const [recordMethod, setRecordMethod] = useState<"CASH" | "UPI">("CASH");
   const [isRecording, setIsRecording] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
   const [customTimerValue, setCustomTimerValue] = useState("");
-  const [countdown, setCountdown] = useState<string | null>(null);
-  const [selectedPresets, setSelectedPresets] = useState<Set<number>>(new Set());
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
 
-  // Initialize selectedPresets only when a NEW active order is found
+  // Use a ref-like approach or just memoize the presets based on the active order's time
+  const [selectedPresets, setSelectedPresets] = useState<Set<number>>(new Set());
+
   useEffect(() => {
     const currentActiveOrder = session?.orders.find(o => 
       o.status !== "CANCELLED" && o.status !== "SERVED" && o.estimatedReadyTime
     );
     
-    // If the active order ID changed, or we have no active order, reset/re-sync
     if (currentActiveOrder?.id !== activeOrderId) {
       setActiveOrderId(currentActiveOrder?.id || null);
       
@@ -53,45 +54,56 @@ export default function AdminPaymentSummary({
         const diffMins = Math.round((new Date(currentActiveOrder.estimatedReadyTime).getTime() - Date.now()) / 60000);
         let remaining = diffMins;
         const newPresets = new Set<number>();
-        // Greedy fit for presets
         if (remaining >= 15) { newPresets.add(15); remaining -= 15; }
         if (remaining >= 10) { newPresets.add(10); remaining -= 10; }
         if (remaining >= 5) { newPresets.add(5); remaining -= 5; }
         setSelectedPresets(newPresets);
       }
     }
-  }, [session?.id, session?.orders.length]); // Only re-sync on session change or order count change
+  }, [session?.id, session?.orders.length, activeOrderId]);
 
 
-  useEffect(() => {
-    const updateCountdown = () => {
-      const orders = session?.orders || [];
-      const activeTimers = orders
-        .filter(o => o.status !== "CANCELLED" && o.status !== "SERVED" && o.estimatedReadyTime)
-        .map(o => new Date(o.estimatedReadyTime!).getTime());
-      
-      if (activeTimers.length === 0) {
-        setCountdown(null);
-        return;
-      }
-      
-      const maxReadyTime = Math.max(...activeTimers);
-      const now = Date.now();
-      const diff = maxReadyTime - now;
-      
-      if (diff <= 0) {
-        setCountdown("READY");
-      } else {
-        const mins = Math.floor(diff / 60000);
-        const secs = Math.floor((diff % 60000) / 1000);
-        setCountdown(`${mins}:${secs.toString().padStart(2, '0')}`);
-      }
-    };
+  const now = useClock();
 
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [session?.orders]);
+  const countdown = useMemo(() => {
+    if (now === 0) return null;
+    const orders = session?.orders || [];
+    const activeTimers = orders
+      .filter(o => o.status !== "CANCELLED" && o.status !== "SERVED" && o.estimatedReadyTime)
+      .map(o => new Date(o.estimatedReadyTime!).getTime());
+    
+    if (activeTimers.length === 0) return null;
+    
+    const maxReadyTime = Math.max(...activeTimers);
+    const diff = maxReadyTime - now;
+    
+    if (diff <= 0) return "READY";
+    
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }, [session?.orders, now]);
+
+  const { total, paid, balance, paymentMode, orders } = useMemo(() => {
+    const orders = (session?.orders || []).filter(o => o.status !== "CANCELLED");
+    const total = orders.reduce((acc, o) => 
+      acc + (o.items || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0) + (o.packingCharges || 0), 0
+    );
+    
+    const payments = session?.payments || [];
+    const paid = payments
+      .filter(p => p.status === "CONFIRMED")
+      .reduce((acc, p) => acc + (p.amount || 0), 0);
+    const balance = total - paid;
+
+    const methods = new Set(payments.map(p => p.method));
+    let paymentMode = "NONE";
+    if (methods.size > 1) paymentMode = "MIXED";
+    else if (methods.has("UPI")) paymentMode = "UPI";
+    else if (methods.has("CASH")) paymentMode = "CASH";
+
+    return { total, paid, balance, paymentMode, orders };
+  }, [session]);
 
   if (!session) {
     return (
@@ -104,23 +116,6 @@ export default function AdminPaymentSummary({
       </div>
     );
   }
-
-  const orders = (session?.orders || []).filter(o => o.status !== "CANCELLED");
-  const total = orders.reduce((acc, o) => 
-    acc + (o.items || []).reduce((s, i) => s + (i.price || 0) * (i.quantity || 0), 0) + (o.packingCharges || 0), 0
-  );
-  
-  const payments = session?.payments || [];
-  const paid = payments
-    .filter(p => p.status === "CONFIRMED")
-    .reduce((acc, p) => acc + (p.amount || 0), 0);
-  const balance = total - paid;
-
-  const methods = new Set(payments.map(p => p.method));
-  let paymentMode = "NONE";
-  if (methods.size > 1) paymentMode = "MIXED";
-  else if (methods.has("UPI")) paymentMode = "UPI";
-  else if (methods.has("CASH")) paymentMode = "CASH";
 
   const handleRecord = async () => {
     const amount = parseInt(recordAmount);
@@ -359,13 +354,13 @@ export default function AdminPaymentSummary({
       )}
 
       <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-3 min-h-0">
-        {(session?.payments || []).length === 0 ? (
+        {(session?.payments || []).filter(p => p.status !== "REJECTED").length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center opacity-20 py-8">
             <CreditCard size={24} className="mb-2" />
             <p className="text-[8px] font-bold uppercase tracking-widest">No Payments Yet</p>
           </div>
         ) : (
-          (session?.payments || []).map(p => (
+          (session?.payments || []).filter(p => p.status !== "REJECTED").map(p => (
             <div key={p.id} className={`flex justify-between items-center p-3 rounded-2xl border transition-all ${
               p.status === 'CONFIRMED' ? 'bg-[#F9F7F4]/30 border-[#3A241C]/5 opacity-60' : 'bg-[#F9F7F4] border-[#3A241C]/10 shadow-sm'
             }`}>
@@ -408,4 +403,6 @@ export default function AdminPaymentSummary({
       </div>
     </div>
   );
-}
+});
+
+export default AdminPaymentSummary;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { memo, useState, useRef, useEffect } from "react";
+import React, { memo, useState, useRef, useEffect, useMemo } from "react";
 import { Minus, Plus, Trash2, Package } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -29,11 +29,15 @@ const CartItem = ({
   const textContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!textContainerRef.current) return;
+    const element = textContainerRef.current;
+    if (!element) return;
     const observer = new ResizeObserver((entries) => {
-      setContainerWidth(entries[0].contentRect.width);
+      const entry = entries[0];
+      if (entry) {
+        setContainerWidth(entry.contentRect.width);
+      }
     });
-    observer.observe(textContainerRef.current);
+    observer.observe(element);
     return () => observer.disconnect();
   }, []);
 
@@ -45,8 +49,35 @@ const CartItem = ({
     onDelete(item.id, !!item.forPacking, item.variant);
   };
 
+  const displayName = useMemo(() => {
+    const fullName = `${item.name}${item.variant ? ` (${item.variant})` : ""}`;
+    if (containerWidth === 0) return fullName;
+    
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
+    const charWidth = isMobile ? 5.8 : 7.6; 
+    
+    const availableWidth = item.forPacking ? containerWidth - 28 : containerWidth;
+    const maxChars = Math.floor(availableWidth / charWidth);
+    
+    if (fullName.length <= maxChars) return fullName;
+    
+    let current = item.name.replace(/Benne Dosa/gi, 'B.D.');
+    let words = current.split(' ');
+    if (words.length > 1) {
+      for (let i = words.length - 1; i >= 1; i--) {
+        const word = words[i];
+        if (word.length > 2 && !word.includes('.')) {
+          words[i] = word[0] + '.';
+          current = words.join(' ');
+          if (current.length + (item.variant ? item.variant.length + 3 : 0) <= maxChars) break;
+        }
+      }
+    }
+    
+    return `${current}${item.variant ? ` (${item.variant})` : ""}`;
+  }, [item.name, item.variant, containerWidth, item.forPacking]);
+
   const tactileTransition: any = { type: "spring", stiffness: 500, damping: 30 };
-  const smoothTransition: any = { duration: 0.35, ease: [0.22, 1, 0.36, 1] };
 
   return (
     <motion.div 
@@ -85,35 +116,7 @@ const CartItem = ({
       <motion.div ref={textContainerRef} layout="position" className={`flex-1 min-w-0 transition-all duration-300 ${!isTakeaway && item.forPacking ? 'ml-6 lg:ml-7' : 'ml-0'}`}>
         <div className="flex flex-col min-w-0">
           <h4 className="font-black text-[#3A241C] text-[11px] lg:text-sm leading-snug mb-0.5 truncate tracking-tight">
-            {(() => {
-              const fullName = `${item.name}${item.variant ? ` (${item.variant})` : ""}`;
-              
-              // Mobile font is smaller (11px vs 14px), so charWidth is smaller
-              const isMobile = typeof window !== 'undefined' && window.innerWidth < 1024;
-              const charWidth = isMobile ? 5.8 : 7.6; 
-              
-              const availableWidth = containerWidth > 0 ? (item.forPacking ? containerWidth - 10 : containerWidth) : 200;
-              const maxChars = Math.floor(availableWidth / charWidth);
-              
-              if (item.name.length <= maxChars) return fullName;
-              
-              let current = item.name.replace(/Benne Dosa/gi, 'B.D.');
-              if (current.length <= maxChars) return `${current}${item.variant ? ` (${item.variant})` : ""}`;
-              
-              let words = current.split(' ');
-              if (words.length > 1) {
-                for (let i = words.length - 1; i >= 1; i--) {
-                  const word = words[i];
-                  if (word.length > 2 && !word.includes('.')) {
-                    words[i] = word[0] + '.';
-                    current = words.join(' ');
-                    if (current.length <= maxChars) break;
-                  }
-                }
-              }
-              
-              return `${current}${item.variant ? ` (${item.variant})` : ""}`;
-            })()}
+            {displayName}
           </h4>
           <div className="flex items-center gap-1.5 lg:gap-2">
             <span className="text-[9px] lg:text-[10px] font-black text-[#3A241C]/40">₹{item.price} × {item.quantity} = </span>

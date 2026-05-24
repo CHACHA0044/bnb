@@ -44,22 +44,12 @@ function slugify(text: string) {
 
 /* ─── In-Memory Menu Cache ─────────────────── */
 let menuCache: { categories: any[]; items: any[]; cachedAt: number } | null = null;
-const CACHE_TTL = 60_000; // 1 minute
+const CACHE_TTL = 86400_000; // 24 hours
 
 async function getMenuFromDB() {
   const categories = await prisma.category.findMany({
     where: { name: { not: "Others" } },
     orderBy: { sortOrder: "asc" },
-  });
-
-  // Auto-restock items whose outOfStockUntil has passed
-  const now = new Date();
-  await prisma.menuItem.updateMany({
-    where: {
-      outOfStock: true,
-      outOfStockUntil: { not: null, lte: now },
-    },
-    data: { outOfStock: false, outOfStockUntil: null },
   });
 
   const items = await prisma.menuItem.findMany({
@@ -625,43 +615,45 @@ router.post("/admin/versions/:id/rollback", requireAdmin, async (req: Request, r
 
     const snapshot = version.snapshot as any[];
 
-    // Delete all current items and categories, then recreate
-    await prisma.menuItem.deleteMany({});
-    await prisma.category.deleteMany({});
+    await prisma.$transaction(async (tx) => {
+      // Delete all current items and categories, then recreate
+      await tx.menuItem.deleteMany({});
+      await tx.category.deleteMany({});
 
-    for (const cat of snapshot) {
-      const newCat = await prisma.category.create({
-        data: {
-          name: cat.name,
-          sortOrder: cat.sortOrder,
-        },
-      });
+      for (const cat of snapshot) {
+        const newCat = await tx.category.create({
+          data: {
+            name: cat.name,
+            sortOrder: cat.sortOrder,
+          },
+        });
 
-      if (cat.items && Array.isArray(cat.items)) {
-        for (const item of cat.items) {
-          await prisma.menuItem.create({
-            data: {
-              name: item.name,
-              price: item.price,
-              categoryId: newCat.id,
-              descriptionEn: item.descriptionEn,
-              descriptionHi: item.descriptionHi,
-              image: item.image,
-              priceLabel: item.priceLabel,
-              rating: item.rating,
-              ratingCount: item.ratingCount,
-              variants: item.variants || [],
-              variantPrices: item.variantPrices,
-              tags: item.tags || [],
-              outOfStock: item.outOfStock || false,
-              discountPct: item.discountPct,
-              discountFlat: item.discountFlat,
-              sortOrder: item.sortOrder || 0,
-            },
-          });
+        if (cat.items && Array.isArray(cat.items)) {
+          for (const item of cat.items) {
+            await tx.menuItem.create({
+              data: {
+                name: item.name,
+                price: item.price,
+                categoryId: newCat.id,
+                descriptionEn: item.descriptionEn,
+                descriptionHi: item.descriptionHi,
+                image: item.image,
+                priceLabel: item.priceLabel,
+                rating: item.rating,
+                ratingCount: item.ratingCount,
+                variants: item.variants || [],
+                variantPrices: item.variantPrices,
+                tags: item.tags || [],
+                outOfStock: item.outOfStock || false,
+                discountPct: item.discountPct,
+                discountFlat: item.discountFlat,
+                sortOrder: item.sortOrder || 0,
+              },
+            });
+          }
         }
       }
-    }
+    }, { timeout: 30000 });
 
     console.log(`[MENU ADMIN] Rolled back to version ${id}`);
     emitMenuUpdate();

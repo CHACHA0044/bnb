@@ -12,7 +12,7 @@ import {
   adminFetchReportSummary, 
   adminRegenerateReport 
 } from "@/lib/api";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useAdmin } from "../AdminContext";
 import CustomDatePicker from "@/components/admin/CustomDatePicker";
 import CustomMonthPicker from "@/components/admin/CustomMonthPicker";
 
@@ -119,7 +119,7 @@ function TimePicker({ value, onChange, onClear }: { value: string; onChange: (v:
 }
 
 export default function ReportsPage() {
-  const { secret, authenticated } = useAdminAuth();
+  const { secret, authenticated } = useAdmin();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   
@@ -216,7 +216,7 @@ export default function ReportsPage() {
   const handleDownloadDaily = async () => {
     if (downloading) return;
     setDownloading(true);
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
     
     let finalFrom = fromDate;
     let finalTo = toDate;
@@ -255,7 +255,7 @@ export default function ReportsPage() {
   const handleDownloadMonthly = async () => {
     if (downloading) return;
     setDownloading(true);
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+    const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
     const url = `${backendUrl}/api/admin/reports/monthly?month=${month}&secret=${secret}`;
     
     try {

@@ -7,7 +7,7 @@ import {
   RefreshCw, X, Package, Search, ChevronDown, Check,
 } from "lucide-react";
 import { adminFetchHistory } from "@/lib/api";
-import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useAdmin } from "../AdminContext";
 import CustomDatePicker from "@/components/admin/CustomDatePicker";
 import CustomMonthPicker from "@/components/admin/CustomMonthPicker";
 
@@ -133,7 +133,7 @@ function TimePicker({ value, onChange, onClear }: { value: string; onChange: (v:
 
 /* ─── Page ─────────────────────────────────────── */
 export default function HistoryPage() {
-  const { secret, authenticated } = useAdminAuth();
+  const { secret, authenticated } = useAdmin();
   const [history, setHistory] = useState<any[]>([]);
   const [filtered, setFiltered] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);

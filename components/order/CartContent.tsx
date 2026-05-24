@@ -17,7 +17,7 @@ interface CartContentProps {
   ordering: boolean;
   orderPlaced: boolean;
   setOrderPlaced: (val: boolean) => void;
-  onPlaceOrder: (phoneNumber?: string) => void;
+  onPlaceOrder: (phoneNumber?: string) => Promise<void>;
   onRemove: (id: string, packing: boolean, variant?: string) => void;
   onAdd: (item: any, variant?: string) => void;
   onDelete: (id: string, packing: boolean, variant?: string) => void;
@@ -26,7 +26,7 @@ interface CartContentProps {
   paymentMode: "UPI" | "CASH" | null;
   setPaymentMode: (mode: "UPI" | "CASH" | null) => void;
   handleUPIPayment: () => void;
-  handleCashPayment: () => void;
+  handleCashPayment: (phone?: string) => void;
   payingUPI: boolean;
   payingCash: boolean;
   clientId: string;
@@ -275,7 +275,13 @@ const CartContent = ({
                 <p className="text-sm lg:text-base font-black text-[#6A994E]">₹{paidTotal}</p>
               </div>
               <div
-                onClick={() => remaining > 0 && setOrderPlaced(true)}
+                onClick={() => {
+                  if (remaining > 0) {
+                    // Place order in background and show payment immediately
+                    onPlaceOrder();
+                    setOrderPlaced(true);
+                  }
+                }}
                 className={`bg-[#E76F51]/5 p-2.5 lg:p-3 rounded-2xl border border-[#E76F51]/20 flex flex-col justify-center ring-2 ring-[#E76F51]/5 transition-all active:scale-95 ${remaining > 0 ? 'cursor-pointer hover:bg-[#E76F51]/10' : 'opacity-50'}`}
               >
                 <p className="text-[7px] font-black text-[#E76F51]/80 uppercase tracking-[0.2em] mb-1">Balance</p>
@@ -318,7 +324,6 @@ const CartContent = ({
                       if (ordering) return;
                       setPaymentMode('UPI');
                       setOrderPlaced(true); // Show QR screen immediately
-                      onPlaceOrder();
                     }}
                     className={`w-full p-5 bg-white rounded-3xl border-2 transition-all flex items-center gap-5 group cursor-pointer shadow-sm hover:shadow-xl active:scale-[0.98] ${ordering ? 'opacity-50 pointer-events-none' : 'border-[#3A241C]/5 hover:border-[#E76F51]/30'}`}
                   >
@@ -423,7 +428,7 @@ const CartContent = ({
                         return;
                       }
                       setPaymentMode('CASH');
-                      onPlaceOrder(phoneNumber);
+                      handleCashPayment(phoneNumber);
                     }}
                     className={`w-full h-16 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 transition-all ${ordering ? 'bg-[#3A241C]/50 cursor-not-allowed' : 'bg-[#3A241C] text-white shadow-[#3A241C]/20'}`}
                   >
@@ -623,7 +628,16 @@ const CartContent = ({
               cartLocked={cartLocked}
               lockedBy={lockedBy}
               clientId={clientId}
-              onPlaceOrder={() => setPaymentStep('SELECTION')}
+              onPlaceOrder={async () => {
+                try {
+                  // Fire and forget - order is sent in background
+                  // Immediately show payment screen while order is being submitted
+                  onPlaceOrder();
+                  setPaymentStep('SELECTION');
+                } catch (e) {
+                  // Swallowed: already toasted by parent
+                }
+              }}
               onAnimationComplete={onAnimationComplete}
               isProceedOnly={true}
             />

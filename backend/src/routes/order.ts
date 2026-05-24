@@ -3,164 +3,220 @@ import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
 import { getIO } from "../lib/socket";
 import { getNextSessionNumber } from "../lib/session";
-import { logOrderAnalytics, removeOrderAnalytics } from "../lib/analytics";
+import { logOrderAnalytics, removeOrderAnalytics, updateOrderPerformanceMetrics } from "../lib/analytics";
 import { clearActiveCart, getActiveCart } from "../lib/socket";
+import { validateRequest, CreateOrderSchema } from "../lib/validation";
+import { calculatePayableAmount } from "../lib/payment-calc";
 import crypto from "crypto";
-
-export const pendingOrders = new Map<string, any>();
+import { savePendingOrder, getPendingOrder, removePendingOrder, getAllPendingOrders } from "../lib/pending-orders";
+import { getRedisClient } from "../lib/redis";
 
 
 const router = Router();
+
 /**
  * GET /api/order/config
- * Return public configuration for the client (e.g. UPI ID)
+ * 
+ * SECURITY: UPI_ID is NEVER exposed to frontend.
+ * This endpoint is REMOVED to prevent UPI tampering.
  */
 router.get("/config", (_req: Request, res: Response) => {
-  res.json({
-    upiId: process.env.UPI_ID || "hemadembla505@okicici"
-  });
+  // UPI configuration is NOT sent to frontend
+  // It's only used internallyduring payment processing
+  res.status(403).json({ error: "Config endpoint deprecated" });
 });
 
 /**
  * POST /api/order
  * Create a new order within a session.
- * Body: { sessionId, items: [{ name, price, quantity }] }
+ * 
+ * CRITICAL SECURITY:
+ * - Frontend sends: sessionId, tableId, items (with menuItemId, quantity, variant)
+ * - Frontend does NOT send: prices, totals, packing charges, taxes
+ * - Backend validates ALL items against database
+ * - Backend looks up current prices from database
+ * - Backend calculates breakdown
+ * - Backend returns breakdown for user confirmation
+ * 
+ * Body: { sessionId, items: [{ menuItemId, quantity, variantName? }], isTakeaway?, instructions? }
  */
-router.post("/", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { sessionId: reqSessionId, tableId, items, isTakeaway, packingCharges, instructions, customerPhone } = req.body as { 
-      sessionId?: string; 
-      tableId?: string; 
-      items: any[]; 
-      isTakeaway?: boolean; 
-      packingCharges?: number;
-      instructions?: string;
-      customerPhone?: string;
-    };
+router.post(
+  "/",
+  validateRequest(CreateOrderSchema),
+  async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { 
+        sessionId: reqSessionId, 
+        tableId, 
+        items: requestItems, 
+        isTakeaway = false, 
+        instructions = "", 
+        customerPhone 
+      } = (req as any).validatedBody;
 
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      res.status(400).json({ error: "items[] required" });
-      return;
-    }
+      let sessionId = reqSessionId;
 
-    if (!reqSessionId && !tableId) {
-      res.status(400).json({ error: "sessionId or tableId required" });
-      return;
-    }
+      // Create session if needed
+      if (!sessionId && tableId) {
+        const sessionNumber = await getNextSessionNumber(tableId);
+        const newSession = await prisma.session.create({
+          data: { tableId, sessionNumber }
+        });
+        sessionId = newSession.id;
+      }
 
-    let sessionId = reqSessionId;
-
-    if (!sessionId && tableId) {
-      const sessionNumber = await getNextSessionNumber(tableId);
-      const newSession = await prisma.session.create({
-        data: { tableId, sessionNumber }
-      });
-      sessionId = newSession.id;
-    }
-
-    // Verify session is OPEN and fetch full history for instant admin update
-    const session = await prisma.session.findUnique({ 
-      where: { id: sessionId },
-      include: {
-        orders: {
-          include: { items: true },
-          orderBy: { createdAt: "desc" },
+      // Verify session exists and is OPEN
+      const session = await prisma.session.findUnique({ 
+        where: { id: sessionId },
+        select: {
+          id: true,
+          tableId: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          orders: {
+            include: { items: true },
+            orderBy: { createdAt: "desc" },
+          },
+          payments: {
+            select: { id: true, amount: true, status: true, method: true, createdAt: true },
+            orderBy: { createdAt: "desc" }
+          },
         },
-        payments: { orderBy: { createdAt: "desc" } },
-      },
-    });
+      });
 
-    if (!session || session.status !== "OPEN") {
-      const reason = session?.status === "CLOSED" 
-        ? "Session has been closed by admin. Please scan QR to start a new order."
-        : "Session not found or already closed";
-      res.status(400).json({ error: reason });
-      return;
-    }
-
-    // Validate items
-    for (const item of items) {
-      if (!item.name || typeof item.price !== "number" || item.price < 0) {
-        res.status(400).json({ error: `Invalid item: ${JSON.stringify(item)}` });
+      if (!session || session.status !== "OPEN") {
+        const reason = session?.status === "CLOSED" 
+          ? "Session has been closed by admin. Please scan QR to start a new order."
+          : "Session not found or already closed";
+        res.status(400).json({ error: reason });
         return;
       }
-    }
 
-    // Smart Timer Extension: If less than 30 mins left, add 30 mins more
-    const start = new Date(session.createdAt).getTime();
-    const end = start + 90 * 60 * 1000;
-    const now = new Date().getTime();
-    const timeLeftMins = (end - now) / (1000 * 60);
-
-    if (timeLeftMins < 30) {
-      // Shift createdAt forward by 30 mins to extend expiration
-      const newCreatedAt = new Date(session.createdAt.getTime() + 30 * 60 * 1000);
-      await prisma.session.update({
-        where: { id: sessionId },
-        data: { createdAt: newCreatedAt }
+      // Validate all items exist in menu
+      const menuItemIds = requestItems.map((i: any) => i.menuItemId);
+      const menuItems = await prisma.menuItem.findMany({
+        where: { id: { in: menuItemIds } },
       });
-    }
 
-    const tempId = `temp_${crypto.randomUUID()}`;
-    const order = {
-      id: tempId,
-      sessionId: sessionId as string,
-      status: "UNCONFIRMED",
-      isTakeaway: Boolean(isTakeaway),
-      packingCharges: Number(packingCharges || 0),
-      instructions: instructions || "",
-      customerPhone: customerPhone || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      items: items.map((item: { name: string; price: number; quantity?: number; type?: string }) => ({
-        id: `temp_item_${crypto.randomUUID()}`,
-        orderId: tempId,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity || 1,
-        type: item.type || "DINE_IN",
-        isServed: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }))
-    };
+      if (menuItems.length !== menuItemIds.length) {
+        res.status(400).json({ error: "One or more items not found in menu" });
+        return;
+      }
 
-    pendingOrders.set(tempId, order);
+      // Check availability
+      const unavailable = menuItems.filter(item => item.outOfStock);
+      if (unavailable.length > 0) {
+        res.status(400).json({
+          error: `Items out of stock: ${unavailable.map(i => i.name).join(", ")}`,
+        });
+        return;
+      }
 
-    console.log(`[ORDER] Created ${order.id} for session ${sessionId} (${items.length} items)`);
+      // Calculate the correct breakdown
+      let calculatedBreakdown = null;
+      try {
+        calculatedBreakdown = await calculatePayableAmount(
+          requestItems as any,
+          isTakeaway
+        );
+      } catch (err) {
+        console.error("[ORDER] Calculation error:", err);
+        res.status(400).json({
+          error: "Could not calculate order amount",
+        });
+        return;
+      }
 
-    // PREPARE INSTANT EMIT DATA
-    // We use the session we just fetched, merged with the new in-memory order
-    const mergedSession = JSON.parse(JSON.stringify({
-      ...session,
-      orders: [order, ...(session.orders || [])]
-    }));
+      // Smart Timer Extension: If less than 30 mins left, extend by 30 mins
+      const referenceTime = session.updatedAt || session.createdAt;
+      const start = new Date(referenceTime).getTime();
+      const end = start + 90 * 60 * 1000;
+      const now = new Date().getTime();
+      const timeLeftMins = (end - now) / (1000 * 60);
 
-    try {
-      const io = getIO();
-      // Emit to user session and admin instantly with full data
-      io.to(`session:${sessionId}`).to("admin").emit("order_placed", {
-        order,
+      if (timeLeftMins < 30) {
+        await prisma.session.update({
+          where: { id: sessionId },
+          data: { updatedAt: new Date() } // Touch to extend active window
+        });
+      }
+
+      const tempId = `temp_${crypto.randomUUID()}`;
+
+      // Build order with CORRECT prices from database
+      const order = {
+        id: tempId,
         sessionId,
-        tableId: session.tableId,
-        fullSession: mergedSession, // Admin sees complete data IMMEDIATELY
-      });
-      
-      clearActiveCart(session.tableId || "");
-      io.to(`table:${session.tableId}`).emit("cart_sync", getActiveCart(session.tableId || ""));
-    } catch (e) { console.error("Socket error", e); }
-    
-    // Non-blocking analytics
-    logOrderAnalytics(session, order).catch(e => console.error("[ORDER] Analytics error:", e));
+        status: "UNCONFIRMED",
+        isTakeaway,
+        packingCharges: calculatedBreakdown.packingCharges,
+        instructions: instructions || "",
+        customerPhone: customerPhone || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        items: calculatedBreakdown.breakdown.items.map((item, idx) => ({
+          id: `temp_item_${crypto.randomUUID()}`,
+          orderId: tempId,
+          name: item.itemName,
+          price: item.unitPrice, // Use DATABASE price, not frontend price
+          quantity: item.quantity,
+          type: isTakeaway ? "TAKEAWAY" : "DINE_IN",
+          isServed: false,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }))
+      };
 
-    // Final response to the placing client (uses merged data for speed)
-    res.status(201).json({ order, session: mergedSession });
-    return;
-  } catch (err) {
-    console.error("[ORDER] Create error:", err);
-    res.status(500).json({ error: "Failed to create order" });
+      // Secure Concurrency: Recheck session status right before saving to prevent ordering in CLOSED session
+      const freshSession = await prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { status: true }
+      });
+      if (!freshSession || freshSession.status !== "OPEN") {
+        res.status(400).json({ error: "Session was closed while preparing your order. Order rejected." });
+        return;
+      }
+
+      await savePendingOrder(tempId, order);
+
+      console.log(`[ORDER] Created ${order.id} for session ${sessionId} (${requestItems.length} items) - Total: ₹${calculatedBreakdown.total}`);
+
+      // Merge session with new order
+      const mergedSession = JSON.parse(JSON.stringify({
+        ...session,
+        orders: [order, ...(session.orders || [])]
+      }));
+
+      try {
+        const io = getIO();
+        io.to(`session:${sessionId}`).to("admin").emit("order_placed", {
+          order,
+          sessionId,
+          tableId: session.tableId,
+          breakdown: calculatedBreakdown,
+        });
+        
+        await clearActiveCart(session.tableId || "");
+        io.to(`table:${session.tableId}`).emit("cart_sync", await getActiveCart(session.tableId || ""));
+      } catch (e) { console.error("Socket error", e); }
+      
+      // Non-blocking analytics
+      logOrderAnalytics(session as any, order).catch(e => console.error("[ORDER] Analytics error:", e));
+
+      // Response includes breakdown for user confirmation
+      res.status(201).json({ 
+        order, 
+        session: mergedSession,
+        breakdown: calculatedBreakdown, // Send breakdown so frontend can display correct amounts
+      });
+      return;
+    } catch (err) {
+      console.error("[ORDER] Create error:", err);
+      res.status(500).json({ error: "Failed to create order" });
+    }
   }
-});
+);
 
 /**
  * PATCH /api/order/:orderId
@@ -179,68 +235,89 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
     }
 
     if (orderId.startsWith("temp_")) {
-      // It's an in-memory order!
-      const pendingOrder = pendingOrders.get(orderId);
-      if (!pendingOrder) {
-        res.status(404).json({ error: "Pending order not found" });
+      const redis = await getRedisClient();
+      const lockKey = `lock:confirm:${orderId}`;
+      const acquired = await redis.set(lockKey, "1", { NX: true, EX: 30 });
+      if (!acquired) {
+        res.status(409).json({ error: "Order is already being confirmed" });
         return;
       }
 
-      if (status === "CANCELLED") {
-        // Reject it
-        pendingOrders.delete(orderId);
-        removeOrderAnalytics(orderId).catch(() => {});
-        try {
+      try {
+        // It's an in-memory order!
+        const pendingOrder = await getPendingOrder(orderId);
+        if (!pendingOrder) {
+          res.status(404).json({ error: "Pending order not found" });
+          return;
+        }
 
-          const io = getIO();
-          io.to(`session:${pendingOrder.sessionId}`).to("admin").emit("order_deleted", {
-            orderId,
-            sessionId: pendingOrder.sessionId,
-            tableId: pendingOrder.session?.tableId,
-            order: pendingOrder
-          });
-        } catch { /* skip */ }
-        res.json({ success: true, status: "CANCELLED" });
-        return;
-      }
+        if (status === "CANCELLED") {
+          // Reject it
+          await removePendingOrder(orderId);
+          removeOrderAnalytics(orderId).catch(() => {});
+          try {
 
-      // If they confirm it (e.g. PLACED, PREPARING) -> write to DB
-      if (status === "PLACED" || status === "PREPARING" || status === "SERVED") {
-        const newOrder = await prisma.order.create({
-          data: {
-            sessionId: pendingOrder.sessionId,
-            isTakeaway: pendingOrder.isTakeaway,
-            packingCharges: pendingOrder.packingCharges,
-            instructions: pendingOrder.instructions,
-            customerPhone: pendingOrder.customerPhone,
-            status: status,
-            items: {
-              create: pendingOrder.items.map((i: any) => ({
-                name: i.name,
-                price: i.price,
-                quantity: i.quantity,
-                type: i.type,
-                isServed: status === "SERVED"
-              }))
-            }
-          } as any,
-          include: { items: true, session: true }
-        });
-        
-        pendingOrders.delete(orderId); // remove from memory
-        
-        try {
+            const io = getIO();
+            io.to(`session:${pendingOrder.sessionId}`).to("admin").emit("order_deleted", {
+              orderId,
+              sessionId: pendingOrder.sessionId,
+              tableId: pendingOrder.session?.tableId,
+              order: pendingOrder
+            });
+          } catch { /* skip */ }
+          res.json({ success: true, status: "CANCELLED" });
+          return;
+        }
+
+        // If they confirm it (e.g. PLACED, PREPARING) -> write to DB
+        if (status === "PLACED" || status === "PREPARING" || status === "SERVED") {
+          // OPTIMISTIC EMIT: Tell admin and user instantly that it's confirmed
           const io = getIO();
-          // Emit order updated with BOTH temp orderId (so UI knows which one finished) and new DB order
-          io.to(`session:${newOrder.sessionId}`).to("admin").emit("order_updated", {
-            tempOrderId: orderId, // tell clients to replace tempId
-            order: newOrder,
-            sessionId: newOrder.sessionId,
-            tableId: newOrder.session?.tableId,
+          io.to(`session:${pendingOrder.sessionId}`).to("admin").emit("order_updated", {
+            tempOrderId: orderId, 
+            order: { ...pendingOrder, status }, // Use pending data with new status
+            sessionId: pendingOrder.sessionId,
+            tableId: pendingOrder.tableId,
           });
-        } catch { /* skip */ }
-        res.json(newOrder);
-        return;
+
+          const newOrder = await prisma.order.create({
+            data: {
+              sessionId: pendingOrder.sessionId,
+              isTakeaway: pendingOrder.isTakeaway,
+              packingCharges: pendingOrder.packingCharges,
+              instructions: pendingOrder.instructions,
+              customerPhone: pendingOrder.customerPhone,
+              status: status,
+              items: {
+                create: pendingOrder.items.map((i: any) => ({
+                  name: i.name,
+                  price: i.price,
+                  quantity: i.quantity,
+                  type: i.type,
+                  isServed: status === "SERVED"
+                }))
+              }
+            } as any,
+            include: { items: true, session: true }
+          });
+          
+          await removePendingOrder(orderId); // remove from Redis
+          
+          try {
+            // Final confirmation emission with real DB IDs
+            io.to(`session:${newOrder.sessionId}`).to("admin").emit("order_confirmed", { 
+              orderId: newOrder.id, 
+              sessionId: newOrder.sessionId,
+              tempOrderId: orderId
+            });
+            
+            updateOrderPerformanceMetrics(newOrder.id, status).catch(() => {});
+          } catch { /* skip */ }
+          res.json(newOrder);
+          return;
+        }
+      } finally {
+        await redis.del(lockKey);
       }
     }
 
@@ -297,6 +374,8 @@ router.patch("/:orderId", requireAdmin, async (req: Request, res: Response): Pro
         sessionId: updatedOrder.sessionId,
         tableId: updatedOrder.session.tableId,
       });
+      
+      updateOrderPerformanceMetrics(orderId, status).catch(() => {});
     } catch { /* skip */ }
     res.json(updatedOrder);
 
@@ -421,9 +500,9 @@ router.delete("/:orderId", requireAdmin, async (req: Request, res: Response): Pr
     const { orderId } = req.params as { orderId: string };
     
     if (orderId.startsWith("temp_")) {
-      const pendingOrder = pendingOrders.get(orderId);
+      const pendingOrder = await getPendingOrder(orderId);
       if (pendingOrder) {
-        pendingOrders.delete(orderId);
+        await removePendingOrder(orderId);
         try {
           const io = getIO();
           io.to(`session:${pendingOrder.sessionId}`).to("admin").emit("order_deleted", {

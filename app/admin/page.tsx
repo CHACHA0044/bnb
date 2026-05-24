@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Loader2 } from "lucide-react";
 import {
@@ -30,7 +30,7 @@ const TAKEAWAY_ID = "TAKEAWAY";
 const TABLE_COLUMNS = [...TABLES];
 
 export default function DashboardPage() {
-  const { sessions, setSessions, loadStats, loading, authenticated, secret } = useAdmin();
+  const { sessions, setSessions, loadStats, loading, authenticated, secret, suppressId } = useAdmin();
   const [addOrderData, setAddOrderData] = useState<{ sessionId?: string | null, tableId?: string | null } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
@@ -46,7 +46,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!authenticated || !secret) return;
-    joinAdmin();
+    joinAdmin(secret);
   }, [authenticated, secret, joinAdmin]);
 
   // Periodic refresh as a fallback
@@ -61,45 +61,55 @@ export default function DashboardPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleUpdateStatus = async (orderId: string, status: string) => {
+  const handleUpdateStatus = useCallback(async (orderId: string, status: string) => {
     if (!secret) return;
     
+    if (status === "CANCELLED") suppressId(orderId);
     // Optimistic Update
-    const previousSessions = [...sessions];
-    setSessions(prev => prev.map(s => ({
-      ...s,
-      orders: s.orders.map(o => {
-        if (o.id === orderId) {
-          const updatedItems = status === "SERVED" 
-            ? (o.items || []).map(item => ({ ...item, isServed: true })) 
-            : status === "PLACED"
-              ? (o.items || []).map(item => ({ ...item, isServed: false }))
-              : o.items;
-          return { ...o, status, items: updatedItems };
-        }
-        return o;
-      })
-    })));
+    setSessions(prev => prev.map(s => {
+      // If we are cancelling, remove the order from the list immediately
+      if (status === "CANCELLED") {
+        return {
+          ...s,
+          orders: s.orders.filter(o => o.id !== orderId)
+        };
+      }
+      
+      // Otherwise update status
+      return {
+        ...s,
+        orders: s.orders.map(o => {
+          if (o.id === orderId) {
+            const updatedItems = status === "SERVED" 
+              ? (o.items || []).map(item => ({ ...item, isServed: true })) 
+              : status === "PLACED"
+                ? (o.items || []).map(item => ({ ...item, isServed: false }))
+                : o.items;
+            return { ...o, status, items: updatedItems };
+          }
+          return o;
+        })
+      };
+    }));
 
     try {
       await adminUpdateOrder(orderId, status, secret);
-      // loadStats() removed to prevent jumpy UI; socket.io 'order_updated' will handle real sync
     } catch (err) {
       console.error(err);
-      setSessions(previousSessions);
+      loadStats(); // Rollback/Sync on error
     }
-  };
+  }, [secret, setSessions, loadStats]);
 
-  const handleConfirmPayment = async (paymentId: string) => {
+  const handleConfirmPayment = useCallback(async (paymentId: string) => {
     if (!secret) return;
     try { 
       await adminConfirmPayment(paymentId, secret); 
     } catch (err) { 
       console.error(err);
     }
-  };
+  }, [secret]);
 
-  const handleDeletePayment = async (paymentId: string) => {
+  const handleDeletePayment = useCallback(async (paymentId: string) => {
     setConfirmModal({
       show: true,
       title: "Reject Payment?",
@@ -109,7 +119,6 @@ export default function DashboardPage() {
         if (!secret) return;
         
         // Optimistic Update: Remove payment immediately
-        const previousSessions = [...sessions];
         setSessions(prev => prev.map(s => ({
           ...s,
           payments: s.payments.filter(p => p.id !== paymentId)
@@ -123,52 +132,51 @@ export default function DashboardPage() {
           showToast("Payment rejected");
         } catch (err) { 
           console.error(err);
-          // Rollback on failure
-          setSessions(previousSessions);
+          loadStats();
           showToast("Failed to reject payment");
         }
       }
     });
-  };
+  }, [secret, setSessions, loadStats]);
 
-  const handleToggleReminder = async (sessionId: string, reminder: boolean) => {
+  const handleToggleReminder = useCallback(async (sessionId: string, reminder: boolean) => {
     if (!secret) return;
     try { 
       await adminToggleReminder(sessionId, reminder, secret); 
     } catch (err) { 
       console.error(err);
     }
-  };
+  }, [secret]);
 
-  const handleDeleteOrder = async (orderId: string) => {
+  const handleDeleteOrder = useCallback(async (orderId: string) => {
     if (!secret) return;
     try {
       await adminDeleteOrder(orderId, secret);
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [secret]);
 
-  const handleCloseSession = async (sessionId: string) => {
+  const handleCloseSession = useCallback(async (sessionId: string) => {
     if (!secret) return;
+    
     // Optimistic Update: Remove session locally immediately
-    const previousSessions = [...sessions];
     setSessions(prev => prev.filter(s => s.id !== sessionId));
     
     try {
+      const { adminCloseSession } = await import("@/lib/api");
       await adminCloseSession(sessionId, secret);
-    } catch (err) {
-      console.error(err);
-      // Rollback on error
-      setSessions(previousSessions);
+    } catch (err: any) {
+      console.error("[ADMIN] Close Error:", err);
+      // If it fails (e.g. balance exists), restore the session locally
+      loadStats();
     }
-  };
+  }, [secret, loadStats]);
 
-  const handleToggleItemServed = async (itemId: string, isServed: boolean) => {
+  const handleToggleItemServed = useCallback(async (itemId: string, isServed: boolean) => {
     if (!secret) return;
     
     // Optimistic Update
-    const previousSessions = [...sessions];
     setSessions(prev => prev.map(s => ({
       ...s,
       orders: s.orders.map(o => ({
@@ -181,15 +189,14 @@ export default function DashboardPage() {
       await adminToggleItemServed(secret, itemId, isServed);
     } catch (err) {
       console.error(err);
-      setSessions(previousSessions);
+      loadStats();
     }
-  };
+  }, [secret, setSessions, loadStats]);
 
-  const handleToggleOrderItems = async (orderId: string, isServed: boolean) => {
+  const handleToggleOrderItems = useCallback(async (orderId: string, isServed: boolean) => {
     if (!secret) return;
     
     // Optimistic Update
-    const previousSessions = [...sessions];
     setSessions(prev => prev.map(s => ({
       ...s,
       orders: s.orders.map(o => o.id === orderId ? {
@@ -202,36 +209,33 @@ export default function DashboardPage() {
       await adminToggleOrderItemsServed(secret, orderId, isServed);
     } catch (err) {
       console.error(err);
-      setSessions(previousSessions);
+      loadStats();
     }
-  };
+  }, [secret, setSessions, loadStats]);
 
-  const handleRecordPayment = async (sessionId: string, method: "CASH" | "UPI", amount: number) => {
+  const handleRecordPayment = useCallback(async (sessionId: string, method: "CASH" | "UPI", amount: number) => {
     if (!secret) return;
     try {
       await adminRecordPayment(secret, sessionId, method, amount);
-      loadStats();
       showToast("Payment recorded");
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [secret]);
 
-  const handleSendReviewRequest = async (sessionId: string, requested: boolean) => {
+  const handleSendReviewRequest = useCallback(async (sessionId: string, requested: boolean) => {
     if (!secret) return;
     try {
       await adminToggleReviewRequest(sessionId, requested, secret);
-      loadStats();
     } catch (err) {
       console.error(err);
     }
-  };
+  }, [secret]);
 
-  const handleUpdateTimer = async (orderId: string, minutes: number | null) => {
+  const handleUpdateTimer = useCallback(async (orderId: string, minutes: number | null) => {
     if (!secret) return;
 
     // Optimistic Update
-    const previousSessions = [...sessions];
     const estimatedReadyTime = minutes !== null 
       ? new Date(Date.now() + minutes * 60 * 1000).toISOString() 
       : undefined;
@@ -243,16 +247,14 @@ export default function DashboardPage() {
 
     try {
       await adminUpdateOrderTimer(orderId, minutes, secret);
-      // We don't call loadStats() here to avoid jumping; 
-      // Socket.io 'order_updated' will eventually sync the real state
     } catch (err) {
       console.error(err);
-      setSessions(previousSessions);
+      loadStats();
     }
-  };
+  }, [secret, setSessions, loadStats]);
 
-  const takeawaySessions = sessions.filter(s => s.tableId === TAKEAWAY_ID && s.status === "OPEN");
-  const tableSessions = sessions.filter(s => s.tableId !== TAKEAWAY_ID && s.status === "OPEN");
+  const takeawaySessions = useMemo(() => sessions.filter(s => s.tableId === TAKEAWAY_ID && s.status === "OPEN"), [sessions]);
+  const tableSessions = useMemo(() => sessions.filter(s => s.tableId !== TAKEAWAY_ID && s.status === "OPEN"), [sessions]);
 
   if (loading && sessions.length === 0) {
     return (

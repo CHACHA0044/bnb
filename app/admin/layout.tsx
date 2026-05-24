@@ -30,7 +30,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [isSidebarOpen, isMobile]);
 
+  const [isMounted, setIsMounted] = useState(false);
+
   useEffect(() => {
+    setIsMounted(true);
     const checkMobile = () => {
       const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
@@ -41,7 +44,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  if (loading) {
+  if (!isMounted || loading) {
     return (
       <div className="min-h-screen bg-[#F9F7F4] flex items-center justify-center">
         <Loader2 className="animate-spin text-[#E76F51]" size={48} />

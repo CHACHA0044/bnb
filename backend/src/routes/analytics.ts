@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { requireAdmin } from "../lib/auth";
-import { isWithinWorkingHours, updateDailySummary } from "../lib/summaries";
+import { isWithinWorkingHours, updateDailySummary, getDailySummary } from "../lib/summaries";
 
 const router = Router();
 
@@ -28,13 +28,9 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
 
     // During working hours, use cached data if available (and not forcing live)
     if (isSingleDay && isWithinWorkingHours() && !isLiveRequested) {
-      const summary = await (prisma as any).dailySummary.findUnique({
-        where: { date: fromDate }
-      });
-
-      if (summary) {
-        console.log(`[ANALYTICS] Serving cached summary for ${fromDate}`);
-        res.json(summary.data);
+      const summaryData = await getDailySummary(fromDate);
+      if (summaryData) {
+        res.json(summaryData);
         return;
       }
     }
@@ -59,7 +55,7 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
 
 
     // 1. KPI Aggregation
-    const totalRevenue = logs.reduce((sum, l) => sum + l.finalPrice, 0);
+    const totalRevenue = logs.reduce((sum, l) => sum + l.finalPrice + (l.packingCharges || 0), 0);
     const orderIds = new Set(logs.map(l => l.orderId));
     const totalOrders = orderIds.size;
     const totalItems = logs.filter(l => l.itemName !== "Packing Charges").reduce((sum, l) => sum + l.quantity, 0);
@@ -209,6 +205,27 @@ router.get("/", async (req: Request, res: Response): Promise<void> => {
         type: "trend",
         icon: "TrendingUp",
         text: `${bestDay.day}s are your highest-grossing days, averaging ₹${bestDay.avgOrder} per order.`,
+      });
+    }
+
+    // Performance Insights (New)
+    const confirmedOrdersInRange = logs.filter((l: any) => l.confirmationTime !== null);
+    if (confirmedOrdersInRange.length > 0) {
+      const avgConfirm = Math.round(confirmedOrdersInRange.reduce((sum: number, l: any) => sum + (l.confirmationTime || 0), 0) / confirmedOrdersInRange.length);
+      insights.push({
+        type: "performance",
+        icon: "CheckCircle",
+        text: `Average order confirmation time is ${avgConfirm}s.`,
+      });
+    }
+
+    const servedOrdersInRange = logs.filter((l: any) => l.preparationTime !== null);
+    if (servedOrdersInRange.length > 0) {
+      const avgPrep = Math.round(servedOrdersInRange.reduce((sum: number, l: any) => sum + (l.preparationTime || 0), 0) / servedOrdersInRange.length);
+      insights.push({
+        type: "performance",
+        icon: "Timer",
+        text: `Average kitchen preparation time is ${Math.round(avgPrep / 60)}m ${avgPrep % 60}s.`,
       });
     }
 

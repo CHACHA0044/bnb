@@ -1,9 +1,12 @@
 import ExcelJS from "exceljs";
 import { prisma } from "./prisma";
+import { getRedisClient } from "./redis";
+
+const REPORT_CACHE_PREFIX = "report:";
+const REPORT_CACHE_TTL = 60 * 60 * 12; // 12 hours
 
 /**
  * Helper to group logs by order and assign sequential numbers per day.
- * Hybrid orders (Dine-In + Takeaway) are split into separate rows.
  */
 async function processLogsForReport(logs: any[]) {
   const sortedLogs = [...logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
@@ -30,7 +33,7 @@ async function processLogsForReport(logs: any[]) {
     const orderSequence: string[] = [];
 
     dayLogs.forEach(l => {
-      const groupKey = l.orderId; // Group strictly by orderId now
+      const groupKey = l.orderId;
       if (!orderGroups.has(groupKey)) {
         const session = sessionMap.get(l.sessionId);
         const confirmedPayments = session?.payments || [];
@@ -79,7 +82,6 @@ async function processLogsForReport(logs: any[]) {
         tableDisplay = `TW${group.sessionNumber}`;
       }
 
-      // Format items: mark (To-Go) only if hybrid
       const hasTakeaway = group.items.some((i: any) => i.orderType === "TAKEAWAY");
       const hasDineIn = group.items.some((i: any) => i.orderType === "DINE_IN");
       const isHybrid = hasTakeaway && hasDineIn;
@@ -109,9 +111,17 @@ async function processLogsForReport(logs: any[]) {
 }
 
 /**
- * Generate a daily Excel report with multiple sheets.
+ * Generate a daily Excel report.
  */
 export async function generateDailyReport(date: string): Promise<Buffer> {
+  try {
+    const redis = await getRedisClient();
+    const cached = await redis.get(`${REPORT_CACHE_PREFIX}daily:${date}`);
+    if (cached) return Buffer.from(cached, "base64");
+  } catch (err) {
+    console.error("[REDIS] Failed to read from cache in generateDailyReport:", err);
+  }
+
   const logs = await prisma.analyticsLog.findMany({
     where: { 
       date,
@@ -143,15 +153,24 @@ export async function generateDailyReport(date: string): Promise<Buffer> {
   const rows = await processLogsForReport(logs);
   rows.forEach(r => txSheet.addRow(r));
 
-  // Style currency columns
   ["F", "G", "H", "I", "J"].forEach(col => {
     txSheet.getColumn(col).numFmt = "₹#,##0";
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
-  return Buffer.from(buffer);
-}
+  const result = Buffer.from(buffer);
+  
+  try {
+    const redis = await getRedisClient();
+    await redis.set(`${REPORT_CACHE_PREFIX}daily:${date}`, result.toString("base64"), {
+      EX: REPORT_CACHE_TTL
+    });
+  } catch (err) {
+    console.error("[REDIS] Failed to write to cache in generateDailyReport:", err);
+  }
 
+  return result;
+}
 
 /**
  * Generate an Excel report for a specific date range.
@@ -200,6 +219,14 @@ export async function generateRangeReport(from: string, to: string): Promise<Buf
  * Generate a monthly CSV string.
  */
 export async function generateMonthlyCSV(month: string): Promise<string> {
+  try {
+    const redis = await getRedisClient();
+    const cached = await redis.get(`${REPORT_CACHE_PREFIX}monthly:${month}`);
+    if (cached) return cached;
+  } catch (err) {
+    console.error("[REDIS] Failed to read from cache in generateMonthlyCSV:", err);
+  }
+
   const logs = await prisma.analyticsLog.findMany({
     where: { 
       date: { startsWith: month },
@@ -225,7 +252,18 @@ export async function generateMonthlyCSV(month: string): Promise<string> {
     r.payTime
   ]);
 
-  return [headers.join(","), ...csvRows.map(r => r.join(","))].join("\n");
+  const result = [headers.join(","), ...csvRows.map(r => r.join(","))].join("\n");
+  
+  try {
+    const redis = await getRedisClient();
+    await redis.set(`${REPORT_CACHE_PREFIX}monthly:${month}`, result, {
+      EX: REPORT_CACHE_TTL
+    });
+  } catch (err) {
+    console.error("[REDIS] Failed to write to cache in generateMonthlyCSV:", err);
+  }
+
+  return result;
 }
 
 /**
@@ -242,5 +280,4 @@ export async function storeReport(
     update: { data: new Uint8Array(data), filename },
     create: { type, date, filename, data: new Uint8Array(data) }
   });
-  console.log(`[REPORTS] Stored ${type} for ${date}`);
 }

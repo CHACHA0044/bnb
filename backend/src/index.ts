@@ -4,8 +4,12 @@ dotenv.config();
 import express, { Request, Response } from "express";
 import cors from "cors";
 import http from "http";
+import helmet from "helmet";
 import { Server as SocketIOServer } from "socket.io";
 import { initSocketEvents } from "./lib/socket";
+import { createAdapter } from "@socket.io/redis-adapter";
+import { getRedisAdapterClients, closeRedis, getRedisClient } from "./lib/redis";
+import { logger, requestLogger } from "./lib/logger";
 
 // Routes
 import tableRouter from "./routes/table";
@@ -18,11 +22,15 @@ import qrRouter from "./routes/qr";
 import locationRouter from "./routes/location";
 import reportsRouter from "./routes/reports";
 import analyticsRouter from "./routes/analytics";
+import rateLimit from "express-rate-limit";
+import { initJobs } from "./lib/jobs";
+
+import { createRateLimiters } from "./lib/rateLimit";
 
 const app = express();
 const server = http.createServer(app);
 
-const PORT = parseInt(process.env.PORT || "5000", 10);
+const PORT = parseInt(process.env.PORT || "5001", 10);
 const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3000";
 
 /* ─── CORS ─────────────────────────────────── */
@@ -32,37 +40,120 @@ app.use(cors({
   credentials: true,
 }));
 
-app.use(express.json());
+/* ─── SECURITY HEADERS ────────────────────── */
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", FRONTEND_URL, "*.vercel.app"],
+    },
+  },
+  hsts: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  frameguard: { action: "deny" },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+  noSniff: true,
+  xssFilter: true,
+}));
+
+// Enforce HTTPS in production
+if (process.env.NODE_ENV === "production") {
+  app.use((req, res, next) => {
+    if (req.header("x-forwarded-proto") !== "https") {
+      res.redirect(307, `https://${req.header("host")}${req.url}`);
+    } else {
+      next();
+    }
+  });
+}
+
+app.use(express.json({ limit: "1mb" })); // Limit payload size
+app.use(requestLogger);
 
 /* ─── Socket.IO ────────────────────────────── */
 const io = new SocketIOServer(server, {
   cors: {
     origin: [FRONTEND_URL, "https://bnb-ten-omega.vercel.app", /\.vercel\.app$/],
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
-initSocketEvents(io);
-
-/* ─── API Routes ───────────────────────────── */
-app.use("/api/table", tableRouter);
-app.use("/api/order", orderRouter);
-app.use("/api/payment", paymentRouter);
-app.use("/api/admin", adminRouter);
-app.use("/api/menu", menuRouter);
-app.use("/api/status", statusRouter);
-app.use("/api/qr", qrRouter);
-app.use("/api/location", locationRouter);
-app.use("/api/admin/reports", reportsRouter);
-app.use("/api/admin/analytics", analyticsRouter);
+// Setup Redis Adapter
+async function setupSocketAdapter() {
+  try {
+    const { pubClient, subClient } = await getRedisAdapterClients();
+    io.adapter(createAdapter(pubClient, subClient));
+    console.log("[WS] Redis adapter initialized");
+  } catch (err) {
+    console.error("[WS] Failed to initialize Redis adapter:", err);
+  }
+}
 
 import { prisma } from "./lib/prisma";
 
-// Health check
-app.get("/api/health", (_req: express.Request, res: express.Response) => {
-  const ts = new Date().toISOString();
-  res.json({ status: "ok", timestamp: ts });
-});
+async function startServer() {
+  // 1. Setup Redis Adapter first
+  await setupSocketAdapter();
+
+  // 2. Initialize socket events
+  initSocketEvents(io);
+
+  // 3. Rate limiters MUST be registered before routes
+  try {
+    const { apiLimiter, orderLimiter, authLimiter } = await createRateLimiters();
+    app.use("/api/order", orderLimiter);
+    app.use("/api/payment", orderLimiter);
+    app.use("/api/admin/verify", authLimiter);
+    app.use("/api/", apiLimiter);
+    console.log("[SERVER] Redis rate limiters initialized");
+  } catch (err) {
+    console.warn("[SERVER] Redis rate limiters unavailable, using defaults:", err);
+  }
+
+
+
+  // 5. Routes registered AFTER rate limiters and latency middleware
+  app.use("/api/table", tableRouter);
+  app.use("/api/order", orderRouter);
+  app.use("/api/payment", paymentRouter);
+  app.use("/api/admin", adminRouter);
+  app.use("/api/menu", menuRouter);
+  app.use("/api/status", statusRouter);
+  app.use("/api/qr", qrRouter);
+  app.use("/api/location", locationRouter);
+  app.use("/api/admin/reports", reportsRouter);
+  app.use("/api/admin/analytics", analyticsRouter);
+
+  // 6. Health check (6.3)
+  app.get("/api/health", async (_req: express.Request, res: express.Response) => {
+    const ts = new Date().toISOString();
+    let dbOk = false, redisOk = false;
+    
+    try { await prisma.$queryRaw`SELECT 1`; dbOk = true; } catch {}
+    try { const r = await getRedisClient(); await r.ping(); redisOk = true; } catch {}
+    
+    const status = dbOk && redisOk ? "ok" : "degraded";
+    res.status(dbOk && redisOk ? 200 : 503).json({
+      status,
+      timestamp: ts,
+      db: dbOk ? "connected" : "error",
+      redis: redisOk ? "connected" : "error"
+    });
+  });
+
+  // 7. Start background jobs
+  initJobs();
+
+  // 8. Start server listening
+  server.listen(PORT, () => {
+    logger.info(`🚀 Backend running on http://localhost:${PORT}`);
+    logger.info(`📡 Socket.IO ready with Redis adapter`);
+    logger.info(`🔗 CORS: ${FRONTEND_URL}`);
+  });
+}
 
 /* ─── Ping config (resolved once at startup) ── */
 // Both vars must be set in production. Fail fast with a clear warning if not.
@@ -97,127 +188,48 @@ app.get("/api/ping", (req: express.Request, res: express.Response) => {
   });
 });
 
-/* ─── Session Auto-Closure Job ─────────────── */
-// Runs every 5 minutes
-setInterval(async () => {
-  try {
-    const openSessions = await prisma.session.findMany({
-      where: { status: "OPEN" },
-      include: {
-        orders: { orderBy: { createdAt: "desc" } }
-      }
-    });
+// Note: Interval jobs (Session Auto-Closure, Daily Reports) moved to lib/jobs.ts
 
-    const now = new Date();
-    
-    for (const session of openSessions) {
-      const latestOrder = session.orders[0];
-      const timeReference = latestOrder ? latestOrder.createdAt : session.createdAt;
-      const minutesSinceActivity = (now.getTime() - timeReference.getTime()) / (1000 * 60);
-      
-      // We consider "active" orders to be PLACED or PREPARING. 
-      // If an order is just UNCONFIRMED, it doesn't prevent auto-closure if time expires.
-      const hasActiveOrders = session.orders.some((o: any) => o.status === "PLACED" || o.status === "PREPARING");
-      
-      if (minutesSinceActivity > 90) {
-        // If there are truly active orders (PLACED/PREPARING), we might want to keep it open longer,
-        // but if they've been inactive for > 90 mins even in those states, it's likely a zombie session.
-        // The user specifically wants to close it if admin hasn't confirmed/rejected (UNCONFIRMED).
-        
-        await prisma.session.update({
-          where: { id: session.id },
-          data: { status: "CLOSED" }
-        });
-
-        // Clean up in-memory pending orders for this session
-        try {
-          const { pendingOrders } = require("./routes/order");
-          if (pendingOrders) {
-            for (const [orderId, order] of pendingOrders.entries()) {
-              if (order.sessionId === session.id) {
-                pendingOrders.delete(orderId);
-                console.log(`[JOB] Removed stale pending order ${orderId} for expired session ${session.id}`);
-              }
-            }
-          }
-        } catch (e) { /* skip */ }
-
-        console.log(`[JOB] Auto-closed session ${session.id} (expired after ${Math.round(minutesSinceActivity)} mins)`);
-        io.to(`session:${session.id}`).to("admin").emit("session_closed", { sessionId: session.id });
-      }
-    }
-  } catch (err) {
-    console.error("[JOB] Error auto-closing sessions:", err);
-  }
-}, 5 * 60 * 1000);
-
-/* ─── Daily Report Generation Job ─────────── */
-import { generateDailyReport, generateMonthlyCSV, storeReport } from "./lib/reports";
-import { isWithinWorkingHours } from "./lib/summaries";
-
-// Automatic Report Finalization Job (Runs at 4 AM daily)
-setInterval(async () => {
-  try {
-    const now = new Date();
-    if (now.getHours() !== 4) return; // Only execute at 4 AM
-
-    console.log("[JOB] Running daily report finalization...");
-
-    // 1. Finalize Yesterday (Ensure all late-night orders are captured)
-    const yesterday = new Date();
-    yesterday.setDate(now.getDate() - 1);
-    const yDate = yesterday.toISOString().split("T")[0];
-    
-    const yBuffer = await generateDailyReport(yDate);
-    await storeReport("DAILY_EXCEL", yDate, `BnB_Daily_${yDate}.xlsx`, yBuffer);
-
-    // 2. Refresh Monthly Archive for the finalized month
-    const yMonth = yDate.slice(0, 7);
-    const yCsv = await generateMonthlyCSV(yMonth);
-    await storeReport("MONTHLY_CSV", yMonth, `BnB_Monthly_${yMonth}.csv`, Buffer.from(yCsv, "utf-8"));
-
-    // 3. Pre-generate Today
-    const today = now.toISOString().split("T")[0];
-    const tBuffer = await generateDailyReport(today);
-    await storeReport("DAILY_EXCEL", today, `BnB_Daily_${today}.xlsx`, tBuffer);
-
-    console.log("[JOB] Daily reports finalized successfully.");
-  } catch (err) {
-    console.error("[JOB] Report generation error:", err);
-  }
-}, 60 * 60 * 1000); // Check every hour
-
-/* ─── Start ────────────────────────────────── */
-server.listen(PORT, () => {
-  console.log(`\n🚀 Backend running on http://localhost:${PORT}`);
-  console.log(`📡 Socket.IO ready`);
-  console.log(`🔗 CORS: ${FRONTEND_URL}`);
-  console.log(`📍 Geo: ${process.env.RESTAURANT_LAT || '26.834906'}, ${process.env.RESTAURANT_LNG || '80.884822'}\n`);
-
-  /* ─── Production Self-Ping Cron Job ────────── */
-  // Render free tier sleeps after 15 min of inactivity.
-  // This job pings the server every 2 minutes to keep it alive.
-  if (process.env.NODE_ENV === "production") {
-    if (!BACKEND_URL || !PING_SECRET) {
-      console.warn("[PING] ⚠️  BACKEND_URL or PING_SECRET is not set — self-ping disabled.");
-    } else {
-      const PING_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
-
-      console.log(`[PING] 🔄 Self-ping cron started — firing every 2 min → ${BACKEND_URL}/api/ping`);
-
-      setInterval(async () => {
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/ping`, {
-            method: "GET",
-            headers: { "x-ping-token": PING_SECRET } satisfies Record<string, string>,
-          });
-          const data = await res.json() as { status: string; timestamp: string; calc: string };
-          console.log(`[PING] ✅ Server alive | ${data.calc} | ${data.timestamp}`);
-        } catch (err) {
-          console.error("[PING] ❌ Self-ping failed:", err);
-        }
-      }, PING_INTERVAL_MS);
-    }
-  }
+startServer().catch(err => {
+  logger.error("Failed to start server:", err);
+  process.exit(1);
 });
- 
+
+/* ─── Production Self-Ping Cron Job ────────── */
+// Render free tier sleeps after 15 min of inactivity.
+// This job pings the server every 2 minutes to keep it alive.
+if (process.env.NODE_ENV === "production") {
+  if (!BACKEND_URL || !PING_SECRET) {
+    console.warn("[PING] ⚠️  BACKEND_URL or PING_SECRET is not set — self-ping disabled.");
+  } else {
+    const PING_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+
+    console.log(`[PING] 🔄 Self-ping cron started — firing every 2 min → ${BACKEND_URL}/api/ping`);
+
+    setInterval(async () => {
+      try {
+        const res = await fetch(`${BACKEND_URL}/api/ping`, {
+          method: "GET",
+          headers: { "x-ping-token": PING_SECRET } satisfies Record<string, string>,
+        });
+        const data = await res.json() as { status: string; timestamp: string; calc: string };
+        console.log(`[PING] ✅ Server alive | ${data.calc} | ${data.timestamp}`);
+      } catch (err) {
+        console.error("[PING] ❌ Self-ping failed:", err);
+      }
+    }, PING_INTERVAL_MS);
+  }
+}
+
+// Graceful shutdown
+process.on("SIGINT", async () => {
+  console.log("\n[SERVER] SIGINT received. Shutting down...");
+  await closeRedis();
+  process.exit(0);
+});
+
+process.on("SIGTERM", async () => {
+  console.log("\n[SERVER] SIGTERM received. Shutting down...");
+  await closeRedis();
+  process.exit(0);
+});

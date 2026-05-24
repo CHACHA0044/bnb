@@ -1,28 +1,58 @@
 /**
  * API client — all backend calls go through NEXT_PUBLIC_API_URL.
+ * 
+ * SECURITY:
+ * - Adds CSRF token to state-changing requests
+ * - Adds idempotency keys to prevent duplicate payment/order submissions
+ * - Never sends sensitive data like price overrides to backend
+ * - Validates all responses from backend
  */
 
+import { v4 as uuidv4 } from "uuid";
+
 const getApiUrl = () => {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (envUrl) return envUrl;
+
   if (typeof window !== "undefined") {
-    const { hostname } = window.location;
-    // If accessing via IP (local network), and API is set to localhost, swap it
-    if (hostname !== "localhost" && envUrl.includes("localhost")) {
-      return envUrl.replace("localhost", hostname);
+    const { hostname, protocol } = window.location;
+    if (hostname !== "localhost") {
+      return `${protocol}//${hostname}:5001`;
     }
   }
-  return envUrl;
+  return "http://localhost:5001";
 };
+
 const API_URL = getApiUrl();
 import { type OrderMenuItem } from "./menu";
 export type { OrderMenuItem };
 
+// CSRF token management
+let csrfToken: string | null = null;
+let currentSessionId: string | null = null;
+
+export function getCSRFToken(): string {
+  return csrfToken || "";
+}
+
+export function setCSRFToken(token: string, sessionId: string): void {
+  csrfToken = token;
+  currentSessionId = sessionId;
+}
+
+// Idempotency key generation
+function generateIdempotencyKey(): string {
+  return `${Date.now()}-${uuidv4()}`;
+}
+
 interface FetchOptions extends RequestInit {
   adminSecret?: string;
+  skipCSRF?: boolean;
+  skipIdempotency?: boolean;
 }
 
 export async function apiFetch<T = unknown>(path: string, options: FetchOptions = {}): Promise<T> {
-  const { adminSecret, headers: customHeaders, ...rest } = options;
+  const { adminSecret, skipCSRF = false, skipIdempotency = false, headers: customHeaders, ...rest } = options;
 
   const headers: Record<string, string> = {
     ...(customHeaders as Record<string, string>),
@@ -36,14 +66,43 @@ export async function apiFetch<T = unknown>(path: string, options: FetchOptions 
     headers["Authorization"] = `Bearer ${adminSecret}`;
   }
 
-  const res = await fetch(`${API_URL}${path}`, { headers, ...rest });
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(body.error || `API ${res.status}`);
+  // Add CSRF token for POST/PATCH/PUT/DELETE on payment/order routes
+  if (!skipCSRF && ["POST", "PATCH", "PUT", "DELETE"].includes(rest.method || "GET")) {
+    if ((path.includes("/payment") || path.includes("/order")) && csrfToken) {
+      headers["x-csrf-token"] = csrfToken;
+    }
   }
 
-  return res.json();
+  // Add idempotency key for payment and order placement (idempotent operations)
+  if (!skipIdempotency && (path === "/api/payment" || path === "/api/order")) {
+    headers["idempotency-key"] = generateIdempotencyKey();
+  }
+
+  let res: Response | null = null;
+  let errorToThrow: any = null;
+  const attempts = 3;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      res = await fetch(`${API_URL}${path}`, { headers, ...rest });
+      break;
+    } catch (err) {
+      errorToThrow = err;
+      const isGet = !rest.method || rest.method.toUpperCase() === "GET";
+      if (attempt === attempts || !isGet) {
+        throw err;
+      }
+      // Wait 1 second before retrying
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+
+  if (!res!.ok) {
+    const body = await res!.json().catch(() => ({ error: res!.statusText }));
+    throw new Error(body.error || `API ${res!.status}`);
+  }
+
+  return res!.json();
 }
 
 /* ─── Typed helpers ─────────────────────── */
@@ -96,31 +155,98 @@ export interface PaymentData {
   createdAt: string;
 }
 
+/* ─── Request Locking ─────────────────── */
+const activeRequests = new Set<string>();
+
+function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  if (activeRequests.has(key)) {
+    throw new Error("Request already in progress");
+  }
+  activeRequests.add(key);
+  return fn().finally(() => activeRequests.delete(key));
+}
+
 /** Fetch or create session for a table */
-export function fetchSession(tableId: string, sessionId?: string) {
+export async function fetchSession(tableId: string, sessionId?: string) {
   const query = sessionId ? `?sessionId=${sessionId}` : "";
-  return apiFetch<SessionData>(`/api/table/${tableId}${query}`);
+  const data = await apiFetch<SessionData & { csrfToken?: string }>(`/api/table/${tableId}${query}`);
+  if (data.csrfToken) {
+    setCSRFToken(data.csrfToken, data.id);
+  }
+  return data;
 }
 
-/** Place an order */
-export function placeOrder(sessionId: string, items: { name: string; price: number; quantity: number; type?: string }[], isTakeaway: boolean = false, tableId?: string, packingCharges: number = 0, instructions?: string, customerPhone?: string) {
-  return apiFetch<{ order: OrderData, session: SessionData }>("/api/order", {
-    method: "POST",
-    body: JSON.stringify({ sessionId, items, isTakeaway, tableId, packingCharges, instructions, customerPhone }),
-  });
+/** Place an order
+ * 
+ * CRITICAL SECURITY:
+ * - Frontend sends ONLY: sessionId, menuItemIds, quantities
+ * - Frontend does NOT send: prices, totals, packing charges
+ * - Backend calculates everything and returns breakdown
+ */
+export function placeOrder(
+  sessionId: string, 
+  items: { id: string; quantity: number }[], // id refers to menuItemId, NOT a local cart item
+  isTakeaway: boolean = false, 
+  tableId?: string, 
+  instructions?: string, 
+  customerPhone?: string
+) {
+  // Transform: convert frontend item format to backend format
+  const backendItems = items.map(item => ({
+    menuItemId: item.id,
+    quantity: item.quantity,
+  }));
+
+  return withLock(`order-${sessionId}`, () => 
+    apiFetch<{ order: OrderData, session: SessionData, breakdown: any }>("/api/order", {
+      method: "POST",
+      body: JSON.stringify({ 
+        sessionId: sessionId || undefined, 
+        items: backendItems, // ONLY menuItemId and quantity
+        isTakeaway, 
+        tableId, 
+        instructions, 
+        customerPhone 
+      }),
+    })
+  );
 }
 
-/** Fetch public order configuration (UPI ID, etc) */
+/** Fetch public order configuration
+ * 
+ * SECURITY: NO longer returns UPI ID
+ * UPI configuration is backend-only and not exposed to frontend
+ */
 export function fetchOrderConfig() {
-  return apiFetch<{ upiId: string }>("/api/order/config");
+  // This endpoint is deprecated for security reasons
+  // UPI ID is never sent to frontend
+  // If you need UPI config, it's generated server-side during payment
+  return Promise.resolve({ upiId: "" }); // Return empty UPI ID
 }
 
-/** Create a payment */
-export function createPayment(sessionId: string, method: "UPI" | "CASH", amount: number, orderId?: string) {
-  return apiFetch<PaymentData>("/api/payment", {
-    method: "POST",
-    body: JSON.stringify({ sessionId, method, amount, orderId }),
-  });
+/** Create a payment
+ * 
+ * CRITICAL SECURITY:
+ * - Frontend does NOT send amount
+ * - Backend calculates amount from orders
+ * - Frontend only sends: sessionId, method (UPI|CASH)
+ */
+export function createPayment(sessionId: string, method: "UPI" | "CASH", orderId?: string, customerPhone?: string) {
+  // NOTE: amount is NOT sent by frontend
+  // Backend will calculate the correct amount from session orders
+  
+  return withLock(`payment-${sessionId}`, () =>
+    apiFetch<PaymentData>("/api/payment", {
+      method: "POST",
+      body: JSON.stringify({ 
+        sessionId, 
+        method,
+        // NO amount field — backend calculates this
+        orderId, 
+        customerPhone 
+      }),
+    })
+  );
 }
 
 /** Admin: Verify secret */
@@ -270,7 +396,9 @@ export function adminAddOrder(sessionId: string | null, items: { name: string; p
 
 /** Fetch public menu */
 export function fetchMenu() {
-  return apiFetch<{ categories: string[]; items: any[] }>(`/api/menu?t=${Date.now()}`);
+  // Removed aggressive cache busting ?t=... 
+  // Let browser caching or SWR handle it
+  return apiFetch<{ categories: string[]; items: any[] }>("/api/menu");
 }
 
 /** Admin: Fetch full menu for editing */

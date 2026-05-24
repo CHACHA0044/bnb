@@ -152,12 +152,12 @@ router.get("/summary", async (req: Request, res: Response): Promise<void> => {
     });
     const sessionMap = new Map(sessions.map(s => [s.id, s]));
 
-    const totalRevenue = logs.reduce((sum, l) => sum + l.finalPrice, 0);
+    const totalRevenue = logs.reduce((sum, l) => sum + l.finalPrice + (l.packingCharges || 0), 0);
     const totalOrders = new Set(logs.map(l => l.orderId)).size;
     const totalItems = logs.filter(l => l.itemName !== "Packing Charges").reduce((sum, l) => sum + l.quantity, 0);
 
     // Group logs by orderId
-    const orderGroups: any = {};
+    const orderGroups: Record<string, any> = {};
     logs.forEach(l => {
       const groupKey = l.orderId;
       if (!orderGroups[groupKey]) {
@@ -181,35 +181,25 @@ router.get("/summary", async (req: Request, res: Response): Promise<void> => {
         };
       }
       
-      if (l.itemName === "Packing Charges") {
-        orderGroups[groupKey].packingTotal += l.finalPrice;
-      } else {
-        orderGroups[groupKey].foodTotal += l.finalPrice;
-        orderGroups[groupKey].items.push(l);
-      }
-      orderGroups[groupKey].amount += l.finalPrice;
+      // Packing charges are stored as a field on the log, not a separate item
+      orderGroups[groupKey].foodTotal += l.finalPrice;
+      orderGroups[groupKey].packingTotal += (l.packingCharges || 0);
+      orderGroups[groupKey].items.push(l);
+      orderGroups[groupKey].amount += (l.finalPrice + (l.packingCharges || 0));
     });
 
     const groupedLogs = Object.values(orderGroups).map((group: any) => {
-      const hasTakeaway = group.items.some((i: any) => i.orderType === "TAKEAWAY");
-      const hasDineIn = group.items.some((i: any) => i.orderType === "DINE_IN");
-      const isHybrid = hasTakeaway && hasDineIn;
-
-      const itemSummary = group.items.map((i: any) => {
-        let name = i.itemName;
-        if (isHybrid && i.orderType === "TAKEAWAY") name += " (To-Go)";
-        return `${i.quantity}x ${name}`;
-      }).join(", ");
+      const itemSummary = group.items.map((i: any) => `${i.quantity}x ${i.itemName}`).join(", ");
 
       return {
         ...group,
         tableId: group.tableId === "TAKEAWAY" ? `TW${group.sessionNumber || ""}` : group.tableId,
-        itemSummary: itemSummary || "Packing Only"
+        itemSummary: itemSummary || "Order"
       };
     }).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     const reportData = {
-      date: singleDate,
+      date: dateToUse,
       totalRevenue,
       totalOrders,
       totalItems,

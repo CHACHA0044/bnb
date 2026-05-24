@@ -1,5 +1,5 @@
 import { Star, MessageSquare } from "lucide-react";
-import { memo, useState, useEffect } from "react";
+import { memo, useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 
 interface OrderHistoryProps {
@@ -30,19 +30,22 @@ const OrderHistory = ({
     }
   }, [sessionFeedback]);
 
+  const sortedOrders = useMemo(() => {
+    if (!orders || !Array.isArray(orders)) return [];
+    return [...orders].sort((a, b) => {
+      if (a.status !== 'SERVED' && b.status === 'SERVED') return -1;
+      if (a.status === 'SERVED' && b.status !== 'SERVED') return 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [orders]);
+
   if (!orders || orders.length === 0) return null;
 
   return (
     <div id="order-history-section" className="pt-8 pb-6 border-t border-[#3A241C]/5">
       <h3 className="text-[9px] lg:text-[10px] font-black uppercase tracking-[0.4em] text-[#3A241C]/50 mb-4 px-2">Order History</h3>
       <div className="space-y-4">
-        {[...orders]
-          .sort((a, b) => {
-            if (a.status !== 'SERVED' && b.status === 'SERVED') return -1;
-            if (a.status === 'SERVED' && b.status !== 'SERVED') return 1;
-            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          })
-          .map((order: any) => {
+        {sortedOrders.map((order: any) => {
             const isTakeawayOrder = order.items.some((it: any) => it.name.toLowerCase().includes("(packing)"));
             const isReady = order.status === 'SERVED' && isTakeawayOrder;
             const displayStatus = isReady ? "READY" : order.status;

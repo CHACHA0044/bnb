@@ -4,7 +4,7 @@ import { useEffect, useCallback, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
 const getApiUrl = () => {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+  const envUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
   if (typeof window !== "undefined") {
     const { hostname } = window.location;
     if (hostname !== "localhost" && envUrl.includes("localhost")) {
@@ -64,9 +64,9 @@ export function useSocket() {
     s?.emit("join_session", sessionId);
   }, []);
 
-  const joinAdmin = useCallback(() => {
+  const joinAdmin = useCallback((token: string) => {
     const s = getSocket();
-    s?.emit("join_admin");
+    s?.emit("join_admin", { token });
   }, []);
 
   const on = useCallback((event: string, handler: (...args: any[]) => void) => {

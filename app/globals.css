@@ -312,3 +312,14 @@ html {
     radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.08) 1px, transparent 0);
   background-size: 20px 20px;
 }
+
+@keyframes css-shine {
+  0% { transform: translateX(-100%) skewX(-12deg); }
+  100% { transform: translateX(200%) skewX(-12deg); }
+}
+
+.animate-css-shine {
+  animation: css-shine 3s linear infinite;
+  transform: translateZ(0);
+  will-change: transform;
+}

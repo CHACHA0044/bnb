@@ -1,9 +1,6 @@
+import crypto from "crypto";
 import { Request, Response, NextFunction } from "express";
 
-/**
- * Express middleware — checks Authorization: Bearer ADMIN_SECRET.
- * Returns 401 if missing or wrong.
- */
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
   const secret = process.env.ADMIN_SECRET;
   if (!secret) {
@@ -13,10 +10,23 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
   }
 
   const auth = req.headers.authorization;
-  const providedSecret = auth?.replace("Bearer ", "") || (req.query.secret as string);
+  const providedSecret = auth?.replace("Bearer ", "");
   
-  if (providedSecret !== secret) {
-    console.warn(`[AUTH] Unauthorized access attempt. Provided length: ${providedSecret?.length || 0}, Expected length: ${secret.length}`);
+  if (!providedSecret) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+
+  // Timing-safe comparison
+  try {
+    const a = Buffer.from(providedSecret);
+    const b = Buffer.from(secret);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      console.warn("[AUTH] Unauthorized timing-safe check failed");
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+  } catch {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }

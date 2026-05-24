@@ -5,10 +5,15 @@ import { getIO } from "../lib/socket";
 
 const router = Router();
 
-// Helper to notify all clients about status change
+// standard event to trigger state refreshes
 function emitStatusUpdate() {
-  getIO().emit("menu_updated"); // standard event to trigger state refreshes
+  cachedStatus = null; // Invalidate cache
+  getIO().emit("status_updated"); // Use dedicated event (not menu_updated) to avoid full session reload
 }
+
+let cachedStatus: any = null;
+let lastCacheTime = 0;
+const CACHE_TTL = 86400000; // 24 hours
 
 /**
  * GET /api/status
@@ -16,29 +21,40 @@ function emitStatusUpdate() {
  */
 router.get("/", async (req: Request, res: Response) => {
   try {
-    // Optimized: Use upsert to ensure the record exists without race conditions
-    let status = await (prisma as any).restaurantStatus.upsert({
-      where: { id: "CURRENT" },
-      update: {}, // No updates needed, just ensure it exists
-      create: { id: "CURRENT", isOpen: true, closingAt: null }
-    }).catch(async () => {
-        // Fallback: Raw check if Prisma model is not yet generated correctly
-        try {
-            const raw = await prisma.$queryRaw`SELECT * FROM "RestaurantStatus" WHERE id = 'CURRENT' LIMIT 1`;
-            if (Array.isArray(raw) && raw.length > 0) return raw[0];
-            
-            await prisma.$executeRaw`INSERT INTO "RestaurantStatus" (id, "isOpen", "updatedAt") VALUES ('CURRENT', true, NOW()) ON CONFLICT DO NOTHING`;
-            return { id: "CURRENT", isOpen: true, closingAt: null };
-        } catch {
-            return { id: "CURRENT", isOpen: true, closingAt: null };
-        }
+    const now = Date.now();
+    if (cachedStatus && (now - lastCacheTime < CACHE_TTL)) {
+      return res.json(cachedStatus);
+    }
+
+    let status = await (prisma as any).restaurantStatus.findUnique({
+      where: { id: "CURRENT" }
     });
 
+    if (!status) {
+      // Optimized: Use upsert to ensure the record exists without race conditions
+      status = await (prisma as any).restaurantStatus.upsert({
+        where: { id: "CURRENT" },
+        update: {}, 
+        create: { id: "CURRENT", isOpen: true, closingAt: null }
+      }).catch(async () => {
+          try {
+              const raw = await prisma.$queryRaw`SELECT * FROM "RestaurantStatus" WHERE id = 'CURRENT' LIMIT 1`;
+              if (Array.isArray(raw) && raw.length > 0) return raw[0];
+              
+              await prisma.$executeRaw`INSERT INTO "RestaurantStatus" (id, "isOpen", "updatedAt") VALUES ('CURRENT', true, NOW()) ON CONFLICT DO NOTHING`;
+              return { id: "CURRENT", isOpen: true, closingAt: null };
+          } catch {
+              return { id: "CURRENT", isOpen: true, closingAt: null };
+          }
+      });
+    }
+
+    cachedStatus = status;
+    lastCacheTime = now;
     res.json(status);
   } catch (err) {
     console.error("Status fetch error:", err);
-    // Return a default status instead of 500 to keep the app usable
-    res.json({ id: "CURRENT", isOpen: true, closingAt: null });
+    res.json(cachedStatus || { id: "CURRENT", isOpen: true, closingAt: null });
   }
 });
 
