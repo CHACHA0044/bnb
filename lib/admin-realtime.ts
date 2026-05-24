@@ -304,7 +304,7 @@ export function useAdminRealtimeOptimized() {
         const affected = computeAffectedSessions(deduped);
 
         // Update only affected sessions
-        setSessions(prev => {
+        setSessions((prev: AdminSessionState) => {
           const next = { ...prev };
           let hasChanges = false;
 
@@ -365,7 +365,7 @@ export function useAdminRealtimeOptimized() {
    * Replace entire session
    */
   const setSession = useCallback((sessionId: string, session: unknown) => {
-    setSessions(prev => ({
+    setSessions((prev: AdminSessionState) => ({
       ...prev,
       [sessionId]: session as AdminSessionState[string],
     }));
@@ -375,7 +375,7 @@ export function useAdminRealtimeOptimized() {
    * Bulk replace sessions
    */
   const setMultipleSessions = useCallback((newSessions: Record<string, unknown>) => {
-    setSessions(prev => ({
+    setSessions((prev: AdminSessionState) => ({
       ...prev,
       ...(newSessions as Record<string, AdminSessionState[string]>),
     }));
@@ -385,7 +385,7 @@ export function useAdminRealtimeOptimized() {
    * Remove session
    */
   const removeSession = useCallback((sessionId: string) => {
-    setSessions(prev => {
+    setSessions((prev: AdminSessionState) => {
       const next = { ...prev };
       delete next[sessionId];
       return next;
@@ -462,8 +462,8 @@ export function computeAdminKPIs(sessions: AdminSessionState) {
 
   return {
     totalActiveSessions: values.length,
-    totalOrders: values.reduce((s, v) => s + v.orderCount, 0),
-    totalRevenue: values.reduce((s, v) => s + v.totalAmount, 0),
+    totalOrders: values.reduce((s: number, v) => s + v.orderCount, 0),
+    totalRevenue: values.reduce((s: number, v) => s + v.totalAmount, 0),
     pendingPayments: values.filter(v => v.paymentStatus === "PENDING").length,
     completedSessions: values.filter(v => v.status === "CLOSED").length,
   };

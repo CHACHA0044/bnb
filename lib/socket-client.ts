@@ -76,5 +76,13 @@ export function useSocket() {
     return () => { s.off(event, handler); };
   }, []);
 
-  return { socket: socket || getSocket(), connected, joinSession, joinAdmin, on };
+  const emit = useCallback((event: string, data: any): Promise<any> => {
+    const s = getSocket();
+    if (!s) return Promise.reject(new Error("Socket not initialized"));
+    return new Promise((resolve) => {
+      s.emit(event, data, resolve);
+    });
+  }, []);
+
+  return { socket: socket || getSocket(), connected, joinSession, joinAdmin, on, emit };
 }

@@ -397,14 +397,9 @@ export function useSocket() {
     client.on("connect", onConnect, { deduplicate: true });
     client.on("disconnect", onDisconnect, { deduplicate: true });
 
-    // Set initial state based on connection
-    if (s.connected) {
-      setConnected(true);
-    }
-
     // Cleanup on unmount
     return () => {
-      cleanupRef.current.forEach(fn => fn());
+      cleanupRef.current.forEach((fn: () => void) => fn());
       cleanupRef.current = [];
       
       // Don't destroy global client on unmount - keep it alive for other components
@@ -472,7 +467,6 @@ export function useSocket() {
   }, []);
 
   return {
-    socket,
     connected,
     on,
     emit,

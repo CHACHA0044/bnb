@@ -124,7 +124,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   const [orderConfig, setOrderConfig] = useState<{ upiId: string } | null>(null);
 
   // Socket
-  const { socket, joinSession, on, connected } = useSocket();
+  const { emit, joinSession, on, connected } = useSocket();
   const [showConfirmed, setShowConfirmed] = useState(false);
   const [showAdminConfirmed, setShowAdminConfirmed] = useState(false);
   const notifiedConfirmedIds = useRef(new Set<string>());
@@ -441,7 +441,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
   }, [safeSetTimeout]);
 
   useEffect(() => {
-    if (!socket || !connected) return;
+    if (!connected) return;
     const unsubs = [
       on("menu_updated", () => {
         loadMenuData();
@@ -457,10 +457,10 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       }),
     ];
     return () => unsubs.forEach(u => u());
-  }, [socket, connected, on, loadMenuData, loadStatus]);
+  }, [connected, on, loadMenuData, loadStatus]);
 
   useEffect(() => {
-    if (!socket || !connected) return;
+    if (!connected) return;
     const unsubs = [
       on("order_placed", (data: any) => {
         if (!data.order) return;
@@ -563,7 +563,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       }),
     ];
     return () => unsubs.forEach((u) => u());
-  }, [socket, connected, on, loadSession, loadStatus, showToast, isTakeawayMode, tableId]);
+  }, [connected, on, loadSession, loadStatus, showToast, isTakeawayMode, tableId]);
 
   // Auto-reset orderPlaced if session becomes empty AND no active notifications
   useEffect(() => {
@@ -629,9 +629,9 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
 
   /* ─── Multiplayer Sync ─────────────────── */
   useEffect(() => {
-    if (!clientId || !connected || !socket) return;
+    if (!clientId || !connected) return;
 
-    socket.emit("join_table", { tableId, clientId });
+    emit("join_table", { tableId, clientId });
 
     const unsubs = [
       on("cart_sync", (sharedCart: any) => {
@@ -677,7 +677,7 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       }),
     ];
     return () => unsubs.forEach(u => u());
-  }, [clientId, connected, socket, tableId, on]);
+  }, [clientId, connected, tableId, on, emit]);
 
   const syncCart = useCallback((updater: CartItem[] | ((prev: CartItem[]) => CartItem[])) => {
     setCart((prev) => {
@@ -807,18 +807,18 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       const existing = prev.find((c) => c.id === item.id && c.forPacking === packingState && c.variant === variant && c.addedBy === clientId);
       if (existing) {
         const newQty = existing.quantity + qty;
-        if (socket && connected) {
-          socket.emit("cart_update_quantity", { tableId, clientId, itemId: existing.id, quantity: newQty });
+        if (connected) {
+          emit("cart_update_quantity", { tableId, clientId, itemId: existing.id, quantity: newQty });
         }
         return prev.map((c) => (c.id === item.id && c.forPacking === packingState && c.variant === variant && c.addedBy === clientId) ? { ...c, quantity: newQty } : c);
       }
       const newItem = { ...item, price: actualPrice, quantity: qty, forPacking: packingState, variant, addedBy: clientId, addedByName: me?.friendlyName || "You", cartItemId: Math.random().toString(36).substring(7) };
-      if (socket && connected) {
-        socket.emit("cart_add_item", { tableId, clientId, item: newItem });
+      if (connected) {
+        emit("cart_add_item", { tableId, clientId, item: newItem });
       }
       return [...prev, newItem];
     });
-  }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cartLocked, cartUsers, clientId, isTakeawayGlobal, syncCart, showToast, socket, connected, tableId]);
+  }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cartLocked, cartUsers, clientId, isTakeawayGlobal, syncCart, showToast, emit, connected, tableId]);
 
   const handleAddTempVariants = useCallback(() => {
     if (!variantModalItem) return;
@@ -835,14 +835,14 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       const existing = prev.find((c) => c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId);
       if (!existing) return prev;
       if (existing.quantity <= 1) {
-        if (socket && connected) socket.emit("cart_remove_item", { tableId, clientId, itemId });
+        if (connected) emit("cart_remove_item", { tableId, clientId, itemId });
         return prev.filter((c) => !(c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId));
       }
       const newQty = existing.quantity - 1;
-      if (socket && connected) socket.emit("cart_update_quantity", { tableId, clientId, itemId, quantity: newQty });
+      if (connected) emit("cart_update_quantity", { tableId, clientId, itemId, quantity: newQty });
       return prev.map((c) => (c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId) ? { ...c, quantity: newQty } : c);
     });
-  }, [cartLocked, clientId, syncCart, showToast, socket, connected, tableId]);
+  }, [cartLocked, clientId, syncCart, showToast, emit, connected, tableId]);
 
   const toggleItemPacking = useCallback((itemId: string, currentPacking: boolean, variant?: string) => {
     if (cartLocked) return showToast("Cart is locked for checkout!");
@@ -862,19 +862,19 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       }
       // For toggle packing, we still emit a full sync or implement a granular one?
       // Let's emit a cart_update (full) for complex state changes like toggle packing
-      if (socket && connected) socket.emit("cart_update", { tableId, clientId, items: newCart });
+      if (connected) emit("cart_update", { tableId, clientId, items: newCart });
       return newCart;
     });
-  }, [cartLocked, clientId, syncCart, showToast, socket, connected, tableId]);
+  }, [cartLocked, clientId, syncCart, showToast, emit, connected, tableId]);
 
   const deleteFromCart = useCallback((itemId: string, forPacking?: boolean, variant?: string) => {
     if (cartLocked) return showToast("Cart is locked for checkout!");
     syncCart((prev) => {
       const newCart = prev.filter((c) => !(c.id === itemId && c.forPacking === forPacking && c.variant === variant && c.addedBy === clientId));
-      if (socket && connected) socket.emit("cart_remove_item", { tableId, clientId, itemId });
+      if (connected) emit("cart_remove_item", { tableId, clientId, itemId });
       return newCart;
     });
-  }, [cartLocked, clientId, syncCart, showToast, socket, connected, tableId]);
+  }, [cartLocked, clientId, syncCart, showToast, emit, connected, tableId]);
 
   const handleGlobalTakeawayToggle = useCallback((isTakeaway: boolean) => {
     if (isTakeawayMode) return;
@@ -980,11 +980,11 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
       // Restore cart on error
       setCart(fullCartBackup);
       
-      if (socket) socket.emit("cart_unlock", { tableId });
+      if (connected) emit("cart_unlock", { tableId });
     }).finally(() => {
       pendingOrderRef.current = null;
     });
-  }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cart, cartLocked, lockedBy, clientId, socket, tableId, session?.id, isTakeawayGlobal, packingCharges, isTakeawayMode, syncCart, showToast]);
+  }, [restaurantStatus.isOpen, restaurantStatus.closingAt, cart, cartLocked, lockedBy, clientId, emit, connected, tableId, session?.id, isTakeawayGlobal, packingCharges, isTakeawayMode, syncCart, showToast]);
 
   /* ─── Payment Actions ──────────────────── */
   const sessionTotal = useMemo(() => session?.orders
@@ -1032,8 +1032,8 @@ export default function TableOrderClient({ tableId, mode = "table" }: { tableId:
     if (remaining > 0) return showToast("Please settle the payment first!");
 
     showToast("Requesting table closure...");
-    if (socket) socket.emit("table_close_request", { tableId, sessionId: session.id });
-  }, [session, remaining, socket, tableId, showToast]);
+    if (connected) emit("table_close_request", { tableId, sessionId: session.id });
+  }, [session, remaining, emit, connected, tableId, showToast]);
 
   const handleRateItem = useCallback(async (itemName: string, rating: number, orderId?: string) => {
     // ... logic omitted for brevity in target content matching, but I will replace the whole block
